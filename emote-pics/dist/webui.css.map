@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/webui/style.css"],
+  "sourcesContent": [".emote-pics td {\n  vertical-align: middle;\n}\n\n.emote-pics input.field {\n  min-width: 22rem;\n}\n\n.emote-pics-num {\n  width: 6rem;\n  min-width: 0;\n}\n\n.emote-pics .rowbar label {\n  margin-right: 1rem;\n}\n\n/* \u4FDD\u5B58/\u6062\u590D\u63D0\u793A\u56FA\u5B9A\u5728\u6309\u94AE\u884C\u4E0B\u9762,\u9884\u7559\u4E00\u884C\u9AD8\u5EA6,\u51FA\u73B0\u548C\u6D88\u5931\u90FD\u4E0D\u63A8\u52A8\u5E03\u5C40\u3002 */\n.emote-pics-prompt-msg {\n  min-height: 1.5em;\n  margin-top: 0.25rem;\n}\n"],
+  "mappings": "AAAA,CAAC,WAAW,GACV,eAAgB,MAClB,CAEA,CAJC,WAIW,KAAK,CAAC,MAChB,UAAW,KACb,CAEA,CAAC,eACC,MAAO,KACP,UAAW,CACb,CAEA,CAbC,WAaW,CAAC,OAAO,MAClB,aAAc,IAChB,CAGA,CAAC,sBACC,WAAY,MACZ,WAAY,MACd",
+  "names": []
+}

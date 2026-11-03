@@ -1,0 +1,67 @@
+{
+  "name": "cortico-world-coo-gen",
+  "version": "0.1.6",
+  "type": "module",
+  "description": "Cortico World: user-initiated image generation through a local ComfyUI. The person owns the prompt, checkpoint, LoRA and parameters; results are saved into a local folder and can be triggered from chat or from a full panel.",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "coopanion",
+    "desktop-pet",
+    "comfyui",
+    "image-generation",
+    "lora"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "出图",
+    "webUiClient": "dist/webui.js",
+    "webUiStyle": "dist/webui.css",
+    "tags": [
+      "creative",
+      "local",
+      "external-setup"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "出图",
+        "description": "用本地 ComfyUI 出用户自己的图：面板里选模型、LoRA、采样参数，或在对话里说一句就开画。LoRA 自动扫描、可设别名和常驻组合，结果存进本地文件夹并写进 PNG 元数据。"
+      },
+      "en": {
+        "displayName": "Image studio",
+        "description": "Generate the user's own pictures with a local ComfyUI: choose checkpoint, LoRAs and sampler settings in the panel, or ask in chat. Scans LoRAs, supports aliases and always-on stacks, saves results locally with PNG metadata."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "build": "node scripts/build-webui.mjs",
+    "describe": "tsx scripts/describe.ts",
+    "check": "tsx scripts/check.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.2.8",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

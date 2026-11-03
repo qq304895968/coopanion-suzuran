@@ -1,0 +1,58 @@
+{
+  "name": "cortico-world-coo-diary",
+  "version": "0.4.1",
+  "type": "module",
+  "description": "Cortico World: write a daily diary as one Markdown file per day in a directory you pick",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "日记",
+    "webUiClient": "dist/webui.js",
+    "tags": [
+      "memory"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "日记",
+        "description": "把你指定的目录变成 Coo 的日记本:每天一个 Markdown 文件,只追加不覆盖,可以读回与回顾。"
+      },
+      "en": {
+        "displayName": "Diary",
+        "description": "Turns a directory you pick into the bot's diary: one Markdown file per day, appended to and never overwritten, readable and listable."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "build": "node scripts/build-webui.mjs",
+    "describe": "tsx scripts/describe.ts",
+    "check:manifest": "tsx scripts/check-manifest.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.2.8",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

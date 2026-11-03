@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.tmp-describe/
+# 黑流树海资料是个人使用导入的第三方数据，不进版本库、不进 npm 包
+src/data/blackstream.local.json
+# 主地图构造坐标（截图录入，个人使用）
+src/data/blackstream-end.local.json
+# 主地图完整拓扑（节点/连线/尽头，导入自路标档案馆，个人使用）
+src/data/blackstream-topology.local.json

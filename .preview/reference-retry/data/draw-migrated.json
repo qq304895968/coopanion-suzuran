@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-03T17:40:32.107Z",
+  "keys": [
+    "style",
+    "customStyle",
+    "maxImagesPerCall",
+    "budgetCny",
+    "popupSeconds",
+    "referenceSearch",
+    "referenceScreen",
+    "localUrl",
+    "localAutoLaunch",
+    "localDefaultCheckpoint",
+    "localLoraMaxCount",
+    "localHistoryLimit",
+    "localBatch",
+    "localNegativePrompt",
+    "localPromptPrefix",
+    "localPromptSuffix",
+    "localTranslateUrl",
+    "localTranslateModel",
+    "localTranslateKeyEnv",
+    "localTranslateTimeoutSeconds",
+    "localTimeoutSeconds",
+    "localPollSeconds",
+    "localPopupSeconds",
+    "localPopupScale"
+  ]
+}

@@ -1,0 +1,28 @@
+# dsh-cover-pipeline —— 开发模式叠加层（零改动试用）
+#
+# 用法（**不修改任何 profile**，适合先试用 / 回归）：
+#   dsh web --patch "<本仓库绝对路径>\cordis.dev.yml"
+#
+# 与 cordis.patch.yml 的区别：
+#   · cordis.patch.yml  —— 随包分发，`dsh plugin add` 之后由 bundle 机制自动加载（长期安装）
+#   · cordis.dev.yml    —— 只通过 --patch 生效（临时试用；name 用绝对路径直接指向本仓库）
+#
+# 路径留空 = 自动发现（见 src/config.js）。要固定本机路径，复制本文件到仓库外再改。
+- insert:
+    - id: cover-pipeline-dev
+      name: 'file:///D:/AI-Song/dsh-plugin-cover/src/index.js'
+      config:
+        songRoot: ''
+        pipelineRoot: ''
+        probeDir: ''
+        mixDir: ''
+        msstDir: ''
+        msstEnv: ''
+        ddspDir: ''
+        ddspEnv: ''
+        ffmpeg: ''
+        voiceModel: ''
+        voiceLibDir: ''
+        targetLufs: -14.0
+        timeoutMs: 3600000
+        maxOutputChars: 6000

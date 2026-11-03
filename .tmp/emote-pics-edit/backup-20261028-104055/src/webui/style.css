@@ -1,0 +1,22 @@
+.emote-pics td {
+  vertical-align: middle;
+}
+
+.emote-pics input.field {
+  min-width: 22rem;
+}
+
+.emote-pics-num {
+  width: 6rem;
+  min-width: 0;
+}
+
+.emote-pics .rowbar label {
+  margin-right: 1rem;
+}
+
+/* 保存/恢复提示固定在按钮行下面,预留一行高度,出现和消失都不推动布局。 */
+.emote-pics-prompt-msg {
+  min-height: 1.5em;
+  margin-top: 0.25rem;
+}

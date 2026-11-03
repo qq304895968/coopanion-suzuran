@@ -1,0 +1,428 @@
+{
+  "manifest": 2,
+  "api": 2,
+  "id": "suzuran",
+  "version": "1.0.0",
+  "name": {
+    "zh": "铃兰",
+    "zh-Hant": "鈴蘭",
+    "en": "Suzuran",
+    "ja": "スズラン",
+    "ko": "스즈란",
+    "ru": "Судзуран",
+    "fr": "Suzuran",
+    "de": "Suzuran",
+    "es-419": "Suzuran",
+    "pt-BR": "Suzuran",
+    "it": "Suzuran"
+  },
+  "about": {
+    "zh": "《明日方舟》干员铃兰（本名丽萨），Q 版二头身、侧身朝右站：金色长发与蓝色发带，一对大狐耳，身后九条蓬松的尾巴，白蓝色连衣裙配小披肩，手里握着一盏提灯法杖。",
+    "en": "Suzuran (Lisa) from Arknights, chibi and three-quarters facing right: long blonde hair with a blue headband, big fox ears, nine fluffy tails behind her, a white-and-blue dress with a small cape, holding a lantern staff."
+  },
+  "author": "Cortico figure pack (converted)",
+  "license": "Arknights assets (c) Hypergryph / Studio Montagne; model data from PRTS Wiki",
+  "credits": [
+    {
+      "role": "角色与模型",
+      "name": "明日方舟 / 鹰角网络"
+    },
+    {
+      "role": "模型数据",
+      "name": "PRTS Wiki",
+      "url": "https://prts.wiki/w/%E9%93%83%E5%85%B0"
+    },
+    {
+      "role": "转换",
+      "name": "Spine 3.8 rig -> paper doll"
+    }
+  ],
+  "entry": "figure.js",
+  "export": "createSuzuranBody",
+  "model": "model.json",
+  "thumb": "thumb.png",
+  "axes": [
+    {
+      "id": "outfit",
+      "name": {
+        "zh": "服装",
+        "zh-Hant": "服裝",
+        "en": "Outfit",
+        "ja": "衣装"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": {
+            "zh": "默认",
+            "zh-Hant": "預設",
+            "en": "Default",
+            "ja": "デフォルト"
+          }
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "default",
+      "pick": {
+        "outfit": "default"
+      },
+      "name": {
+        "zh": "默认",
+        "en": "Default"
+      },
+      "accent": "#c9a227"
+    }
+  ],
+  "vocab": [
+    {
+      "id": "neutral",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "平静",
+          "普通"
+        ]
+      },
+      "about": {
+        "zh": "默认的脸，睁着眼睛",
+        "en": "the default face, eyes open"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "happy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "开心",
+          "高兴",
+          "笑"
+        ]
+      },
+      "about": {
+        "zh": "眯起眼睛笑，尾巴摇起来",
+        "en": "squints into a smile, tails wagging"
+      },
+      "seconds": 1.1
+    },
+    {
+      "id": "wink",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "眨眼"
+        ]
+      },
+      "about": {
+        "zh": "眨一只眼",
+        "en": "one eye closes"
+      },
+      "seconds": 0.8
+    },
+    {
+      "id": "love",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "喜欢",
+          "心动"
+        ]
+      },
+      "about": {
+        "zh": "眯眼笑，脸有点红",
+        "en": "smiling eyes, a little blush"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "surprised",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "惊讶",
+          "吃惊"
+        ]
+      },
+      "about": {
+        "zh": "睁大眼睛",
+        "en": "eyes wide"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "shy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害羞",
+          "不好意思"
+        ]
+      },
+      "about": {
+        "zh": "垂下眼睛，耳朵塌下来",
+        "en": "eyes down, ears drooping"
+      },
+      "seconds": 1.1
+    },
+    {
+      "id": "sad",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "难过",
+          "失落"
+        ]
+      },
+      "about": {
+        "zh": "眼睛半闭，低下头",
+        "en": "eyes half closed, head down"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "sleepy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "困",
+          "打瞌睡"
+        ]
+      },
+      "about": {
+        "zh": "眼睛快闭上了，脑袋一点一点",
+        "en": "eyes closing, head nodding"
+      },
+      "seconds": 1.4
+    },
+    {
+      "id": "thinking",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "思考",
+          "想想"
+        ]
+      },
+      "about": {
+        "zh": "歪着头想事情",
+        "en": "tilts her head, thinking"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "stand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "站着"
+        ]
+      },
+      "about": {
+        "zh": "原地站着，轻轻呼吸",
+        "en": "stands still, breathing"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "jump",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳",
+          "跳起"
+        ]
+      },
+      "about": {
+        "zh": "往上一跳",
+        "en": "jumps up"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "hop",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "蹦一下"
+        ]
+      },
+      "about": {
+        "zh": "小跳一下",
+        "en": "hops once"
+      },
+      "seconds": 0.7
+    },
+    {
+      "id": "look",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "看",
+          "看看"
+        ]
+      },
+      "about": {
+        "zh": "转头四处看",
+        "en": "looks around"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "turn",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转身"
+        ]
+      },
+      "about": {
+        "zh": "转过身去",
+        "en": "turns around"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "nod",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "点头"
+        ]
+      },
+      "about": {
+        "zh": "点头",
+        "en": "nods"
+      },
+      "seconds": 0.8
+    },
+    {
+      "id": "shake",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "摇头"
+        ]
+      },
+      "about": {
+        "zh": "摇头",
+        "en": "shakes her head"
+      },
+      "seconds": 0.8
+    },
+    {
+      "id": "spin",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转圈"
+        ]
+      },
+      "about": {
+        "zh": "转一圈",
+        "en": "spins once"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "sit",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "坐下"
+        ]
+      },
+      "about": {
+        "zh": "坐下来",
+        "en": "sits down"
+      },
+      "seconds": 1
+    },
+    {
+      "id": "sleep",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "睡觉",
+          "睡"
+        ]
+      },
+      "about": {
+        "zh": "闭上眼睛睡觉",
+        "en": "falls asleep"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "dizzy",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "晕",
+          "晕头转向"
+        ]
+      },
+      "about": {
+        "zh": "转圈眼，站不稳",
+        "en": "spiral eyes, wobbling"
+      },
+      "seconds": 1.4
+    },
+    {
+      "id": "walk",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "走",
+          "走过去"
+        ]
+      },
+      "about": {
+        "zh": "走到某处",
+        "en": "walks somewhere"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "run",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跑",
+          "跑过去"
+        ]
+      },
+      "about": {
+        "zh": "跑到某处",
+        "en": "runs somewhere"
+      },
+      "seconds": 1
+    }
+  ],
+  "sounds": {},
+  "can": {
+    "walk": true
+  },
+  "moves": [],
+  "needs": [],
+  "voice": {
+    "pitch": 1.32
+  },
+  "effects": {
+    "reach": 0.3
+  },
+  "bubble": {
+    "light": {
+      "fill": "#ffffff",
+      "text": "#2a2f3a",
+      "line": "#e3d3a8"
+    },
+    "dark": {
+      "fill": "#2a2720",
+      "text": "#f3ecd9",
+      "line": "#6b5b35"
+    }
+  }
+}

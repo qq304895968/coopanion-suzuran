@@ -1,0 +1,2315 @@
+{
+ "view": [
+  0,
+  0,
+  256,
+  256
+ ],
+ "units": {
+  "S": 0.6139234572643849,
+  "X0": 9.0928955078125,
+  "FEET": -7.134765625,
+  "TEX": 3.0
+ },
+ "deformers": {
+  "F_Weapon_b": {
+   "kind": "rot",
+   "pivot": [
+    177.211,
+    146.051
+   ],
+   "parent": "F_R_Hand_b"
+  },
+  "F_Coat_b2": {
+   "kind": "rot",
+   "pivot": [
+    134.757,
+    127.586
+   ],
+   "parent": "F_Coat_b"
+  },
+  "F_R_Hand_b": {
+   "kind": "rot",
+   "pivot": [
+    165.519,
+    143.087
+   ],
+   "parent": "F_R_forearm"
+  },
+  "F_Hip": {
+   "kind": "rot",
+   "pivot": [
+    118.438,
+    155.572
+   ],
+   "parent": "Front"
+  },
+  "Front": {
+   "kind": "rot",
+   "pivot": [
+    122.418,
+    251.62
+   ],
+   "parent": "root"
+  },
+  "F_L_Foot": {
+   "kind": "rot",
+   "pivot": [
+    105.825,
+    235.331
+   ],
+   "parent": "F_L_Calf"
+  },
+  "F_Face_Stun_a": {
+   "kind": "rot",
+   "pivot": [
+    111.769,
+    97.822
+   ],
+   "parent": "F_Face_Stun"
+  },
+  "F_Tail_b5": {
+   "kind": "rot",
+   "pivot": [
+    109.338,
+    166.907
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Hair_i": {
+   "kind": "rot",
+   "pivot": [
+    133.576,
+    101.506
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Annex_d": {
+   "kind": "rot",
+   "pivot": [
+    136.976,
+    157.683
+   ],
+   "parent": "F_Annex_c"
+  },
+  "F_Face_Default": {
+   "kind": "rot",
+   "pivot": [
+    31.225,
+    75.281
+   ],
+   "parent": "F_Face"
+  },
+  "F_Face": {
+   "kind": "rot",
+   "pivot": [
+    17.931,
+    89.945
+   ],
+   "parent": "F_Head"
+  },
+  "F_R_Ear2": {
+   "kind": "rot",
+   "pivot": [
+    168.044,
+    51.13
+   ],
+   "parent": "F_R_Ear"
+  },
+  "F_Weapon_f": {
+   "kind": "rot",
+   "pivot": [
+    195.041,
+    70.403
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_L_Calf": {
+   "kind": "rot",
+   "pivot": [
+    112.767,
+    193.908
+   ],
+   "parent": "F_L_Leg"
+  },
+  "F_Annex_e": {
+   "kind": "rot",
+   "pivot": [
+    142.692,
+    154.976
+   ],
+   "parent": "F_Annex_c"
+  },
+  "F_Tail_b2": {
+   "kind": "rot",
+   "pivot": [
+    49.537,
+    135.065
+   ],
+   "parent": "F_Tail_b"
+  },
+  "F_R_Arm": {
+   "kind": "rot",
+   "pivot": [
+    122.855,
+    120.293
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Coat_a2": {
+   "kind": "rot",
+   "pivot": [
+    105.014,
+    128.655
+   ],
+   "parent": "F_Coat_a"
+  },
+  "F_Face_Default_k": {
+   "kind": "rot",
+   "pivot": [
+    140.926,
+    96.731
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Muzzle": {
+   "kind": "rot",
+   "pivot": [
+    192.447,
+    66.892
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_Hair_f2": {
+   "kind": "rot",
+   "pivot": [
+    146.508,
+    74.426
+   ],
+   "parent": "F_Hair_f"
+  },
+  "F_Annex_a": {
+   "kind": "rot",
+   "pivot": [
+    137.381,
+    131.344
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Tail_b7": {
+   "kind": "rot",
+   "pivot": [
+    73.274,
+    171.597
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Tail_b3": {
+   "kind": "rot",
+   "pivot": [
+    105.883,
+    133.096
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Coat_a3": {
+   "kind": "rot",
+   "pivot": [
+    84.137,
+    139.943
+   ],
+   "parent": "F_Coat_a2"
+  },
+  "F_Tail_f2": {
+   "kind": "rot",
+   "pivot": [
+    132.516,
+    187.398
+   ],
+   "parent": "F_Tail_f"
+  },
+  "F_R_Foot": {
+   "kind": "rot",
+   "pivot": [
+    136.463,
+    236.679
+   ],
+   "parent": "F_R_Calf"
+  },
+  "F_Weapon_d": {
+   "kind": "rot",
+   "pivot": [
+    190.73,
+    64.309
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_Hair_h": {
+   "kind": "rot",
+   "pivot": [
+    78.136,
+    96.841
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Hair_a2": {
+   "kind": "rot",
+   "pivot": [
+    87.909,
+    83.169
+   ],
+   "parent": "F_Hair_a"
+  },
+  "F_Hair_a3": {
+   "kind": "rot",
+   "pivot": [
+    91.31,
+    110.168
+   ],
+   "parent": "F_Hair_a2"
+  },
+  "F_Tail_b11": {
+   "kind": "rot",
+   "pivot": [
+    93.911,
+    175.598
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Face_Default_b": {
+   "kind": "rot",
+   "pivot": [
+    139.444,
+    82.888
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Tail_i": {
+   "kind": "rot",
+   "pivot": [
+    104.866,
+    170.252
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Annex_b": {
+   "kind": "rot",
+   "pivot": [
+    127.801,
+    129.059
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Weapon_a": {
+   "kind": "rot",
+   "pivot": [
+    174.333,
+    108.259
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_Annex_b3": {
+   "kind": "rot",
+   "pivot": [
+    128.454,
+    156.332
+   ],
+   "parent": "F_Annex_b2"
+  },
+  "F_L_Arm": {
+   "kind": "rot",
+   "pivot": [
+    105.885,
+    118.75
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Tail_e": {
+   "kind": "rot",
+   "pivot": [
+    99.642,
+    171.615
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Face_Stun_c": {
+   "kind": "rot",
+   "pivot": [
+    129.389,
+    109.546
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Tail_b6": {
+   "kind": "rot",
+   "pivot": [
+    133.657,
+    139.988
+   ],
+   "parent": "F_Tail_b5"
+  },
+  "F_Hair_d": {
+   "kind": "rot",
+   "pivot": [
+    121.335,
+    43.982
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Face_Default_j": {
+   "kind": "rot",
+   "pivot": [
+    114.405,
+    95.751
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Tail_b4": {
+   "kind": "rot",
+   "pivot": [
+    76.238,
+    154.006
+   ],
+   "parent": "F_Tail_b3"
+  },
+  "F_Hair": {
+   "kind": "rot",
+   "pivot": [
+    -16.252,
+    85.122
+   ],
+   "parent": "F_Head"
+  },
+  "F_Face_Default_g": {
+   "kind": "rot",
+   "pivot": [
+    129.093,
+    108.558
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Tail_b9": {
+   "kind": "rot",
+   "pivot": [
+    77.275,
+    171.807
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Annex_g": {
+   "kind": "rot",
+   "pivot": [
+    112.76,
+    158.736
+   ],
+   "parent": "F_Annex_f"
+  },
+  "F_Waist": {
+   "kind": "rot",
+   "pivot": [
+    118.019,
+    155.961
+   ],
+   "parent": "F_Hip"
+  },
+  "F_Tail_b": {
+   "kind": "rot",
+   "pivot": [
+    81.697,
+    151.852
+   ],
+   "parent": "F_Tail"
+  },
+  "F_Tail_e2": {
+   "kind": "rot",
+   "pivot": [
+    128.282,
+    199.826
+   ],
+   "parent": "F_Tail_e"
+  },
+  "F_Weapon_h": {
+   "kind": "rot",
+   "pivot": [
+    196.25,
+    64.096
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_R_Hand_A_b2": {
+   "kind": "rot",
+   "pivot": [
+    184.944,
+    145.153
+   ],
+   "parent": "F_R_Hand_A_b"
+  },
+  "F_Coat_d5": {
+   "kind": "rot",
+   "pivot": [
+    128.401,
+    193.343
+   ],
+   "parent": "F_Coat_d4"
+  },
+  "F_Weapon_g": {
+   "kind": "rot",
+   "pivot": [
+    196.141,
+    65.324
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_L_Forearm": {
+   "kind": "rot",
+   "pivot": [
+    99.289,
+    138.734
+   ],
+   "parent": "F_L_Arm"
+  },
+  "F_Weapon_e": {
+   "kind": "rot",
+   "pivot": [
+    190.04,
+    62.32
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_Coat_b3": {
+   "kind": "rot",
+   "pivot": [
+    149.192,
+    129.105
+   ],
+   "parent": "F_Coat_b2"
+  },
+  "F_Head": {
+   "kind": "rot",
+   "pivot": [
+    117.566,
+    111.162
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Coat_a": {
+   "kind": "rot",
+   "pivot": [
+    126.325,
+    129.83
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Weapon_c": {
+   "kind": "rot",
+   "pivot": [
+    188.233,
+    68.617
+   ],
+   "parent": "F_Weapon_b2"
+  },
+  "F_Coat_c4": {
+   "kind": "rot",
+   "pivot": [
+    125.172,
+    161.314
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Hair_e": {
+   "kind": "rot",
+   "pivot": [
+    111.905,
+    45.985
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Face_Stun_b": {
+   "kind": "rot",
+   "pivot": [
+    141.907,
+    98.365
+   ],
+   "parent": "F_Face_Stun"
+  },
+  "F_Face_Default_e": {
+   "kind": "rot",
+   "pivot": [
+    141.171,
+    91.253
+   ],
+   "parent": "F_Face_Clo"
+  },
+  "F_Face_Default_h": {
+   "kind": "rot",
+   "pivot": [
+    113.181,
+    99.984
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Face_Stun": {
+   "kind": "rot",
+   "pivot": [
+    31.888,
+    70.07
+   ],
+   "parent": "F_Face"
+  },
+  "F_R_Ear": {
+   "kind": "rot",
+   "pivot": [
+    147.883,
+    65.465
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Hair_a": {
+   "kind": "rot",
+   "pivot": [
+    104.398,
+    44.484
+   ],
+   "parent": "F_Hair"
+  },
+  "F_R_Calf": {
+   "kind": "rot",
+   "pivot": [
+    134.626,
+    194.365
+   ],
+   "parent": "F_R_Leg"
+  },
+  "F_Tail_b8": {
+   "kind": "rot",
+   "pivot": [
+    43.211,
+    185.834
+   ],
+   "parent": "F_Tail_b7"
+  },
+  "F_Face_Default_f": {
+   "kind": "rot",
+   "pivot": [
+    142.06,
+    91.487
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Face_Clo": {
+   "kind": "rot",
+   "pivot": [
+    33.602,
+    66.58
+   ],
+   "parent": "F_Face"
+  },
+  "F_Hair_b": {
+   "kind": "rot",
+   "pivot": [
+    143.886,
+    45.9
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Annex_e2": {
+   "kind": "rot",
+   "pivot": [
+    148.723,
+    166.412
+   ],
+   "parent": "F_Annex_e"
+  },
+  "F_L_Ear": {
+   "kind": "rot",
+   "pivot": [
+    90.816,
+    59.37
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Face_Default_d": {
+   "kind": "rot",
+   "pivot": [
+    109.207,
+    90.168
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_L_Hand": {
+   "kind": "rot",
+   "pivot": [
+    88.04,
+    166.637
+   ],
+   "parent": "F_L_Forearm"
+  },
+  "F_Coat_d4": {
+   "kind": "rot",
+   "pivot": [
+    129.477,
+    137.833
+   ],
+   "parent": "F_Coat_d"
+  },
+  "F_Hair_d2": {
+   "kind": "rot",
+   "pivot": [
+    123.082,
+    74.573
+   ],
+   "parent": "F_Hair_d"
+  },
+  "F_Coat_b": {
+   "kind": "rot",
+   "pivot": [
+    128.747,
+    129.669
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Hair_e2": {
+   "kind": "rot",
+   "pivot": [
+    101.3,
+    74.812
+   ],
+   "parent": "F_Hair_e"
+  },
+  "F_Annex_f": {
+   "kind": "rot",
+   "pivot": [
+    112.008,
+    145.349
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Annex_b2": {
+   "kind": "rot",
+   "pivot": [
+    128.157,
+    145.733
+   ],
+   "parent": "F_Annex_b"
+  },
+  "F_Annex_c": {
+   "kind": "rot",
+   "pivot": [
+    136.375,
+    145.5
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Weapon_a2": {
+   "kind": "rot",
+   "pivot": [
+    174.344,
+    137.364
+   ],
+   "parent": "F_Weapon_a"
+  },
+  "F_Tail": {
+   "kind": "rot",
+   "pivot": [
+    -53.592,
+    167.258
+   ],
+   "parent": "F_Waist"
+  },
+  "F_R_Hand_A_b": {
+   "kind": "rot",
+   "pivot": [
+    164.936,
+    141.546
+   ],
+   "parent": "F_R_forearm"
+  },
+  "F_Weapon_b2": {
+   "kind": "rot",
+   "pivot": [
+    177.059,
+    146.16
+   ],
+   "parent": "F_Weapon_b"
+  },
+  "F_Hair_f": {
+   "kind": "rot",
+   "pivot": [
+    133.329,
+    43.891
+   ],
+   "parent": "F_Hair"
+  },
+  "F_Tail_i2": {
+   "kind": "rot",
+   "pivot": [
+    106.504,
+    206.116
+   ],
+   "parent": "F_Tail_i"
+  },
+  "F_Face_Default_a": {
+   "kind": "rot",
+   "pivot": [
+    114.649,
+    81.925
+   ],
+   "parent": "F_Face_Default"
+  },
+  "F_Tail_b12": {
+   "kind": "rot",
+   "pivot": [
+    73.733,
+    200.99
+   ],
+   "parent": "F_Tail_b11"
+  },
+  "F_Hair_b2": {
+   "kind": "rot",
+   "pivot": [
+    157.512,
+    78.553
+   ],
+   "parent": "F_Hair_b"
+  },
+  "F_R_Hand_A_a2": {
+   "kind": "rot",
+   "pivot": [
+    169.432,
+    146.217
+   ],
+   "parent": "F_R_Hand_A_b"
+  },
+  "F_R_Leg": {
+   "kind": "rot",
+   "pivot": [
+    128.491,
+    160.048
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Annex_h": {
+   "kind": "rot",
+   "pivot": [
+    100.577,
+    157.533
+   ],
+   "parent": "F_Annex_f"
+  },
+  "F_Coat_d": {
+   "kind": "rot",
+   "pivot": [
+    114.615,
+    137.614
+   ],
+   "parent": "F_Chest"
+  },
+  "F_Tail_b10": {
+   "kind": "rot",
+   "pivot": [
+    53.052,
+    193.375
+   ],
+   "parent": "F_Tail_b9"
+  },
+  "F_Chest": {
+   "kind": "rot",
+   "pivot": [
+    118.019,
+    140.419
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Hair_b3": {
+   "kind": "rot",
+   "pivot": [
+    156.548,
+    101.813
+   ],
+   "parent": "F_Hair_b2"
+  },
+  "F_L_Ear2": {
+   "kind": "rot",
+   "pivot": [
+    65.058,
+    46.216
+   ],
+   "parent": "F_L_Ear"
+  },
+  "F_L_Leg": {
+   "kind": "rot",
+   "pivot": [
+    105.476,
+    159.903
+   ],
+   "parent": "F_Waist"
+  },
+  "F_Face_Default_c": {
+   "kind": "rot",
+   "pivot": [
+    113.042,
+    88.748
+   ],
+   "parent": "F_Face_Clo"
+  },
+  "F_Face_Default_i": {
+   "kind": "rot",
+   "pivot": [
+    140.896,
+    100.449
+   ],
+   "parent": "F_Face_Default"
+  },
+  "root": {
+   "kind": "rot",
+   "pivot": [
+    122.418,
+    251.62
+   ],
+   "parent": null
+  },
+  "F_R_forearm": {
+   "kind": "rot",
+   "pivot": [
+    141.186,
+    136.518
+   ],
+   "parent": "F_R_Arm"
+  },
+  "F_Tail_f": {
+   "kind": "rot",
+   "pivot": [
+    102.595,
+    173.205
+   ],
+   "parent": "F_Tail"
+  }
+ },
+ "parts": [
+  {
+   "id": "F_Tail_i",
+   "tex": "F_Tail_i",
+   "z": 0,
+   "parent": "F_Tail_i2",
+   "box": [
+    79.676,
+    164.145,
+    53.0,
+    65.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_i"
+  },
+  {
+   "id": "F_Tail_b",
+   "tex": "F_Tail_b",
+   "z": 1,
+   "parent": "F_Tail_b12",
+   "box": [
+    53.624,
+    168.268,
+    54.0,
+    55.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b6"
+  },
+  {
+   "id": "F_Tail_b__F_Tail_b5",
+   "tex": "F_Tail_b__F_Tail_b5",
+   "z": 2,
+   "parent": "F_Tail_b10",
+   "box": [
+    31.08,
+    161.667,
+    60.333,
+    54.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b5"
+  },
+  {
+   "id": "F_Tail_f",
+   "tex": "F_Tail_f",
+   "z": 3,
+   "parent": "F_Tail_f2",
+   "box": [
+    92.93,
+    157.757,
+    64.667,
+    54.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_f"
+  },
+  {
+   "id": "F_Tail_e",
+   "tex": "F_Tail_e",
+   "z": 4,
+   "parent": "F_Tail_e2",
+   "box": [
+    89.104,
+    160.07,
+    58.667,
+    58.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_e"
+  },
+  {
+   "id": "F_Tail_b__F_Tail_b3",
+   "tex": "F_Tail_b__F_Tail_b3",
+   "z": 5,
+   "parent": "F_Tail_b6",
+   "box": [
+    97.179,
+    115.367,
+    62.333,
+    67.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b3"
+  },
+  {
+   "id": "F_Tail_b__F_Tail_b2",
+   "tex": "F_Tail_b__F_Tail_b2",
+   "z": 6,
+   "parent": "F_Tail_b4",
+   "box": [
+    49.7,
+    118.826,
+    72.0,
+    61.0
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b2"
+  },
+  {
+   "id": "F_Tail_b__F_Tail_b",
+   "tex": "F_Tail_b__F_Tail_b",
+   "z": 7,
+   "parent": "F_Tail_b2",
+   "box": [
+    22.834,
+    112.723,
+    64.333,
+    54.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b"
+  },
+  {
+   "id": "F_Tail_b__F_Tail_b4",
+   "tex": "F_Tail_b__F_Tail_b4",
+   "z": 8,
+   "parent": "F_Tail_b8",
+   "box": [
+    17.395,
+    157.119,
+    69.667,
+    52.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Tail_b4"
+  },
+  {
+   "id": "F_Hair_i",
+   "tex": "F_Hair_i",
+   "z": 9,
+   "parent": "F_Hair_i",
+   "box": [
+    118.497,
+    87.458,
+    34.333,
+    35.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_i"
+  },
+  {
+   "id": "F_Hair_h",
+   "tex": "F_Hair_h",
+   "z": 10,
+   "parent": "F_Hair_h",
+   "box": [
+    59.931,
+    84.496,
+    34.667,
+    34.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_h"
+  },
+  {
+   "id": "F_Coat_d",
+   "tex": "F_Coat_d",
+   "z": 11,
+   "parent": "F_Coat_d5",
+   "box": [
+    56.777,
+    125.919,
+    104.0,
+    97.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Coat_d"
+  },
+  {
+   "id": "F_R_Hand_b",
+   "tex": "F_R_Hand_b",
+   "z": 12,
+   "parent": "F_R_Hand_b",
+   "box": [
+    153.966,
+    123.545,
+    37.667,
+    37.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Hand_b"
+  },
+  {
+   "id": "F_R_Hand_a",
+   "tex": "F_R_Hand_a",
+   "z": 13,
+   "parent": "F_R_Hand_b",
+   "box": [
+    156.564,
+    121.317,
+    41.667,
+    41.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Hand_a"
+  },
+  {
+   "id": "F_R_Hand_A_b",
+   "tex": "F_R_Hand_A_b",
+   "z": 14,
+   "parent": "F_R_Hand_A_b2",
+   "box": [
+    166.488,
+    133.968,
+    32.667,
+    21.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_R_Hand_A_b"
+  },
+  {
+   "id": "F_R_Hand_A_a",
+   "tex": "F_R_Hand_A_a",
+   "z": 15,
+   "parent": "F_R_Hand_A_a2",
+   "box": [
+    158.712,
+    125.59,
+    33.333,
+    35.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_R_Hand_A_a"
+  },
+  {
+   "id": "F_R_forearm",
+   "tex": "F_R_forearm",
+   "z": 16,
+   "parent": "F_R_forearm",
+   "box": [
+    110.328,
+    103.799,
+    69.333,
+    68.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_forearm"
+  },
+  {
+   "id": "F_R_Arm",
+   "tex": "F_R_Arm",
+   "z": 17,
+   "parent": "F_R_Arm",
+   "box": [
+    117.171,
+    113.402,
+    30.667,
+    30.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Arm"
+  },
+  {
+   "id": "F_R_Calf",
+   "tex": "F_R_Calf",
+   "z": 18,
+   "parent": "F_R_Calf",
+   "box": [
+    110.266,
+    181.813,
+    60.667,
+    70.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Calf"
+  },
+  {
+   "id": "F_R_Foot",
+   "tex": "F_R_Foot",
+   "z": 19,
+   "parent": "F_R_Foot",
+   "box": [
+    116.428,
+    232.247,
+    46.0,
+    20.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Foot"
+  },
+  {
+   "id": "F_R_Leg",
+   "tex": "F_R_Leg",
+   "z": 20,
+   "parent": "F_R_Leg",
+   "box": [
+    109.98,
+    151.894,
+    44.333,
+    52.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Leg"
+  },
+  {
+   "id": "F_L_Calf",
+   "tex": "F_L_Calf",
+   "z": 21,
+   "parent": "F_L_Calf",
+   "box": [
+    73.208,
+    182.609,
+    63.667,
+    73.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Calf"
+  },
+  {
+   "id": "F_L_Foot",
+   "tex": "F_L_Foot",
+   "z": 22,
+   "parent": "F_L_Foot",
+   "box": [
+    81.416,
+    231.394,
+    46.667,
+    22.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Foot"
+  },
+  {
+   "id": "F_L_Leg",
+   "tex": "F_L_Leg",
+   "z": 23,
+   "parent": "F_L_Leg",
+   "box": [
+    84.288,
+    151.132,
+    48.667,
+    53.333
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Leg"
+  },
+  {
+   "id": "F_Coat_c",
+   "tex": "F_Coat_c",
+   "z": 24,
+   "parent": "F_Coat_c4",
+   "box": [
+    67.582,
+    138.197,
+    99.333,
+    57.0
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Coat_c"
+  },
+  {
+   "id": "F_Chest",
+   "tex": "F_Chest",
+   "z": 25,
+   "parent": "F_Chest",
+   "box": [
+    100.698,
+    109.941,
+    35.0,
+    35.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Chest"
+  },
+  {
+   "id": "F_Waist",
+   "tex": "F_Waist",
+   "z": 26,
+   "parent": "F_Waist",
+   "box": [
+    97.935,
+    130.867,
+    43.333,
+    33.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Waist"
+  },
+  {
+   "id": "F_Annex_h",
+   "tex": "F_Annex_h",
+   "z": 27,
+   "parent": "F_Annex_h",
+   "box": [
+    88.025,
+    151.648,
+    18.0,
+    24.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_h"
+  },
+  {
+   "id": "F_Annex_g",
+   "tex": "F_Annex_g",
+   "z": 28,
+   "parent": "F_Annex_g",
+   "box": [
+    103.78,
+    152.863,
+    14.667,
+    22.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_g"
+  },
+  {
+   "id": "F_Annex_f",
+   "tex": "F_Annex_f",
+   "z": 29,
+   "parent": "F_Annex_f",
+   "box": [
+    86.884,
+    133.322,
+    37.333,
+    30.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_f"
+  },
+  {
+   "id": "F_Annex_e",
+   "tex": "F_Annex_e",
+   "z": 30,
+   "parent": "F_Annex_e2",
+   "box": [
+    139.011,
+    152.575,
+    18.333,
+    24.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_e"
+  },
+  {
+   "id": "F_Annex_d",
+   "tex": "F_Annex_d",
+   "z": 31,
+   "parent": "F_Annex_d",
+   "box": [
+    133.477,
+    155.157,
+    12.667,
+    15.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_d"
+  },
+  {
+   "id": "F_Annex_c",
+   "tex": "F_Annex_c",
+   "z": 32,
+   "parent": "F_Annex_c",
+   "box": [
+    128.631,
+    141.917,
+    19.667,
+    20.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_c"
+  },
+  {
+   "id": "F_Weapon_i",
+   "tex": "F_Weapon_i",
+   "z": 33,
+   "parent": "F_Weapon_b2",
+   "box": [
+    159.363,
+    19.157,
+    70.333,
+    83.0
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_i"
+  },
+  {
+   "id": "F_Weapon_c",
+   "tex": "F_Weapon_c",
+   "z": 34,
+   "parent": "F_Weapon_c",
+   "box": [
+    145.57,
+    58.5,
+    46.0,
+    54.333
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_c"
+  },
+  {
+   "id": "F_Weapon_f",
+   "tex": "F_Weapon_f",
+   "z": 35,
+   "parent": "F_Weapon_f",
+   "box": [
+    183.972,
+    66.812,
+    47.0,
+    54.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_f"
+  },
+  {
+   "id": "F_Weapon_d",
+   "tex": "F_Weapon_d",
+   "z": 36,
+   "parent": "F_Weapon_d",
+   "box": [
+    144.645,
+    52.772,
+    47.667,
+    30.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_d"
+  },
+  {
+   "id": "F_Weapon_g",
+   "tex": "F_Weapon_g",
+   "z": 37,
+   "parent": "F_Weapon_g",
+   "box": [
+    190.653,
+    63.097,
+    48.0,
+    30.333
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_g"
+  },
+  {
+   "id": "F_Weapon_e",
+   "tex": "F_Weapon_e",
+   "z": 38,
+   "parent": "F_Weapon_e",
+   "box": [
+    168.339,
+    46.867,
+    26.0,
+    18.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_e"
+  },
+  {
+   "id": "F_Weapon_h",
+   "tex": "F_Weapon_h",
+   "z": 39,
+   "parent": "F_Weapon_h",
+   "box": [
+    194.14,
+    52.452,
+    26.667,
+    18.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_h"
+  },
+  {
+   "id": "F_Weapon_b",
+   "tex": "F_Weapon_b",
+   "z": 40,
+   "parent": "F_Muzzle",
+   "box": [
+    139.979,
+    5.833,
+    82.667,
+    248.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_b"
+  },
+  {
+   "id": "F_Weapon_a",
+   "tex": "F_Weapon_a",
+   "z": 41,
+   "parent": "F_Weapon_a2",
+   "box": [
+    169.055,
+    105.834,
+    11.667,
+    52.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Weapon_a"
+  },
+  {
+   "id": "F_L_Hand",
+   "tex": "F_L_Hand",
+   "z": 42,
+   "parent": "F_L_Hand",
+   "box": [
+    65.697,
+    157.201,
+    40.0,
+    40.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Hand"
+  },
+  {
+   "id": "F_L_Forearm",
+   "tex": "F_L_Forearm",
+   "z": 43,
+   "parent": "F_L_Forearm",
+   "box": [
+    67.581,
+    129.396,
+    51.667,
+    51.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Forearm"
+  },
+  {
+   "id": "F_L_Arm",
+   "tex": "F_L_Arm",
+   "z": 44,
+   "parent": "F_L_Arm",
+   "box": [
+    84.974,
+    107.678,
+    42.0,
+    39.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Arm"
+  },
+  {
+   "id": "F_Coat_b",
+   "tex": "F_Coat_b",
+   "z": 45,
+   "parent": "F_Coat_b3",
+   "box": [
+    125.564,
+    116.84,
+    47.0,
+    24.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Coat_b"
+  },
+  {
+   "id": "F_Coat_a",
+   "tex": "F_Coat_a",
+   "z": 46,
+   "parent": "F_Coat_a3",
+   "box": [
+    62.453,
+    122.764,
+    67.0,
+    38.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Coat_a"
+  },
+  {
+   "id": "F_Annex_b",
+   "tex": "F_Annex_b",
+   "z": 47,
+   "parent": "F_Annex_b3",
+   "box": [
+    123.046,
+    124.982,
+    9.333,
+    41.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_b"
+  },
+  {
+   "id": "F_Annex_a",
+   "tex": "F_Annex_a",
+   "z": 48,
+   "parent": "F_Annex_a",
+   "box": [
+    129.362,
+    127.285,
+    18.0,
+    22.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Annex_a"
+  },
+  {
+   "id": "F_R_Ear",
+   "tex": "F_R_Ear",
+   "z": 49,
+   "parent": "F_R_Ear2",
+   "box": [
+    136.488,
+    34.806,
+    51.0,
+    46.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_R_Ear"
+  },
+  {
+   "id": "F_Head",
+   "tex": "F_Head",
+   "z": 50,
+   "parent": "F_Head",
+   "box": [
+    76.995,
+    39.513,
+    78.0,
+    78.0
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Head"
+  },
+  {
+   "id": "F_Face_Default_m",
+   "tex": "F_Face_Default_m",
+   "z": 51,
+   "parent": "F_Head",
+   "box": [
+    133.32,
+    89.3,
+    16.0,
+    15.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_m"
+  },
+  {
+   "id": "F_Face_Default_l",
+   "tex": "F_Face_Default_l",
+   "z": 52,
+   "parent": "F_Head",
+   "box": [
+    99.25,
+    87.048,
+    25.333,
+    17.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_l"
+  },
+  {
+   "id": "F_Face_Default_k",
+   "tex": "F_Face_Default_k",
+   "z": 53,
+   "parent": "F_Face_Default_k",
+   "box": [
+    135.508,
+    88.643,
+    12.333,
+    15.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_k"
+  },
+  {
+   "id": "F_Face_Default_j",
+   "tex": "F_Face_Default_j",
+   "z": 54,
+   "parent": "F_Face_Default_j",
+   "box": [
+    105.735,
+    87.057,
+    16.667,
+    16.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_j"
+  },
+  {
+   "id": "F_Face_Default_i",
+   "tex": "F_Face_Default_i",
+   "z": 55,
+   "parent": "F_Face_Default_i",
+   "box": [
+    114.455,
+    75.879,
+    38.333,
+    41.0
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_i"
+  },
+  {
+   "id": "F_Face_Default_h",
+   "tex": "F_Face_Default_h",
+   "z": 56,
+   "parent": "F_Face_Default_h",
+   "box": [
+    89.956,
+    72.207,
+    38.333,
+    39.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_h"
+  },
+  {
+   "id": "F_Hair_g",
+   "tex": "F_Hair_g",
+   "z": 57,
+   "parent": "F_Hair",
+   "box": [
+    65.69,
+    35.079,
+    94.667,
+    78.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_g"
+  },
+  {
+   "id": "F_Hair_f",
+   "tex": "F_Hair_f",
+   "z": 58,
+   "parent": "F_Hair_f2",
+   "box": [
+    125.686,
+    41.627,
+    32.667,
+    54.333
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_f"
+  },
+  {
+   "id": "F_Hair_e",
+   "tex": "F_Hair_e",
+   "z": 59,
+   "parent": "F_Hair_e2",
+   "box": [
+    91.982,
+    41.998,
+    27.333,
+    46.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_e"
+  },
+  {
+   "id": "F_Hair_d",
+   "tex": "F_Hair_d",
+   "z": 60,
+   "parent": "F_Hair_d2",
+   "box": [
+    103.867,
+    42.293,
+    40.0,
+    52.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_d"
+  },
+  {
+   "id": "F_Hair_c",
+   "tex": "F_Hair_c",
+   "z": 61,
+   "parent": "F_Hair",
+   "box": [
+    91.687,
+    48.584,
+    65.667,
+    21.667
+   ],
+   "grid": [
+    6,
+    6
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_c"
+  },
+  {
+   "id": "F_Hair_b",
+   "tex": "F_Hair_b",
+   "z": 62,
+   "parent": "F_Hair_b3",
+   "box": [
+    133.025,
+    39.619,
+    34.667,
+    87.667
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_b"
+  },
+  {
+   "id": "F_L_Ear",
+   "tex": "F_L_Ear",
+   "z": 63,
+   "parent": "F_L_Ear2",
+   "box": [
+    45.28,
+    30.732,
+    60.333,
+    47.333
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_L_Ear"
+  },
+  {
+   "id": "F_Hair_a",
+   "tex": "F_Hair_a",
+   "z": 64,
+   "parent": "F_Hair_a3",
+   "box": [
+    78.195,
+    41.292,
+    34.667,
+    90.0
+   ],
+   "grid": [
+    8,
+    8
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Hair_a"
+  },
+  {
+   "id": "F_Face_Default_g",
+   "tex": "F_Face_Default_g",
+   "z": 65,
+   "parent": "F_Face_Default_g",
+   "box": [
+    125.88,
+    107.014,
+    6.667,
+    3.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_g"
+  },
+  {
+   "id": "F_Face_Default_f",
+   "tex": "F_Face_Default_f",
+   "z": 66,
+   "parent": "F_Face_Default_f",
+   "box": [
+    133.398,
+    87.151,
+    20.333,
+    11.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_f"
+  },
+  {
+   "id": "F_Face_Default_e",
+   "tex": "F_Face_Default_e",
+   "z": 67,
+   "parent": "F_Face_Default_e",
+   "box": [
+    134.722,
+    86.183,
+    17.667,
+    9.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_Face_Default_e"
+  },
+  {
+   "id": "F_Face_Default_d",
+   "tex": "F_Face_Default_d",
+   "z": 68,
+   "parent": "F_Face_Default_d",
+   "box": [
+    95.929,
+    83.017,
+    28.333,
+    16.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_d"
+  },
+  {
+   "id": "F_Face_Default_c",
+   "tex": "F_Face_Default_c",
+   "z": 69,
+   "parent": "F_Face_Default_c",
+   "box": [
+    100.042,
+    84.844,
+    25.0,
+    10.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_Face_Default_c"
+  },
+  {
+   "id": "F_Face_Default_b",
+   "tex": "F_Face_Default_b",
+   "z": 70,
+   "parent": "F_Face_Default_b",
+   "box": [
+    133.553,
+    81.626,
+    13.333,
+    3.667
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_b"
+  },
+  {
+   "id": "F_Face_Default_a",
+   "tex": "F_Face_Default_a",
+   "z": 71,
+   "parent": "F_Face_Default_a",
+   "box": [
+    108.081,
+    80.399,
+    14.0,
+    4.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": true,
+   "alpha": 1.0,
+   "slot": "F_Face_Default_a"
+  },
+  {
+   "id": "F_Face_Stun_c",
+   "tex": "F_Face_Stun_c",
+   "z": 72,
+   "parent": "F_Face_Stun_c",
+   "box": [
+    125.562,
+    107.317,
+    7.333,
+    4.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_Face_Stun_c"
+  },
+  {
+   "id": "F_Face_Stun_b",
+   "tex": "F_Face_Stun_b",
+   "z": 73,
+   "parent": "F_Face_Stun_b",
+   "box": [
+    130.819,
+    86.371,
+    22.333,
+    22.333
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_Face_Stun_b"
+  },
+  {
+   "id": "F_Face_Stun_a",
+   "tex": "F_Face_Stun_a",
+   "z": 74,
+   "parent": "F_Face_Stun_a",
+   "box": [
+    98.268,
+    83.524,
+    27.333,
+    26.0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "visible": false,
+   "alpha": 0.0,
+   "slot": "F_Face_Stun_a"
+  }
+ ]
+}

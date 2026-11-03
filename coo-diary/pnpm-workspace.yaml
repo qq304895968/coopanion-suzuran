@@ -1,0 +1,8 @@
+# esbuild 的 postinstall 要装平台二进制,放行它。
+allowBuilds:
+  esbuild: true
+# 本机 pnpm 默认的 junction 布局里的链接无法被 Node 解析(tsx 找不到 esbuild),
+# 改用扁平布局。只影响本包的开发依赖,发布出去的包不带 node_modules。
+nodeLinker: hoisted
+minimumReleaseAgeExclude:
+  - cortico@0.2.8

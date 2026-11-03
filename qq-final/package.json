@@ -1,0 +1,45 @@
+{
+  "name": "cortico-world-qq-local",
+  "version": "0.6.35-local.1",
+  "private": true,
+  "description": "本地分支：QQ（OneBot v11 / NapCat）World，fork 自 cortico-world-qq-final 0.6.35，加了 voice_text（先日语语音、后中文文字，串行发送队列）。",
+  "type": "module",
+  "main": "./src/index.ts",
+  "files": [
+    "src",
+    "dist",
+    "describe.json",
+    "README.md",
+    "CHANGELOG.md",
+    "ENV_PROMPT.md",
+    "asr_sidecar.py",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "qq",
+    "onebot",
+    "napcat",
+    "local-fork"
+  ],
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "label": "QQ_bot",
+    "tags": [
+      "im",
+      "qq",
+      "external-setup"
+    ],
+    "webUiClient": "dist/console.js",
+    "webUiStyle": "dist/console.css",
+    "describe": "describe.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "name": "cortico-world-coo-draw",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cortico World: one drawing studio with two tabs — the persona's small hand-drawn pictures through the Qianwen API, and the user's own ComfyUI pictures. Each persona-facing call site can choose its backend; diary drawings keep the persona's hand.",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "coopanion",
+    "desktop-pet",
+    "drawing",
+    "comfyui",
+    "qwen"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "画室",
+    "webUiClient": "dist/webui.js",
+    "webUiStyle": "dist/webui.css",
+    "tags": [
+      "creative",
+      "internet",
+      "requires-key",
+      "local",
+      "external-setup"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "画室",
+        "description": "一个插件装两种画法：API 绘画让桌宠按自己的人设画 512×512 的小画（画夹、评价、额度），本地出图借你的 ComfyUI 出你自己的图（模型、LoRA、工作流、历史）。桌宠主动画和日记配图可以各自选 API 或本地，日记里的画仍保持铃兰的手笔。"
+      },
+      "en": {
+        "displayName": "Drawing studio",
+        "description": "Two ways to draw in one plugin: persona-styled API drawings (gallery, ratings, quota) and your own local ComfyUI pictures (checkpoints, LoRAs, workflows, history). Pet drawings and diary illustrations can each pick a backend, and diary pictures keep the persona's hand."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "build": "node scripts/build-webui.mjs",
+    "describe": "tsx scripts/describe.ts",
+    "check": "tsx scripts/check.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.2.8",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

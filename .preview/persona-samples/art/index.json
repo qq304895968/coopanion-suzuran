@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-03T23:18:03.339+08:00",
+  "drawings": [
+    {
+      "id": "d-20261103T231803-3e9fb7",
+      "file": "unrated/d-20261103T231803-3e9fb7.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 389906,
+      "createdAt": "2026-11-03T23:18:03.337+08:00",
+      "subject": "一只在窗台上打盹的小狐狸",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "rating": "unrated"
+    },
+    {
+      "id": "d-20261103T231728-e97a2a",
+      "file": "unrated/d-20261103T231728-e97a2a.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 401048,
+      "createdAt": "2026-11-03T23:17:28.763+08:00",
+      "subject": "一只在窗台上打盹的小狐狸",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "rating": "unrated"
+    },
+    {
+      "id": "d-20261103T231656-24b586",
+      "file": "unrated/d-20261103T231656-24b586.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 407970,
+      "createdAt": "2026-11-03T23:16:56.269+08:00",
+      "subject": "一只在窗台上打盹的小狐狸",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "rating": "unrated"
+    }
+  ]
+}

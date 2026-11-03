@@ -1,0 +1,59 @@
+{
+  "name": "cortico-world-coo-screen",
+  "version": "0.4.0",
+  "type": "module",
+  "description": "Cortico World: press a hotkey and hand the current screen to Coo, one frame at a time",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "screenshot",
+    "vision"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "win32"
+  ],
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "看一眼",
+    "tags": [
+      "external-setup"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "看一眼",
+        "description": "按一下热键,把当前这一屏交给 Coo 看:它先说清这是什么,再告诉你下一步怎么做。抓屏在一个只依赖标准库的 Python 侧车里做,不装 Pillow、不常驻录屏,只在按键那一刻拍一帧。"
+      },
+      "en": {
+        "displayName": "Glance",
+        "description": "Press a hotkey and Coo looks at your screen: first what this is, then what to do next. Capturing happens in a stdlib-only Python sidecar, with no Pillow and no always-on recording; one frame per keypress."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "sidecar",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "selftest:sidecar": "python sidecar/selftest.py"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.2.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

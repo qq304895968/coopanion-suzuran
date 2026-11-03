@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/webui/style.css"],
+  "sourcesContent": [".emote-pics td {\n  vertical-align: middle;\n}\n\n.emote-pics-num {\n  width: 6rem;\n  min-width: 0;\n}\n\n.emote-pics .rowbar label {\n  margin-right: 1rem;\n}\n"],
+  "mappings": "AAAA,CAAC,WAAW,GACV,eAAgB,MAClB,CAEA,CAAC,eACC,MAAO,KACP,UAAW,CACb,CAEA,CATC,WASW,CAAC,OAAO,MAClB,aAAc,IAChB",
+  "names": []
+}

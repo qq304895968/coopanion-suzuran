@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-04T01:46:10.814+08:00",
+  "drawings": [
+    {
+      "id": "d-20261104T014610-75835b",
+      "file": "unrated/d-20261104T014610-75835b.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 437141,
+      "createdAt": "2026-11-04T01:46:10.812+08:00",
+      "subject": "洞窟里的瀑布、彩虹和石柱，秋天的红树，铃兰站在左下角抬头看",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "reference": "本地图片 aec4910f29723ada05f703c12246e8a62cfdecd7298e447ce3b85af980cff9fb",
+      "rating": "unrated"
+    },
+    {
+      "id": "d-20261104T014128-a9f20e",
+      "file": "unrated/d-20261104T014128-a9f20e.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 440076,
+      "createdAt": "2026-11-04T01:41:28.231+08:00",
+      "subject": "洞窟里的瀑布、彩虹和石柱，秋天的红树，铃兰站在左下角抬头看",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "reference": "本地图片 ref-512.png",
+      "rating": "unrated"
+    },
+    {
+      "id": "d-20261104T014111-ad5dcf",
+      "file": "unrated/d-20261104T014111-ad5dcf.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 415945,
+      "createdAt": "2026-11-04T01:41:11.858+08:00",
+      "subject": "洞窟里的瀑布、彩虹和石柱，秋天的红树，铃兰站在左下角抬头看",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "reference": "本地图片 ref-512.png",
+      "rating": "unrated"
+    },
+    {
+      "id": "d-20261104T014054-c4a0c6",
+      "file": "unrated/d-20261104T014054-c4a0c6.png",
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 394805,
+      "createdAt": "2026-11-04T01:40:54.505+08:00",
+      "subject": "洞窟里的瀑布、彩虹和石柱，秋天的红树，铃兰站在左下角抬头看",
+      "style": "蜡笔涂鸦",
+      "styleId": "crayon",
+      "reference": "本地图片 ref-512.png",
+      "rating": "unrated"
+    }
+  ]
+}

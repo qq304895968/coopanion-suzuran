@@ -1,0 +1,300 @@
+/** `emote_pic`:按概率从表情文件夹里挑一张图;没出图时返回 skipped 回执。 */
+import { randomInt } from 'node:crypto';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, extname, isAbsolute, join } from 'node:path';
+import type { Language } from 'cortico/core/language.ts';
+import type { ToolDef, ToolOutcome, World, WorldWebUiDecl } from 'cortico/core/types.ts';
+import type { DeepPartial } from 'cortico/world.ts';
+import {
+  EMOTIONS,
+  clampChance,
+  isEmotion,
+  resolveConfig,
+  type EmotePicsConfigSection,
+  type Emotion,
+  type ResolvedConfig,
+} from './config.ts';
+
+/** 5 MiB;再大的图跳过。 */
+const MAX_BYTES = 5 * 1024 * 1024;
+
+/** 同一表情最近发过几张不重复。 */
+const RECENT_LIMIT = 3;
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+
+/** 全部工具的声明;定义里的 describe 与 `tools()` 都取它。 */
+export const EMOTE_PIC_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  {
+    name: 'emote_pic',
+    description: 'Maybe attach one random picture from the folder configured for an emotion. '
+      + 'The call first rolls the emotion\'s chance (and its cooldown); when it does not fire, the receipt says '
+      + 'skipped with a reason and carries no image. Use force to bypass chance and cooldown while testing. '
+      + 'When it fires, the receipt carries the image as a [blob ...] line with a log: handle for image-sending tools. '
+      + 'Only png, jpg, jpeg, gif and webp up to 5 MB are used.',
+    tags: ['read'],
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        emotion: {
+          type: 'string',
+          enum: [...EMOTIONS],
+          description: 'Which emotion folder to draw from.',
+        },
+        avoid: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File names not to pick, e.g. the last picture you sent.',
+        },
+        force: {
+          type: 'boolean',
+          description: 'Bypass the chance roll and the cooldown; the other rules still apply. For testing.',
+        },
+      },
+      required: ['emotion'],
+    },
+  },
+];
+
+export interface EmotePicsWorldOptions {
+  /** `worlds.emote-pics` 的活引用。 */
+  cfg: EmotePicsConfigSection;
+  /** 深合并进 `worlds.emote-pics`;面板保存走这里,立即生效。 */
+  persist(patch: DeepPartial<EmotePicsConfigSection>): void;
+  /** 概率掷骰;测试可注入,默认 `Math.random`。 */
+  random?: () => number;
+  /** 冷却计时;测试可注入,默认 `Date.now`。 */
+  now?: () => number;
+}
+
+type SaveResult = { ok: true; state: ResolvedConfig } | { ok: false; error: string };
+type SkipReason = 'chance' | 'cooldown';
+
+export class EmotePicsWorld implements World {
+  readonly id = 'emote-pics';
+
+  /** 每个表情最近发过的文件名,最多 `RECENT_LIMIT` 个;进程重启后清空。 */
+  private readonly recent = new Map<Emotion, string[]>();
+  /** 每个表情上次出图的时间(ms);冷却用。 */
+  private readonly lastSent = new Map<Emotion, number>();
+
+  constructor(private readonly opts: EmotePicsWorldOptions) {}
+
+  /** 这个 World 不进环境提示词。 */
+  envPromptVars(): null {
+    return null;
+  }
+
+  tools(): ToolDef[] {
+    return [{ ...EMOTE_PIC_DECLS[0], handler: async (args) => this.pick(args) }];
+  }
+
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
+    const zh = language.startsWith('zh');
+    return {
+      label: zh ? '表情图库' : 'Emote pictures',
+      panels: [{
+        id: 'folders',
+        title: zh ? '表情文件夹' : 'Emotion folders',
+        description: zh
+          ? '给每个表情选一个图片文件夹、设一个出图概率;改完立即生效,不用重启。'
+          : 'Pick one picture folder and a send chance per emotion; changes apply at once without a restart.',
+      }],
+      invoke: async (panel, method, args) => {
+        if (panel !== 'folders') throw new Error(`unknown panel: ${panel}`);
+        if (method === 'state') return { ok: true, state: resolveConfig(this.opts.cfg) };
+        if (method === 'setDir') return this.setDir(args);
+        if (method === 'setChance') return this.setChance(args);
+        if (method === 'setDefaults') return this.setDefaults(args);
+        throw new Error(`unknown method: ${method}`);
+      },
+    };
+  }
+
+  async start(): Promise<void> {}
+
+  async stop(): Promise<void> {}
+
+  private setDir(args: unknown[]): SaveResult {
+    const emotion = String(args[0] ?? '');
+    if (!isEmotion(emotion)) return { ok: false, error: `未知表情: ${emotion}` };
+    const path = String(args[1] ?? '').trim();
+    if (path) {
+      if (!isAbsolute(path)) return { ok: false, error: `请填绝对路径: ${path}` };
+      let stat;
+      try {
+        stat = statSync(path);
+      } catch {
+        return { ok: false, error: `文件夹不存在: ${path}` };
+      }
+      if (!stat.isDirectory()) return { ok: false, error: `不是文件夹: ${path}` };
+    }
+    this.opts.persist({ emotions: { [emotion]: { dir: path } } } as DeepPartial<EmotePicsConfigSection>);
+    return { ok: true, state: resolveConfig(this.opts.cfg) };
+  }
+
+  private setChance(args: unknown[]): SaveResult {
+    const emotion = String(args[0] ?? '');
+    if (!isEmotion(emotion)) return { ok: false, error: `未知表情: ${emotion}` };
+    const value = Number(args[1]);
+    if (!Number.isFinite(value)) return { ok: false, error: `概率必须是 0~1 的数字: ${String(args[1] ?? '')}` };
+    const chance = clampChance(value, 0);
+    this.opts.persist({ emotions: { [emotion]: { chance } } } as DeepPartial<EmotePicsConfigSection>);
+    return { ok: true, state: resolveConfig(this.opts.cfg) };
+  }
+
+  private setDefaults(args: unknown[]): SaveResult {
+    const patch = (args[0] ?? {}) as Record<string, unknown>;
+    const next: { defaultChance?: number; cooldownSeconds?: number } = {};
+    if (patch.defaultChance !== undefined) {
+      const value = Number(patch.defaultChance);
+      if (!Number.isFinite(value)) return { ok: false, error: `默认概率必须是 0~1 的数字: ${String(patch.defaultChance)}` };
+      next.defaultChance = clampChance(value, 0);
+    }
+    if (patch.cooldownSeconds !== undefined) {
+      const value = Number(patch.cooldownSeconds);
+      if (!Number.isFinite(value) || value < 0) {
+        return { ok: false, error: `冷却秒数必须是不小于 0 的数字: ${String(patch.cooldownSeconds)}` };
+      }
+      next.cooldownSeconds = value;
+    }
+    this.opts.persist(next as DeepPartial<EmotePicsConfigSection>);
+    return { ok: true, state: resolveConfig(this.opts.cfg) };
+  }
+
+  private pick(args: Record<string, unknown>): ToolOutcome {
+    const emotion = String(args.emotion ?? '').trim();
+    if (!isEmotion(emotion)) {
+      return fail(`emotion 只接受 ${EMOTIONS.join('、')} 之一;收到 "${emotion}"。`);
+    }
+
+    const config = resolveConfig(this.opts.cfg);
+    const setting = config.emotions[emotion];
+    if (!setting.dir) {
+      return fail(`${emotion} 还没有配置文件夹。到 WebUI 的「表情图库」面板里给它选一个。`);
+    }
+    if (!isAbsolute(setting.dir)) return fail(`${emotion} 配置的文件夹不是绝对路径: ${setting.dir}`);
+
+    let stat;
+    try {
+      stat = statSync(setting.dir);
+    } catch {
+      return fail(`${emotion} 的文件夹不存在: ${setting.dir}`);
+    }
+    if (!stat.isDirectory()) return fail(`${emotion} 的文件夹不是目录: ${setting.dir}`);
+
+    const avoid = new Set(
+      (Array.isArray(args.avoid) ? args.avoid : [])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => basename(value)),
+    );
+    const images = this.imagesIn(setting.dir, avoid);
+    if (!images.length) {
+      return fail(`${emotion} 的文件夹里没有可用图片(只收 png/jpg/jpeg/gif/webp,每张不超过 5 MB)`
+        + (avoid.size ? `;avoid 还排除了 ${avoid.size} 个文件名。` : '。'));
+    }
+
+    if (args.force !== true) {
+      const chance = setting.chance;
+      if (chance <= 0) return this.skip(emotion, 'chance', chance, `概率 0%`);
+      const roll = this.random();
+      if (roll >= chance) {
+        return this.skip(emotion, 'chance', chance, `概率 ${Math.round(chance * 100)}%,掷骰 ${roll.toFixed(3)}`);
+      }
+      const left = this.cooldownLeftMs(emotion, config.cooldownSeconds);
+      if (left > 0) {
+        return this.skip(emotion, 'cooldown', chance,
+          `刚发过一张,冷却还剩 ${Math.ceil(left / 1000)} 秒(间隔 ${config.cooldownSeconds} 秒)`);
+      }
+    }
+
+    const recent = this.recent.get(emotion) ?? [];
+    let pool = images.filter((image) => !recent.includes(image.name));
+    if (!pool.length) pool = images.filter((image) => image.name !== recent[recent.length - 1]);
+    if (!pool.length) pool = images;
+    const chosen = pool[randomInt(pool.length)]!;
+
+    let bytes: Uint8Array;
+    try {
+      bytes = readFileSync(chosen.path);
+    } catch (err) {
+      return fail(`读取 ${chosen.path} 失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    this.remember(emotion, chosen.name);
+    this.lastSent.set(emotion, this.now());
+    return {
+      text: `已选 ${emotion}:${chosen.name}(${bytes.byteLength} 字节,${chosen.mime},概率 ${Math.round(setting.chance * 100)}%)\n`
+        + `path=${chosen.path}\n`
+        + '句柄在下一行 [blob …] 里,把它填进 pet_say 的 images。',
+      blobs: [{ bytes, mime: chosen.mime, name: chosen.name, fallbackText: `原路径 ${chosen.path}` }],
+    };
+  }
+
+  /** 跳过不是错误:回执里带 `{skipped, reason, chance}`,不带附件。 */
+  private skip(emotion: Emotion, reason: SkipReason, chance: number, detail: string): ToolOutcome {
+    const payload = JSON.stringify({ skipped: true, reason, chance });
+    return { text: `[skipped] ${payload}\n${emotion} 这次不出图:${detail}。不是错误,是故意跳过。` };
+  }
+
+  private cooldownLeftMs(emotion: Emotion, cooldownSeconds: number): number {
+    if (cooldownSeconds <= 0) return 0;
+    const last = this.lastSent.get(emotion);
+    if (last === undefined) return 0;
+    return Math.max(0, cooldownSeconds * 1000 - (this.now() - last));
+  }
+
+  /** 文件夹里合格、且不在 avoid 名单里的图片。 */
+  private imagesIn(
+    folder: string,
+    avoid: ReadonlySet<string>,
+  ): Array<{ name: string; path: string; mime: string }> {
+    let names: string[];
+    try {
+      names = readdirSync(folder);
+    } catch {
+      return [];
+    }
+    const out: Array<{ name: string; path: string; mime: string }> = [];
+    for (const name of names) {
+      if (name.startsWith('.') || avoid.has(name)) continue;
+      const mime = MIME_BY_EXTENSION[extname(name).toLowerCase()];
+      if (!mime) continue;
+      const path = join(folder, name);
+      try {
+        const stat = statSync(path);
+        if (!stat.isFile() || stat.size > MAX_BYTES) continue;
+      } catch {
+        continue;
+      }
+      out.push({ name, path, mime });
+    }
+    return out;
+  }
+
+  private remember(emotion: Emotion, name: string): void {
+    const list = this.recent.get(emotion) ?? [];
+    list.push(name);
+    if (list.length > RECENT_LIMIT) list.splice(0, list.length - RECENT_LIMIT);
+    this.recent.set(emotion, list);
+  }
+
+  private random(): number {
+    return (this.opts.random ?? Math.random)();
+  }
+
+  private now(): number {
+    return (this.opts.now ?? Date.now)();
+  }
+}
+
+function fail(text: string): ToolOutcome {
+  return { text, failed: true };
+}

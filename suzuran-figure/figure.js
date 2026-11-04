@@ -198,11 +198,14 @@ async function loadOutfit(outfit, scene, url) {
   const img = await scene.page(outfit);
   const size = { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
 
+  // url() 可能给的是 URL 对象，也可能已经被 asset() 变成字符串
+  const href = (u) => (typeof u === 'string' ? u : u.href);
+
   let atlasText;
   try {
     atlasText = await readText(url(dir + outfit.atlas));
   } catch {
-    atlasText = (await import(url(`${dir}${outfit.atlas}.js`).href)).default;
+    atlasText = (await import(href(url(`${dir}${outfit.atlas}.js`)))).default;
   }
   const atlas = parseAtlas(atlasText);
 
@@ -210,7 +213,7 @@ async function loadOutfit(outfit, scene, url) {
   try {
     bytes = await readBytes(url(dir + outfit.skel));
   } catch {
-    bytes = await inflateBase64((await import(url(`${dir}${outfit.skel}.js`).href)).default);
+    bytes = await inflateBase64((await import(href(url(`${dir}${outfit.skel}.js`)))).default);
   }
 
   const missing = [];

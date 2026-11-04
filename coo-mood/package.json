@@ -1,0 +1,61 @@
+{
+  "name": "cortico-world-coo-mood",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Cortico World: a persistent mood value that colours the pet's dialogue, thinking style and behaviour",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "coopanion",
+    "mood",
+    "roleplay"
+  ],
+  "engines": {
+    "node": ">=22.15"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "心情",
+    "webUiClient": "dist/webui.js",
+    "tags": [
+      "internal-state",
+      "companion"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "心情",
+        "description": "给桌宠一个会自然回归、会被对话/浏览/搭理影响的心情值；它改变说话方式、思维方式、待机表现与主动程度。"
+      },
+      "en": {
+        "displayName": "Mood",
+        "description": "A persistent mood value that drifts back to the persona's baseline and changes how the pet talks, thinks, idles and reaches out."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "build": "node scripts/build-webui.mjs",
+    "describe": "node scripts/describe.mjs",
+    "check:manifest": "node scripts/check-manifest.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "cortico": "0.2.8",
+    "typescript": "5.7.3",
+    "vitest": "2.1.9"
+  }
+}

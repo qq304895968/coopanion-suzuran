@@ -1,0 +1,50 @@
+{
+  "name": "cortico-world-arknights",
+  "version": "0.5.1",
+  "type": "module",
+  "description": "Cortico World for Arknights: offline operator skills/talents lookup, Integrated Strategies run ledger, reminders and Blackstream (ROGUE 6) screenshot topology, map matching and true step distances",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "arknights",
+    "明日方舟"
+  ],
+  "engines": {
+    "node": ">=22.15"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "tags": [],
+    "describe": "describe.json"
+  },
+  "files": [
+    "src",
+    "!src/data/blackstream.local.json",
+    "!src/data/blackstream-end.local.json",
+    "!src/data/blackstream-topology.local.json",
+    "README.md",
+    "CHANGELOG.md",
+    "DATA-NOTICE.md",
+    "LICENSE",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:data": "node scripts/build-operators.mjs",
+    "build:describe": "tsx scripts/build-describe.ts",
+    "import:blackstream": "node scripts/import-blackstream.mjs",
+    "import:topologies": "node scripts/import-topologies.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "cortico": "0.2.8",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "vitest": "2.1.9"
+  }
+}

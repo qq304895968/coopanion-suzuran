@@ -1,0 +1,102 @@
+[
+  {
+    "source": "coo-draw/src/api/art-store.ts",
+    "mirror": "pet-draw/src/art-store.ts"
+  },
+  {
+    "source": "coo-draw/src/api/config.ts",
+    "mirror": "pet-draw/src/config.ts"
+  },
+  {
+    "source": "coo-draw/src/api/draw.ts",
+    "mirror": "pet-draw/src/draw.ts"
+  },
+  {
+    "source": "coo-draw/src/api/persona.ts",
+    "mirror": "pet-draw/src/persona.ts"
+  },
+  {
+    "source": "coo-draw/src/api/popup.ts",
+    "mirror": "pet-draw/src/popup.ts"
+  },
+  {
+    "source": "coo-draw/src/api/quota.ts",
+    "mirror": "pet-draw/src/quota.ts"
+  },
+  {
+    "source": "coo-draw/src/api/reference.ts",
+    "mirror": "pet-draw/src/reference.ts"
+  },
+  {
+    "source": "coo-draw/src/api/store.ts",
+    "mirror": "pet-draw/src/store.ts"
+  },
+  {
+    "source": "coo-draw/src/api/style.ts",
+    "mirror": "pet-draw/src/style.ts"
+  },
+  {
+    "source": "coo-draw/src/local/comfy.ts",
+    "mirror": "coo-gen/src/comfy.ts"
+  },
+  {
+    "source": "coo-draw/src/local/config.ts",
+    "mirror": "coo-gen/src/config.ts"
+  },
+  {
+    "source": "coo-draw/src/local/fs-util.ts",
+    "mirror": "coo-gen/src/fs-util.ts"
+  },
+  {
+    "source": "coo-draw/src/local/launch.ts",
+    "mirror": "coo-gen/src/launch.ts"
+  },
+  {
+    "source": "coo-draw/src/local/lora.ts",
+    "mirror": "coo-gen/src/lora.ts"
+  },
+  {
+    "source": "coo-draw/src/local/model-paths.ts",
+    "mirror": "coo-gen/src/model-paths.ts"
+  },
+  {
+    "source": "coo-draw/src/local/models.ts",
+    "mirror": "coo-gen/src/models.ts"
+  },
+  {
+    "source": "coo-draw/src/local/output.ts",
+    "mirror": "coo-gen/src/output.ts"
+  },
+  {
+    "source": "coo-draw/src/local/png.ts",
+    "mirror": "coo-gen/src/png.ts"
+  },
+  {
+    "source": "coo-draw/src/local/presets.ts",
+    "mirror": "coo-gen/src/presets.ts"
+  },
+  {
+    "source": "coo-draw/src/local/settings.ts",
+    "mirror": "coo-gen/src/settings.ts"
+  },
+  {
+    "source": "coo-draw/src/local/tasks.ts",
+    "mirror": "coo-gen/src/tasks.ts"
+  },
+  {
+    "source": "coo-draw/src/local/tools.ts",
+    "mirror": "coo-gen/src/tools.ts"
+  },
+  {
+    "source": "coo-draw/src/local/translate.ts",
+    "mirror": "coo-gen/src/translate.ts"
+  },
+  {
+    "source": "coo-draw/src/local/types.ts",
+    "mirror": "coo-gen/src/types.ts"
+  },
+  {
+    "source": "coo-draw/src/local/workflow.ts",
+    "mirror": "coo-gen/src/workflow.ts"
+  }
+]

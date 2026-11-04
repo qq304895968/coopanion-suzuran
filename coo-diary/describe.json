@@ -1,0 +1,224 @@
+{
+  "tools": [
+    {
+      "name": "diary_write",
+      "description": "把一篇日记追加到当天文件(<YYYY-MM-DD>.md)末尾。文件不存在时新建并写日期标题。已有内容一律不覆盖。回执给出文件名、日期与当天第几篇。想引用画画插件里的画时,先用 diary_art 看 id,再把 id 填进 arts:图会复制进日记的 images/<日期>/ 并在正文末尾用 Markdown 引用。想写「看一眼」留下的深刻瞬间时,先用 diary_moment 看 id,再把 id 填进 moments;截图同样会复制进日记。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "日记正文,Markdown。用第一人称写具体的事和当时的心情。"
+          },
+          "date": {
+            "type": "string",
+            "description": "要写的日期 YYYY-MM-DD;省略时是部署时区的今天。"
+          },
+          "time": {
+            "type": "string",
+            "description": "这一篇的时刻 HH:mm;省略时今天写就用此刻,补写往日写「补记」。"
+          },
+          "mood": {
+            "type": "string",
+            "description": "一个词的心情,写在标题里;省略时标题只有时刻。"
+          },
+          "arts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "要引用进这篇日记的画 id(来自 diary_art 或 pet_draw 回执)。每张会复制进 images/<日期>/ 并在正文末尾加一行 Markdown 图片。"
+          },
+          "includeDayArt": {
+            "type": "boolean",
+            "description": "true 时把这个日期当天画过的画全部引用进来(和 arts 合并去重)。默认 false。"
+          },
+          "moments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "要写进这篇日记的「深刻瞬间」id(来自 diary_moment 或 screen_memories)。截图会复制进 images/<日期>/ 并写成一段引用。"
+          },
+          "includeMemorable": {
+            "type": "boolean",
+            "description": "true 时把这个日期所有的深刻瞬间都写进来(和 moments 合并去重)。默认 false。"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "把一篇日记追加到当天的 Markdown 文件末尾。",
+        "en": "Appends one diary entry to the end of that day’s Markdown file."
+      }
+    },
+    {
+      "name": "diary_read",
+      "description": "读回日记原文。给 date 读那一天;不给 date 时按 days 读最近几篇(按日期从新到旧挑,跳过没写的天)。回执最多带 maxChars 字,超出部分截断并说明。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "读这一天,YYYY-MM-DD。"
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "description": "不给 date 时读最近几篇,缺省 1。"
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 40000,
+            "description": "回执最多带回多少字,缺省 8000。"
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "读回某一天或最近几篇日记的原文。",
+        "en": "Reads back one day’s or the latest few diary entries."
+      }
+    },
+    {
+      "name": "diary_list",
+      "description": "列出日记目录里哪些天有日记,按日期从新到旧。每条给出当天的篇数与字数,用来决定读哪几天。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "只看这天及以后,YYYY-MM-DD。"
+          },
+          "to": {
+            "type": "string",
+            "description": "只看这天及以前,YYYY-MM-DD。"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "最多列多少天,缺省 30。"
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "列出哪些天写过日记,各有多少篇。",
+        "en": "Lists the days that have diary entries, with entry counts."
+      }
+    },
+    {
+      "name": "diary_art",
+      "description": "回想某一天画过的画:从画画插件的画夹索引里按日期列出 id、时刻、评价和画的主题,可选把图作为附件交回来,方便看着画写日记。默认看今天。要把画引用进日记,把 id 填进 diary_write 的 arts;要把当天所有画都收进去,用 includeDayArt: true。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "看哪一天,YYYY-MM-DD;省略时是部署时区的今天。"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "all",
+              "unrated",
+              "favorite",
+              "like",
+              "neutral",
+              "dislike"
+            ],
+            "description": "只看某种评价;默认 all。"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "最多列几张,缺省 8。"
+          },
+          "attach": {
+            "type": "boolean",
+            "description": "是否把图作为附件交回来(最多 4 张);默认 true。"
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "回想某一天画过的画,可把图作为附件交回来。",
+        "en": "Recalls the drawings made on a day, optionally returning them as attachments."
+      }
+    },
+    {
+      "name": "diary_moment",
+      "description": "回想某一天「看一眼」留下的深刻瞬间(桌宠用 screen_rate 打到阈值以上的屏幕画面):列出 id、时刻、分数、摘要和原图绝对路径,可选把原图作为附件交回来。默认今天。要把这一刻写进日记,把 id 填进 diary_write 的 moments;想把这一刻画下来,调用 pet_draw 时带 purpose: \"diary\",把原图路径填进 referencePath,不要用关键词搜图。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "看哪一天,YYYY-MM-DD;省略时是部署时区的今天。"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "最多列几个,缺省 8。"
+          },
+          "attach": {
+            "type": "boolean",
+            "description": "是否把原图作为附件交回来(最多 4 张);默认 true。"
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "回想某一天「看一眼」留下的深刻瞬间,可把原图作为附件交回来。",
+        "en": "Recalls the memorable “Glance” moments of a day, optionally returning their screenshots as attachments."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "diary.started",
+      "description": {
+        "zh": "World 挂载完成。",
+        "en": "The World was mounted."
+      }
+    },
+    {
+      "type": "diary.reminder",
+      "description": {
+        "zh": "到了配置的提醒时刻,当天还没有日记。",
+        "en": "The reminder time passed and that day still has no entry."
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "key": "worlds.diary.envPrompt",
+      "title": "日记 · 环境提示词",
+      "role": "envPrompt",
+      "content": "日记目录:{{diary.dir}}\n今天:{{diary.today}}\n今天的状态:{{diary.status}}\n今天画过的画:{{diary.art}}\n今天印象深刻的瞬间:{{diary.moments}}\n\ndiary_write 把一篇日记追加到当天文件(<YYYY-MM-DD>.md)的末尾,只追加,不覆盖以前的内容。写的时候用第一人称,把当天值得记的事和当时的心情写具体;用户没让你写、也不是你们约定的写日记时间时,不要自己调用它。同一件事不要重复写。\n\n想回顾过去:diary_list 先看哪些天写过、各有多少篇,再决定读哪几天;diary_read 给 date 读那一天,给 days 读最近几篇。读回来的就是原文。\n\n和画画联动:今天画过画、而这件事值得写进日记时,先用 diary_art 回想(默认看今天,图会作为附件给你看)。挑出和当天的事有关的,把它们的 id 填进 diary_write 的 arts;写出的日记会把图复制到 images/<日期>/ 并在正文末尾用 Markdown 引用。想把这一天画过的画全部收进去,用 includeDayArt: true。不要编造 id,也不要引用没看过的画。\n\n和「看一眼」联动:今天有深刻瞬间、而它值得写进日记时,先用 diary_moment 回想(附件是当时的屏幕,回执里有原图绝对路径)。把瞬间的 id 填进 diary_write 的 moments,截图会复制进 images/<日期>/ 并写成一段「深刻瞬间」引用;想把这一天所有瞬间都收进去,用 includeMemorable: true。写进日记时,如果绘画 World 开着,默认先照着那一刻的原图画一张(一个瞬间最多一张,别重复);调用 pet_draw 时带上 purpose: \"diary\",再把新画 id 填进 arts。用户明确说不要画时除外。\n\n想给日记配一张新画:如果这一刻有原图(比如深刻瞬间的屏幕),先调用 pet_draw,purpose 填 \"diary\",把 referencePath 填成那张原图的绝对路径,不要用 referenceName / referenceQuery 搜关键词;再把新画 id 填进 diary_write 的 arts。没有原图、只是凭空想画时,才按文字画;同样带 purpose: \"diary\",这样才会用日记配图的路由和铃兰的人设笔触。绘画 World 没开、或者画不了时,就只写文字,不要假装画过。\n\n日记目录显示「(未设置)」时,提醒用户到「日记」页面填一个目录,自己不要猜路径,也不要把别处的内容写进去。\n"
+    }
+  ]
+}

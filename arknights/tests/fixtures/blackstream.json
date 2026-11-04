@@ -1,0 +1,44 @@
+{
+  "source": "路标档案馆（测试样本）",
+  "sourceUrl": "https://www.lubiao.wiki/tools/blackstream-route",
+  "importedAt": "2026-10-01T00:00:00.000Z",
+  "counts": { "items": 2, "pools": 1, "floors": 1 },
+  "floors": [
+    {
+      "floor": 1,
+      "name": "第1层",
+      "zoneId": "zone_1",
+      "zoneName": "测试区",
+      "description": "测试用的一层。",
+      "stageIds": ["ro6_n_1_1", "ro6_n_1_2"]
+    }
+  ],
+  "nodeDistance": [
+    {
+      "id": "1",
+      "label": "I",
+      "mapSampleCount": 100,
+      "sampleCount": 1000,
+      "rows": [
+        { "name": "作战", "counts": { "1": 30, "2": 10 } },
+        { "name": "不期而遇", "counts": { "1": 10, "2": 30 } }
+      ]
+    }
+  ],
+  "mapConstructions": [
+    {
+      "id": "1",
+      "label": "I",
+      "sampleCount": 100,
+      "rows": [
+        { "templateId": "F1-T01", "count": 60, "frequency": 0.6 },
+        { "templateId": "F1-T02", "count": 40, "frequency": 0.4 }
+      ]
+    }
+  ],
+  "items": [
+    { "id": "relic_a", "name": "测试藏品A", "dataType": "藏品", "rarity": "RARE", "effect": "效果A" },
+    { "id": "relic_b", "name": "测试藏品B", "dataType": "藏品", "rarity": "SUPER_RARE", "effect": "效果B" }
+  ],
+  "pools": [{ "id": "pool_1", "name": "测试池", "count": 2, "items": ["relic_a", "relic_b"] }]
+}

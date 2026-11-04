@@ -1,0 +1,43 @@
+# Dependency stores and generated build output (all workspaces)
+node_modules/
+.pnpm-store/
+.npm/
+dist/
+build/
+out/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Local experiments, screenshots, generated samples and test scratch
+.tmp/
+.tmp-*/
+.preview/
+.cache/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.log
+
+# Deployment secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.local.*
+*.pem
+*.key
+*.p12
+*.pfx
+reverse-token.txt
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local host/script backups may contain deployment-specific data
+*.bak-*

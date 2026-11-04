@@ -1,0 +1,68 @@
+{
+  "name": "cortico-world-api-balance",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cortico World: check an API account's balance (DeepSeek, Kimi, SiliconFlow, OpenRouter) with an API key saved in the deployment key store.",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico",
+    "coopanion",
+    "desktop-pet",
+    "balance",
+    "deepseek",
+    "kimi",
+    "siliconflow",
+    "openrouter"
+  ],
+  "engines": {
+    "node": ">=22.15"
+  },
+  "packageManager": "pnpm@11.28.6",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "API 余额",
+    "webUiClient": "dist/webui.js",
+    "tags": [
+      "diagnostics",
+      "internet",
+      "requires-key"
+    ],
+    "describe": "describe.json",
+    "locales": {
+      "zh": {
+        "displayName": "API 余额",
+        "description": "查 DeepSeek、Kimi、硅基流动、OpenRouter 的账户余额。API Key 在「API 余额」页填写并保存到部署密钥库；桌宠只在被问到时查，金额照实说。"
+      },
+      "en": {
+        "displayName": "API balance",
+        "description": "Checks the balance of a DeepSeek, Kimi, SiliconFlow or OpenRouter API account. Paste and save the API key on the API balance page; the pet only asks when the person does, and never invents an amount."
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "describe.json"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "build": "node scripts/build-webui.mjs && tsx scripts/describe.ts",
+    "describe": "tsx scripts/describe.ts",
+    "check": "tsx scripts/check.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "cortico": "0.2.8",
+    "esbuild": "0.28.2",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "vitest": "2.1.9"
+  }
+}

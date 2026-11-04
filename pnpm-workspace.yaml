@@ -1,0 +1,18 @@
+packages:
+  - api-balance
+  - arknights
+  - coo-diary
+  - coo-draw
+  - coo-gen
+  - coo-mood
+  - coo-screen
+  - emote-pics
+  - pet-draw
+  - qq-final
+
+# Flat layout also works for Windows directory-linked host extensions.
+nodeLinker: hoisted
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - cortico@0.2.8

@@ -1,0 +1,70 @@
+{
+  "tools": [
+    {
+      "name": "emote_pic",
+      "description": "Attach one random picture from the folder of an emotion to this reply; it shows on the chat page only (the pet bubble pops on its own). Rolls the configured chance and cooldown; when it does not fire the receipt says skipped with a reason and carries no image. Only png, jpg, jpeg, gif and webp up to 5 MB are used.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "emotion"
+        ],
+        "properties": {
+          "emotion": {
+            "type": "string",
+            "enum": [
+              "neutral",
+              "happy",
+              "wink",
+              "love",
+              "shy",
+              "surprised",
+              "angry",
+              "sad",
+              "sleepy",
+              "thinking",
+              "smug",
+              "pout",
+              "worried",
+              "determined",
+              "flustered",
+              "scared",
+              "excited",
+              "cry",
+              "confused"
+            ],
+            "description": "Which emotion folder to draw from."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Bypass the chance roll and the cooldown. For testing."
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "按概率从该情绪的子文件夹挑一张图,作为附件交给这次对话(只显示在对话页);跳过不是错误。",
+        "en": "Rolls the configured chance and attaches one picture from that emotion folder to this reply (chat page only); a skip is not an error."
+      }
+    },
+    {
+      "name": "emote_popup_test",
+      "description": "Pop one random picture from the configured emotion folders on the desktop, without sending a chat message. Use when the panel is unavailable or to check the popup.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "不经过面板,从已配置的情绪子文件夹里随机弹一张测试图到桌宠身上。",
+        "en": "Pops a random test picture from the configured emotion folders onto the pet, without the panel."
+      }
+    }
+  ],
+  "events": []
+}

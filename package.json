@@ -1,0 +1,34 @@
+{
+  "name": "coopanion-suzuran-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Suzuran / Coopanion World extensions; the desktop host is installed separately.",
+  "packageManager": "pnpm@11.28.6",
+  "engines": {
+    "node": ">=22.15"
+  },
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=1 --if-present run build",
+    "typecheck": "pnpm -r --workspace-concurrency=1 run typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 run test",
+    "test:tooling": "node --test scripts/tests/*.test.mjs",
+    "check:repo": "node scripts/check-repository.mjs",
+    "check:artifacts": "node scripts/check-repository.mjs --artifacts",
+    "sync:drawing": "node scripts/sync-drawing.mjs",
+    "check:mirrors": "node scripts/sync-drawing.mjs --check",
+    "validate": "pnpm check:repo && pnpm check:mirrors && pnpm test:tooling && pnpm typecheck && pnpm test && pnpm test:smoke && pnpm build && pnpm check:artifacts && pnpm check:metadata && pnpm check:packages",
+    "check:host": "node --import tsx scripts/check-host.mjs",
+    "check:metadata": "node --import tsx scripts/check-metadata.mjs",
+    "describe:all": "node --import tsx scripts/check-metadata.mjs --write",
+    "check:packages": "pnpm -r --workspace-concurrency=1 --if-present run check && pnpm -r --workspace-concurrency=1 --if-present run check:manifest",
+    "test:smoke": "pnpm --filter cortico-world-coo-mood run smoke"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "cortico": "0.2.8",
+    "typescript": "5.7.3",
+    "vitest": "2.1.9",
+    "tsx": "4.19.2"
+  }
+}

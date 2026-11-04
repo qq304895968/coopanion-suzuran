@@ -1,0 +1,395 @@
+{
+  "level": "source-modules-not-release-binary-or-GUI",
+  "node": "v22.22.3",
+  "hostVersion": "0.2.17",
+  "sdkVersion": "0.2.12",
+  "hostFiles": {
+    "app/core-host.cjs": "c675aeb0ea8ce9b51ab7d1254ca62d7af529c6b51cc9d33b86b3c7ffe18dd1e9",
+    "vendor/cortico/src/extensions.ts": "98cdd2fc5aa1c39b8531f0448f6f59673ae4273146dc0a292729c6152b57c8cb",
+    "packages/cortico-world-desktop-pet/src/server.ts": "aebb5adbf42686a402d265daa084cb45cf8115efe4600a5d2f4068f78fb153ba"
+  },
+  "warnings": [
+    "Uses workspace dependencies and Node, not the released Electron runtime. No World.start() in module probes; --full runs isolated tests, not live deployment acceptance. No Electron desktop or paid API.",
+    "Optional image-bubble endpoint returned 405; in-pet images need a host change. Standalone popup rendering was NOT tested.",
+    "Official wrapper did not forward companion:open-folder. Extensions must use native opening, not process.send() as an acknowledgement."
+  ],
+  "extensions": {
+    "resolution": ".cache/host-validation/v0.2.17/source/Coopanion-0.2.17/vendor/cortico/src/core/types.ts",
+    "packages": [
+      {
+        "package": "api-balance",
+        "name": "cortico-world-api-balance",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 2,
+        "events": 0,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "arknights",
+        "name": "cortico-world-arknights",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 16,
+        "events": 6,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "none"
+      },
+      {
+        "package": "coo-diary",
+        "name": "cortico-world-coo-diary",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 5,
+        "events": 2,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "coo-draw",
+        "name": "cortico-world-coo-draw",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 13,
+        "events": 3,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "coo-gen",
+        "name": "cortico-world-coo-gen",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 8,
+        "events": 2,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "coo-mood",
+        "name": "cortico-world-coo-mood",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 5,
+        "events": 7,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "coo-screen",
+        "name": "cortico-world-coo-screen",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 3,
+        "events": 1,
+        "os": [
+          "win32"
+        ],
+        "loader": true,
+        "webUi": "none"
+      },
+      {
+        "package": "emote-pics",
+        "name": "cortico-world-emote-pics",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 2,
+        "events": 0,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "pet-draw",
+        "name": "cortico-world-pet-draw",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 5,
+        "events": 1,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      },
+      {
+        "package": "qq-final",
+        "name": "cortico-world-qq-local",
+        "api": 6,
+        "definition": true,
+        "metadataMatches": true,
+        "tools": 15,
+        "events": 9,
+        "os": [
+          "all"
+        ],
+        "loader": true,
+        "webUi": "served"
+      }
+    ],
+    "webUiAssets": 8
+  },
+  "petServer": {
+    "petConnected": true,
+    "state": 200,
+    "prefs": 200,
+    "foreignOrigin": 421,
+    "imageBubble": 405
+  },
+  "ipc": {
+    "realCoreHost": true,
+    "fixtureCoreChild": true,
+    "openFolderDelivered": true,
+    "processSendReturned": true,
+    "openFolderForwarded": 0,
+    "supportedOpenForwarded": true
+  },
+  "patch": {
+    "applied": false,
+    "powershellExecuted": false,
+    "cssExists": true,
+    "replacements": [
+      {
+        "file": "src/server.ts",
+        "anchor": "serverRouteAnchor",
+        "status": "applicable"
+      },
+      {
+        "file": "src/server.ts",
+        "anchor": "bodyOld",
+        "status": "applicable"
+      },
+      {
+        "file": "web/pet-app.js",
+        "anchor": "caseOld",
+        "status": "applicable"
+      },
+      {
+        "file": "web/pet-app.js",
+        "anchor": "fnOld",
+        "status": "applicable"
+      },
+      {
+        "file": "web/pet-app.js",
+        "anchor": "stepOld",
+        "status": "applicable"
+      }
+    ]
+  },
+  "sdkChecks": {
+    "typechecks": [
+      {
+        "package": "api-balance",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "api-balance",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "arknights",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "coo-diary",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "coo-diary",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "coo-draw",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "coo-draw",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "coo-gen",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "coo-gen",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "coo-mood",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "coo-mood",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "coo-screen",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "emote-pics",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "emote-pics",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "pet-draw",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "pet-draw",
+        "config": "tsconfig.web.json",
+        "passed": true
+      },
+      {
+        "package": "qq-final",
+        "config": "tsconfig.json",
+        "passed": true
+      },
+      {
+        "package": "qq-final",
+        "config": "tsconfig.web.json",
+        "passed": true
+      }
+    ],
+    "tests": [
+      {
+        "package": "api-balance",
+        "passed": 16,
+        "skipped": 0,
+        "files": 1
+      },
+      {
+        "package": "arknights",
+        "passed": 35,
+        "skipped": 0,
+        "files": 5
+      },
+      {
+        "package": "coo-diary",
+        "passed": 66,
+        "skipped": 0,
+        "files": 4
+      },
+      {
+        "package": "coo-draw",
+        "passed": 169,
+        "skipped": 0,
+        "files": 22
+      },
+      {
+        "package": "coo-gen",
+        "passed": 61,
+        "skipped": 0,
+        "files": 10
+      },
+      {
+        "package": "coo-mood",
+        "passed": 5,
+        "skipped": 0,
+        "files": 1
+      },
+      {
+        "package": "coo-screen",
+        "passed": 19,
+        "skipped": 6,
+        "files": 4
+      },
+      {
+        "package": "emote-pics",
+        "passed": 7,
+        "skipped": 0,
+        "files": 1
+      },
+      {
+        "package": "pet-draw",
+        "passed": 86,
+        "skipped": 0,
+        "files": 10
+      },
+      {
+        "package": "qq-final",
+        "passed": 30,
+        "skipped": 0,
+        "files": 4
+      }
+    ]
+  },
+  "provenance": {
+    "release": "https://github.com/Pal-AI-Lab/Coopanion/releases/tag/v0.2.17",
+    "sourceArchives": [
+      {
+        "archive": "source.tar.gz",
+        "commit": "dbc06466edbe4d6328d61bbedaa4d9e312c16497",
+        "sha256": "1619e1ca788dd3a8d390ca751f953e012dea18813ed689663644429f59e48746",
+        "originalFilesUnchanged": 1413
+      },
+      {
+        "archive": "cortico-source.tar.gz",
+        "commit": "e77b6617a3c622c0f4fb09750ff9ceabf49439ac",
+        "sha256": "2dfe902058c5c68ff72b9121f01f770a8eb07782634a3c98686895a4c7bf86fb",
+        "originalFilesUnchanged": 1189
+      }
+    ],
+    "releaseBinaryDownloaded": false,
+    "electronGuiRun": false,
+    "hostPatchApplied": false
+  },
+  "workspaceValidation": {
+    "baselineSdk": "0.2.8",
+    "validateExitCode": 0,
+    "vitestPassed": 494,
+    "vitestSkipped": 6,
+    "toolingPassed": 31,
+    "toolingSkipped": 2,
+    "totalPassed": 525,
+    "totalSkipped": 8
+  }
+}

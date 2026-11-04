@@ -1,0 +1,34 @@
+name: Validate extensions
+on:
+  pull_request:
+  push:
+    branches: [main, 'arena/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      COOPANION_SCREEN_INTEGRATION: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned package manager
+        run: npm install --global pnpm@11.28.6
+      - name: Reproducible dependency installation
+        run: pnpm install --frozen-lockfile
+      - name: Repository, mirrors, types, offline tests and build resources
+        run: pnpm validate
+      - name: Parse Python sidecars (no capture or model requests)
+        run: python scripts/check-python.py

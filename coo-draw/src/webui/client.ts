@@ -55,25 +55,7 @@ const apiPanel: WebUiPanel = {
       // 读不到也不阻塞画夹
     }
 
-    if (settings) {
-      const row = ctx.ui.rowbar();
-      const info = ctx.ui.msgline(t(
-        `画风：${settings.style} · 路由：主动画 ${settings.routePet === 'local' ? '本地' : 'API'} / 日记 ${settings.routeDiary === 'local' ? '本地' : 'API'}（在 World 设置里改）`,
-        `Style: ${settings.style} · Route: pet ${settings.routePet} / diary ${settings.routeDiary} (in World settings)`,
-      ));
-      const diag = ctx.ui.button('📊', {
-        size: 'sm', variant: 'plain',
-        onClick: async () => {
-          try {
-            const q = await ctx.invoke<QuotaOutcome>('quota', [true]);
-            ctx.ui.toast(q.text.replace(/^\[quota\]\s*/, ''), q.failed ? 'bad' : 'ok');
-          } catch (e) { ctx.ui.toast(message(e), 'bad'); }
-        },
-      });
-      diag.title = t('查看额度/路由详情', 'View quota/route');
-      row.append(info, diag);
-      ctx.root.append(row);
-    }
+    // 顶部第一层标签栏已按需求完全移除（不保留、不迁移）
   },
 };
 

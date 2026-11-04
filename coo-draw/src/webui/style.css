@@ -97,16 +97,16 @@
 .coo-conn-kv {
   display: grid;
   grid-template-columns: 48px 1fr;
-  gap: 6px 10px;
+  gap: 16px 10px;
   font-size: 12px;
   line-height: 1.5;
   align-items: center;
 }
-.coo-conn-kv .k { opacity: .58; font-size: 11px; white-space: nowrap; }
+.coo-conn-kv .k { opacity: .58; font-size: 11px; white-space: nowrap; color: #8a8f98; }
 .coo-conn-kv .v {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   word-break: break-all;
 }
@@ -116,7 +116,9 @@
   white-space: nowrap;
   max-width: 100%;
 }
-.coo-conn-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.coo-conn-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.coo-conn-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.coo-conn-actions .btn .coo-icon { width: 14px; height: 14px; }
 .coo-conn-url-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
 .coo-conn-url-row input { flex: 1; min-width: 160px; }
 
@@ -263,7 +265,8 @@
 }
 .coo-lora-count { font-size: 12px; opacity: .68; white-space: nowrap; }
 .coo-lora-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
-.coo-lora-list { max-height: 400px; overflow: auto; }
+.coo-lora-list { max-height: 360px; overflow: auto; }
+.coo-lora-list thead th { position: sticky; top: 0; background: var(--bg, #fff); z-index: 1; }
 .coo-lora-empty { padding: 16px; text-align: center; font-size: 12px; opacity: .6; }
 .coo-weight-stepper {
   display: inline-flex;

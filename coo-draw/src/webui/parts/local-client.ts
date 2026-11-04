@@ -517,18 +517,18 @@ const studioPanel: WebUiPanel = {
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
 
-    // Sticky 操作按钮 - 全宽底部固定，不遮挡内容
-    const sticky = ctx.ui.h('div', 'coo-sticky-bar');
-    const stickyHint = ctx.ui.h('div', 'hint', '');
+    // 右侧悬浮操作窗（生成/取消）- 置于进度条上方，去掉打开目录
+    const genLine = ctx.ui.msgline(''); left.append(genLine);
+    const actionFloat = ctx.ui.h('div', 'coo-action-float');
+    const actionHint = ctx.ui.h('div', 'hint', ''); actionHint.style.display='none';
+    const actionRow = ctx.ui.h('div', 'coo-action-row');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
     const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
-    const openBtn = ctx.ui.button(t('打开目录', 'Open folder'), { variant: 'plain', size: 'sm' });
     cancelBtn.disabled = true;
     cancelBtn.style.border = '1px solid var(--line, rgba(127,127,127,.3))';
-    sticky.append(stickyHint, generateBtn, cancelBtn, openBtn);
-    ctx.root.append(sticky);
-    const genLine = ctx.ui.msgline(''); left.append(genLine);
-    const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); stickyHint.textContent = text; };
+    actionRow.append(generateBtn, cancelBtn);
+    actionFloat.append(actionHint, actionRow);
+    const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); actionHint.textContent = text; actionHint.style.display = text ? 'block' : 'none'; };
 
     const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
     const updateGenerateEnabled = (): void => {
@@ -554,7 +554,7 @@ const studioPanel: WebUiPanel = {
         if (needs) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
       } else if (!state.checkpoint) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
       generateBtn.disabled = disable || busy || isActive(current);
-      if (disable && hint) stickyHint.textContent = hint;
+      if (disable && hint) actionHint.textContent = hint;
       // 样式提示
       generateBtn.title = disable ? hint : '';
     };
@@ -705,6 +705,7 @@ const studioPanel: WebUiPanel = {
     if (boot.warnings.length) connCard.append(ctx.ui.msgline(boot.warnings.join(' · '), true));
     const healthLine = ctx.ui.msgline(''); healthLine.style.fontSize = '12px'; connCard.append(healthLine);
     right.append(connCard);
+    right.append(actionFloat);
 
     const renderHealth = (health: CooGenBootstrap['health']): void => {
       const ok = health.ok;
@@ -784,7 +785,7 @@ const studioPanel: WebUiPanel = {
       shared.current = task;
       if (!task) {
         progressCard.classList.add('is-idle');
-        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent = ''; progressDetail.style.display='none'; previewImg.style.display='none'; viewWorksBtn.style.display='none';
+        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent = t('空闲','Idle'); progressDetail.style.display=''; previewImg.style.display='none'; viewWorksBtn.style.display='none';
         generateBtn.disabled = busy; cancelBtn.disabled = true; updateGenerateEnabled(); return;
       }
       progressCard.classList.remove('is-idle');
@@ -863,7 +864,6 @@ const studioPanel: WebUiPanel = {
       if (!current) return;
       void (async ()=>{ try { await ctx.invoke('cancel', [current?.id]); ctx.ui.toast(t('已请求取消','Cancel requested')); const res=await ctx.invoke<StatusResponse>('status'); if (!alive) return; current=res.task; shared.current=current; renderTask(current); } catch(e){ say(errText(e), true); } })();
     });
-    openBtn.addEventListener('click', ()=>{ void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
     renderTask(current);
     if (current && isActive(current)) void poll();
   },

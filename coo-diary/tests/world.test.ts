@@ -285,7 +285,12 @@ describe('和画画插件联动', () => {
     expect(outcome.text).toContain(`${day} 画过 1 张`);
     expect(outcome.text).toContain('d-1');
     expect(outcome.text).toContain('一只看星星的小狐狸');
-    expect(outcome.text).not.toContain('d-2');
+    // 只看列表部分:结尾的操作提示里含有工具名 pet_draw,不能用整段文本判断。
+    const listPart = outcome.text
+      .split('\n')
+      .filter((line) => !/diary_write 的 arts|pet_draw/.test(line))
+      .join('\n');
+    expect(listPart).not.toContain('d-2');
     expect(outcome.blobs).toHaveLength(1);
     const blob = outcome.blobs![0]!;
     expect('bytes' in blob && blob.bytes.length).toBe(PNG.length);

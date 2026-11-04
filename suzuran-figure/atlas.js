@@ -71,13 +71,16 @@ export function regionView(reg, pageW, pageH) {
   const rot = !!reg.rotate;
   const footW = rot ? reg.height : reg.width;
   const footH = rot ? reg.width : reg.height;
+  // 往里收半个像素：图集里两块图挨得紧，双线性采样会把邻居的那一条混进来，
+  // 表现在头发、轮廓线边上发灰/变粗。收半个像素就只采自己这一块。
+  const hw = pageW ? .5 / pageW : 0, hh = pageH ? .5 / pageH : 0;
   return {
     name: reg.name,
     rotate: rot,
-    u: reg.x / pageW,
-    v: reg.y / pageH,
-    u2: (reg.x + footW) / pageW,
-    v2: (reg.y + footH) / pageH,
+    u: reg.x / pageW + hw,
+    v: reg.y / pageH + hh,
+    u2: (reg.x + footW) / pageW - hw,
+    v2: (reg.y + footH) / pageH - hh,
     width: reg.width,
     height: reg.height,
     originalWidth: reg.originalWidth,

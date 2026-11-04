@@ -27,6 +27,8 @@ const SVGNS = 'http://www.w3.org/2000/svg';
  * 画布在逻辑空间里盖住的范围。套件给的方格是 256×256，但铃兰的伞尖会伸到框外、狐狸还会往右坐，
  * 所以画布比 256 大；放大倍率固定 2（后备像素是 2 的幂，WebGL1 也能 mipmap）。
  */
+const KNEE = 1;          // 膝盖弯曲方向（+1 朝前）
+const KIT_FOOT_Y = 241;  // 套件里脚休息时的逻辑 y（HIPS 212 + 29）
 const VIEW = { x: -104, y: -136, w: 512, h: 512 };
 const CANVAS_SCALE = 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -239,6 +241,7 @@ function createFigure(MODEL, scene, url) {
 
   let skel = null, state = null;
   let bones = {};
+  let legRest = null;      // 两侧踝关节在模型空间里的休息位置 [[x,y],[x,y]]
   let post = new Map();
   let pivotEye = null, pivotMouth = null;
   let stunSlots = [];              // [{ slot, att }]
@@ -284,6 +287,24 @@ function createFigure(MODEL, scene, url) {
     }
     for (const role of ['armL', 'armR', 'legL', 'legR', 'earL', 'earR', 'tail']) {
       bones[role] = next.limbs?.[role] ? skel.findBone(next.limbs[role]) : null;
+    }
+
+    // 量一次两侧踝关节：腿长各套服装不一样，IK 要照着它自己的骨架来
+    legRest = null;
+    if (bones.legL && bones.legR) {
+      const pick = (thigh) => {
+        const calf = childBone(thigh);
+        if (!calf) return null;
+        const foot = childBone(calf);
+        const end = foot || calf;
+        const len = Math.abs(end === calf ? calf.data.length : 0);
+        return foot
+          ? [foot.worldX, foot.worldY]
+          : [calf.worldX + Math.cos(calf.getWorldRotationX() * Math.PI / 180) * len,
+             calf.worldY + Math.sin(calf.getWorldRotationX() * Math.PI / 180) * len];
+      };
+      const l = pick(bones.legL), r = pick(bones.legR);
+      if (l && r) legRest = [l, r];
     }
 
     // 脸：眨眼/张嘴是"一组槽位绕公共中心压扁"，不依赖骨骼支点，四套服装通用
@@ -380,6 +401,47 @@ function createFigure(MODEL, scene, url) {
     skel.updateWorldTransform();
   }
 
+  const childBone = (bone) => {
+    if (!bone) return null;
+    let best = null;
+    for (const c of bone.children) if (!best || Math.abs(c.data.length) > Math.abs(best.data.length)) best = c;
+    return best && Math.abs(best.data.length) > .5 ? best : null;
+  };
+  const wrap180 = (a) => { a = (a + 180) % 360; if (a < 0) a += 360; return a - 180; };
+
+  /** 两段骨骼 IK：让 thigh→calf 的末端落在 (tx, ty)（骨骼空间），膝盖朝前弯。 */
+  function ikLeg(thigh, tx, ty) {
+    const calf = childBone(thigh);
+    if (!calf) return;
+    const foot = childBone(calf);
+    const L1 = Math.abs(thigh.data.length), L2 = Math.abs(calf.data.length);
+    if (!(L1 > .5 && L2 > .5)) return;
+    const ax = thigh.worldX, ay = thigh.worldY;
+    const dx = tx - ax, dy = ty - ay;
+    const dist = Math.hypot(dx, dy);
+    const d = Math.min(L1 + L2 - .6, Math.max(Math.abs(L1 - L2) + .6, dist));
+    const at = Math.atan2(dy, dx) * 180 / Math.PI;
+    const cos1 = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
+    const a1 = Math.acos(Math.max(-1, Math.min(1, cos1))) * 180 / Math.PI;
+    // 膝盖朝角色面朝的那一侧弯（骨骼空间 +x）
+    const facing = Math.cos(at * Math.PI / 180) >= 0 ? 1 : -1;
+    const thighWorld = at + a1 * KNEE * facing;
+    thigh.rotation += wrap180(thighWorld - thigh.getWorldRotationX());
+    thigh.updateWorldTransform();
+
+    const kx = ax + L1 * Math.cos(thighWorld * Math.PI / 180);
+    const ky = ay + L1 * Math.sin(thighWorld * Math.PI / 180);
+    const calfWorld = Math.atan2(ty - ky, tx - kx) * 180 / Math.PI;
+    const footWorld = foot ? foot.getWorldRotationX() : null;
+    calf.rotation += wrap180(calfWorld - calf.getWorldRotationX());
+    calf.updateWorldTransform();
+    // 脚掌保持原来的朝向（别跟着膝盖一起翻过去）
+    if (foot && footWorld !== null) {
+      foot.rotation += wrap180(footWorld - foot.getWorldRotationX());
+      foot.updateWorldTransform();
+    }
+  }
+
   function poseBones(frame) {
     const t = frame.t || 0;
     const add = (bone, rot, dx = 0, dy = 0) => {
@@ -393,15 +455,32 @@ function createFigure(MODEL, scene, url) {
     add(bones.chest, pose.lean * .18);
     add(bones.waist, pose.lean * .32 + lookX * .08);
 
-    // 走路/坐下：套件的 frame.legs 给了髋→脚的落点（逻辑单位），把腿骨朝那里掰
+    // 走路/坐下：套件的 frame.legs 给了髋→脚的落点（逻辑单位）。
+    // 单纯转大腿会让脚在半空划弧、膝盖也不弯，看着像在“滑”。这里按两段骨骼做一次 IK：
+    // 大腿指向膝盖、膝盖弯到脚正好落在目标点上，脚掌再转回原来的朝向。
+    // 走路/跑：这只小人的腿是画在长袍里的（F_Coat_* 蒙皮网格），腿骨上那几块 F_L/R_Leg 小图
+    // 被衣服完全盖住，转腿骨屏幕上什么也看不见（量过）。所以位移靠身体来演：
+    // 上下颠、左右晃、前倾，配合手臂摆动，就是“一颠一颠地跑”。
     const legs = Array.isArray(frame.legs) ? frame.legs : null;
-    if (legs && legs.length >= 2 && (frame.mode === 'walk' || frame.mode === 'run' || frame.mode === 'sit')) {
+    if (frame.mode === 'walk' || frame.mode === 'run') {
+      const run = frame.mode === 'run';
+      const ph = (frame.t || 0) * (run ? 13 : 8);
+      const root = skel.bones[0];
+      if (root) {
+        const hop = Math.abs(Math.sin(ph));
+        root.y += hop * (run ? 7 : 4) + Math.sin(ph * 2) * (run ? 1.2 : .6);
+        root.rotation += Math.sin(ph * 2) * (run ? 1.6 : .9) + (run ? 2.2 : .8);
+      }
+      add(bones.hips, Math.sin(ph * 2) * (run ? -2.4 : -1.2));
+      add(bones.chest, Math.sin(ph * 2 + .5) * (run ? 1.8 : 1));
+      add(bones.head, -Math.sin(ph * 2 + .5) * (run ? 1.6 : .8));
+    } else if (frame.mode === 'sit' && legs && legs.length >= 2 && legRest) {
+      skel.updateWorldTransform();
+      const k = outfit.scale;
       for (let i = 0; i < 2; i++) {
-        const bone = i === 0 ? bones.legL : bones.legR;
-        const seg = legs[i];
-        if (!bone || !seg) continue;
-        const dx = seg[2] - seg[0], dy = seg[3] - seg[1];
-        add(bone, clamp(Math.atan2(dx, dy) * 180 / Math.PI, -44, 44));
+        const seg = legs[i], thigh = i === 0 ? bones.legL : bones.legR, rest = legRest[i];
+        if (!seg || !thigh || !rest) continue;
+        ikLeg(thigh, rest[0] + (seg[2] - seg[0]) / k, rest[1] + (KIT_FOOT_Y - seg[3]) / k);
       }
     } else if (frame.mode === 'air' || frame.mode === 'drag') {
       add(bones.legL, -12); add(bones.legR, 9);

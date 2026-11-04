@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>铃兰形象包 · 预览</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f4f1ea; color: #2a2733; display: flex; flex-direction: column; height: 100vh;
+  }
+  header { padding: 10px 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #ddd6c8; background: #fbf8f2; }
+  header h1 { font-size: 14px; margin: 0 8px 0 0; font-weight: 600; }
+  .group { display: flex; gap: 6px; align-items: center; padding-right: 10px; border-right: 1px solid #e3dbcc; }
+  .group:last-child { border: 0; }
+  label { color: #6b6577; }
+  select, button {
+    font: inherit; padding: 4px 9px; border-radius: 7px; border: 1px solid #d6cfc0; background: #fff; color: #2a2733; cursor: pointer;
+  }
+  button:hover { background: #f2ece0; }
+  button.on { background: #2f6d5b; border-color: #2f6d5b; color: #fff; }
+  #stage { position: relative; flex: 1; overflow: hidden; background:
+    radial-gradient(1200px 500px at 50% 0%, #ffffff 0%, #f0ece2 60%, #e7e1d3 100%); }
+  #stage::after { /* 地板线 */
+    content: ''; position: absolute; left: 0; right: 0; bottom: 60px; height: 1px; background: repeating-linear-gradient(90deg, #d9d2c2 0 8px, transparent 8px 16px);
+  }
+  #root { position: absolute; inset: 0; }
+  #hud { position: absolute; left: 12px; bottom: 10px; font-variant-numeric: tabular-nums; color: #7b7488; font-size: 12px; pointer-events: none; white-space: pre; }
+  #log { position: absolute; right: 12px; top: 10px; width: 230px; max-height: 40vh; overflow: auto; font-size: 11px; color: #6b6577;
+    background: rgba(255,255,255,.72); border: 1px solid #e3dbcc; border-radius: 8px; padding: 6px 8px; white-space: pre-wrap; }
+  #err { position: absolute; inset: 0; display: none; place-content: center; padding: 30px; color: #a3324a; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>铃兰 · 形象包预览</h1>
+  <span class="group">
+    <label for="outfit">服装</label>
+    <select id="outfit">
+      <option value="default">默认</option>
+      <option value="spring">春之颂</option>
+      <option value="snow" selected>雪霁</option>
+      <option value="wild">弃土花开</option>
+    </select>
+  </span>
+  <span class="group" id="motions">
+    <label>动作</label>
+    <button data-do="walk">走</button>
+    <button data-do="run">跑</button>
+    <button data-do="sit">坐</button>
+    <button data-do="sleep">睡</button>
+    <button data-do="dizzy">晕</button>
+    <button data-do="wave">挥手</button>
+    <button data-do="attack">挥伞</button>
+    <button data-do="cast">施法</button>
+    <button data-do="twirl">转伞</button>
+    <button data-do="flop">躺倒</button>
+    <button data-do="climb">攀爬</button>
+  </span>
+  <span class="group">
+    <label>表情</label>
+    <button data-do="happy">开心</button>
+    <button data-do="sad">难过</button>
+    <button data-do="angry">生气</button>
+    <button data-do="surprised">惊讶</button>
+    <button data-do="sleepy">困</button>
+  </span>
+  <span class="group">
+    <label><input type="checkbox" id="slowmo"> 慢放 1/4</label>
+    <label><input type="checkbox" id="lines"> 显示包围盒</label>
+  </span>
+</header>
+<div id="stage"><div id="root"></div><div id="hud"></div><div id="log"></div><div id="err"></div></div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

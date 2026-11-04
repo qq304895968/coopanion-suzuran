@@ -96,10 +96,9 @@ export function createRenderer(canvas, view) {
     if (!entry) { entry = { tex: gl.createTexture() }; textures.set(name, entry); }
     gl.bindTexture(gl.TEXTURE_2D, entry.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    const pot = (n) => (n & (n - 1)) === 0;
-    const mip = gl2 || (pot(src.width) && pot(src.height));
-    if (mip) gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+    // 不做 mipmap：画布是 2 倍超采样，贴图在画布里始终是“放大”采样，用不到 mip；
+    // 而 mip 会把紧挨着的另一块图集混进来，头发、脸这些细线条边上就会发灰、变粗。
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);

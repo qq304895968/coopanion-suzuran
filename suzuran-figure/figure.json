@@ -1,0 +1,121 @@
+{
+  "manifest": 2,
+  "api": 2,
+  "id": "suzuran",
+  "version": "1.0.0",
+  "name": {
+    "zh": "铃兰",
+    "zh-Hant": "鈴蘭",
+    "en": "Suzuran",
+    "ja": "スズラン",
+    "ko": "스즈란"
+  },
+  "about": {
+    "zh": "明日方舟干员铃兰:狐耳少女,戴尖顶帽、留紫色双马尾,手持一把长杖;括号里选的是她的立绘——默认、精英2、皮肤「雪霁」(红围巾暖室装)",
+    "en": "Arknights operator Suzuran: a fox-eared girl in a pointed hat with purple twintails holding a long staff; the bracket picks her illustration — default, E2, or the 'Snow Clearing' skin (red scarf, warm room outfit)"
+  },
+  "author": "coopanion-suzuran workspace",
+  "license": "MIT (pack code); character art © Hypergryph/Yostar, extracted from game files (see README.md)",
+  "credits": [
+    {
+      "role": "角色原设",
+      "name": "Hypergryph / Yostar (明日方舟干员「铃兰」)"
+    },
+    {
+      "role": "立绘素材来源",
+      "name": "游戏客户端文件经 fexli/ArknightsResource (GitHub) 公开"
+    }
+  ],
+  "entry": "figure.js",
+  "export": "createSuzuranBody",
+  "thumb": "thumbs/suzuran.png",
+  "axes": [
+    {
+      "id": "outfit",
+      "name": {
+        "zh": "皮肤",
+        "zh-Hant": "皮膚",
+        "en": "Skin",
+        "ja": "衣装",
+        "ko": "스킨"
+      },
+      "options": [
+        {
+          "id": "default",
+          "name": { "zh": "默认立绘", "en": "Default" },
+          "thumb": "thumbs/default.png",
+          "accent": "#8d7bd8"
+        },
+        {
+          "id": "e2",
+          "name": { "zh": "精英2", "en": "E2" },
+          "thumb": "thumbs/e2.png",
+          "accent": "#5aa7e8"
+        },
+        {
+          "id": "xueji",
+          "name": { "zh": "雪霁", "en": "Snow Clearing (nian#11)" },
+          "thumb": "thumbs/xueji.png",
+          "accent": "#d8574a"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "default",
+      "pick": { "outfit": "default" },
+      "name": { "zh": "默认", "en": "Default" },
+      "accent": "#8d7bd8"
+    },
+    {
+      "id": "e2",
+      "pick": { "outfit": "e2" },
+      "name": { "zh": "精英2", "en": "E2" },
+      "accent": "#5aa7e8"
+    },
+    {
+      "id": "xueji",
+      "pick": { "outfit": "xueji" },
+      "name": { "zh": "雪霁", "en": "Snow Clearing" },
+      "accent": "#d8574a"
+    }
+  ],
+  "vocab": [
+    { "id": "neutral", "kind": "expression", "names": { "zh": ["平静", "面无表情"], "en": ["neutral"] }, "about": { "zh": "恢复平静的表情", "en": "goes back to a calm face" }, "seconds": 0.9 },
+    { "id": "happy", "kind": "expression", "names": { "zh": ["开心", "高兴"], "en": ["happy"] }, "about": { "zh": "露出开心的笑容", "en": "smiles happily" }, "seconds": 0.9 },
+    { "id": "wink", "kind": "expression", "names": { "zh": ["眨眼", "调皮"], "en": ["wink"] }, "about": { "zh": "俏皮地眨一下眼", "en": "winks" }, "seconds": 0.9 },
+    { "id": "love", "kind": "expression", "names": { "zh": ["喜欢", "心动"], "en": ["love"] }, "about": { "zh": "眼睛变成爱心", "en": "eyes turn into hearts" }, "seconds": 0.9 },
+    { "id": "angry", "kind": "expression", "names": { "zh": ["生气", "鼓脸"], "en": ["angry"] }, "about": { "zh": "鼓起脸颊瞪人", "en": "puffs her cheeks angrily" }, "seconds": 0.9 },
+    { "id": "sad", "kind": "expression", "names": { "zh": ["难过", "委屈"], "en": ["sad"] }, "about": { "zh": "眼神低垂,嘴角下撇", "en": "droops sadly" }, "seconds": 0.9 },
+    { "id": "determined", "kind": "expression", "names": { "zh": ["认真", "坚定"], "en": ["determined"] }, "about": { "zh": "眼神压低,一脸认真", "en": "a lowered gaze, a serious face" }, "seconds": 0.9 },
+    { "id": "flustered", "kind": "expression", "names": { "zh": ["慌张", "窘"], "en": ["flustered"] }, "about": { "zh": "满脸通红冒汗", "en": "red all over and sweating" }, "seconds": 0.9 },
+    { "id": "scared", "kind": "expression", "names": { "zh": ["害怕", "吓到"], "en": ["scared"] }, "about": { "zh": "眼睛瞪大,身体发抖", "en": "eyes wide, body shaking" }, "seconds": 0.9 },
+    { "id": "excited", "kind": "expression", "names": { "zh": ["期待", "星星眼"], "en": ["excited"] }, "about": { "zh": "眼睛里闪着星星", "en": "stars sparkle in the eyes" }, "seconds": 0.9 },
+    { "id": "cry", "kind": "expression", "names": { "zh": ["大哭", "哭"], "en": ["cry"] }, "about": { "zh": "闭眼大哭,眼泪直流", "en": "eyes shut, wailing, tears streaming" }, "seconds": 0.9 },
+    { "id": "confused", "kind": "expression", "names": { "zh": ["疑惑", "问号"], "en": ["confused"] }, "about": { "zh": "一脸不解,头顶问号", "en": "a puzzled face, a question mark overhead" }, "seconds": 0.9 },
+    { "id": "sleepy", "kind": "expression", "names": { "zh": ["困", "犯困"], "en": ["sleepy"] }, "about": { "zh": "眯起眼睛打哈欠", "en": "eyes half-closed, drowsy" }, "seconds": 0.9 },
+    { "id": "proud", "kind": "expression", "names": { "zh": ["得意", "叉腰"], "en": ["proud"] }, "about": { "zh": "昂首挺胸一脸得意", "en": "chest out, proud" }, "seconds": 0.9 },
+    { "id": "stand", "kind": "motion", "names": { "zh": ["站起", "站"], "en": ["stand"] }, "about": { "zh": "站起来(坐着、睡着时)", "en": "stands up" }, "seconds": 1.2 },
+    { "id": "jump", "kind": "motion", "names": { "zh": ["跳", "跳起来"], "en": ["jump"] }, "about": { "zh": "原地起跳", "en": "jumps on the spot" }, "seconds": 1.2 },
+    { "id": "hop", "kind": "motion", "names": { "zh": ["小跳", "蹦"], "en": ["hop"] }, "about": { "zh": "小小蹦一下", "en": "a small hop" }, "seconds": 0.9 },
+    { "id": "look", "kind": "motion", "names": { "zh": ["张望", "看看"], "en": ["look around"] }, "about": { "zh": "左右张望", "en": "looks left and right" }, "seconds": 2.7 },
+    { "id": "turn", "kind": "motion", "names": { "zh": ["转身"], "en": ["turn"] }, "about": { "zh": "转向另一边", "en": "turns to face the other way" }, "seconds": 0.4 },
+    { "id": "nod", "kind": "motion", "names": { "zh": ["点头"], "en": ["nod"] }, "about": { "zh": "低头两下", "en": "dips the head twice" }, "seconds": 0.8 },
+    { "id": "shake", "kind": "motion", "names": { "zh": ["摇头"], "en": ["shake head"] }, "about": { "zh": "脸左右转", "en": "turns the face left and right" }, "seconds": 0.8 },
+    { "id": "spin", "kind": "motion", "names": { "zh": ["转圈"], "en": ["spin"] }, "about": { "zh": "原地转一圈", "en": "spins around once" }, "seconds": 0.8 },
+    { "id": "sit", "kind": "motion", "names": { "zh": ["坐下", "坐"], "en": ["sit"] }, "about": { "zh": "坐下", "en": "sits down" }, "seconds": 0.8, "lasting": true },
+    { "id": "sleep", "kind": "motion", "names": { "zh": ["睡觉", "睡"], "en": ["sleep"] }, "about": { "zh": "坐下打盹闭眼", "en": "dozes sitting down" }, "seconds": 0.8, "lasting": true },
+    { "id": "dizzy", "kind": "motion", "names": { "zh": ["晕", "转晕"], "en": ["dizzy"] }, "about": { "zh": " dizzy for a few seconds", "en": "dizzy for a few seconds" }, "seconds": 3.2 },
+    { "id": "walk", "kind": "motion", "names": { "zh": ["走走", "散步"], "en": ["walk"] }, "about": { "zh": "随便走一段", "en": "wanders a little way" }, "seconds": 12 },
+    { "id": "run", "kind": "motion", "names": { "zh": ["跑", "跑起来"], "en": ["run"] }, "about": { "zh": "跑到屏幕另一头", "en": "runs to the other end of the screen" }, "seconds": 12 },
+    { "id": "wave", "kind": "motion", "names": { "zh": ["招手", "打招呼"], "en": ["wave"] }, "about": { "zh": "举起手挥一挥", "en": "waves hello" }, "seconds": 1.7 },
+    { "id": "bow", "kind": "motion", "names": { "zh": ["鞠躬"], "en": ["bow"] }, "about": { "zh": "闭眼,上身往前倾鞠一躬", "en": "closes the eyes and bows" }, "seconds": 1.7 },
+    { "id": "shiver", "kind": "motion", "names": { "zh": ["发抖", "哆嗦"], "en": ["shiver"] }, "about": { "zh": "缩着身子抖一会儿", "en": "huddles up and shivers" }, "seconds": 1.9 },
+    { "id": "dance", "kind": "motion", "names": { "zh": ["跳舞", "摇摆"], "en": ["dance"] }, "about": { "zh": "原地踩着节拍摇摆三秒,冒音符", "en": "sways to a beat, music notes floating up" }, "seconds": 3.4 }
+  ],
+  "sounds": {},
+  "can": {
+    "walk": true
+  }
+}

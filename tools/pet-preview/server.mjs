@@ -9,7 +9,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/[\\/]+$/, '');
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
 
 const TYPES = {

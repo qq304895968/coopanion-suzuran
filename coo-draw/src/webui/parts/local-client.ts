@@ -77,6 +77,65 @@ function shortDate(ts: number): string {
 function stripExt(name: string): string {
   return name.replace(/\.(safetensors|ckpt|pt|pth)$/i, '');
 }
+function svgIcon(name: string, size = 16): HTMLElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('viewBox','0 0 24 24');
+  svg.setAttribute('fill','none');
+  svg.setAttribute('stroke','currentColor');
+  svg.setAttribute('stroke-width','1.8');
+  svg.setAttribute('stroke-linecap','round');
+  svg.setAttribute('stroke-linejoin','round');
+  svg.classList.add('coo-icon');
+  svg.style.width = size+'px'; svg.style.height = size+'px'; svg.style.verticalAlign='middle';
+  let inner='';
+  if(name==='info') inner='<circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 11h1v5h1"/>';
+  else if(name==='shuffle') inner='<path d="M16 3h4v4"/><path d="M16 21h4v-4"/><path d="M8 8l8 8"/><path d="M8 16l8-8"/>';
+  else if(name==='swap') inner='<path d="M7 16V4"/><path d="M7 16l3-3"/><path d="M7 16l-3-3"/><path d="M17 8v12"/><path d="M17 8l3 3"/><path d="M17 8l-3 3"/>';
+  else if(name==='chevronRight') inner='<path d="M9 18l6-6-6-6"/>';
+  else if(name==='chevronDown') inner='<path d="M6 9l6 6 6-6"/>';
+  else if(name==='arrowRight') inner='<path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>';
+  else if(name==='refresh') inner='<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>';
+  else if(name==='warn') inner='<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 1.71H20.47a2 2 0 0 0 1.71-1.71L13.71 3.86a1 1 0 0 0-1.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
+  else if(name==='plug') inner='<path d="M7 11V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v4"/><path d="M10 11v6"/><path d="M14 11v6"/><rect x="7" y="17" width="10" height="3" rx="1"/>';
+  else inner='<circle cx="12" cy="12" r="9"/>';
+  svg.innerHTML = inner;
+  return svg as unknown as HTMLElement;
+}
+function iconWithText(iconName: string, text: string, size=16): HTMLElement {
+  const wrap = document.createElement('span'); wrap.className='coo-icon-btn'; wrap.style.display='inline-flex'; wrap.style.alignItems='center'; wrap.style.gap='4px';
+  wrap.append(svgIcon(iconName, size), document.createTextNode(text));
+  return wrap;
+}
+const PARAM_LABELS: Record<string,string> = { positive: '正向提示词', negative: '反向提示词', checkpoint: '模型', steps: '步数', cfg: 'CFG', seed: '种子', sampler: '采样器', scheduler: '调度器', width: '宽', height: '高', batch: '批次' };
+
+
+// 共享内存：跨子 Tab 保持生成状态，避免切换后进度丢失
+interface SharedDrawState {
+  boot: CooGenBootstrap | null;
+  checkpoints: string[];
+  loras: LoRARecord[];
+  controlNets: string[];
+  presets: WorkflowSummary[];
+  history: HistoryEntry[];
+  current: GenerateTaskView | null;
+  lastFinished: string;
+  resultEntry: HistoryEntry | null;
+  resultUrl: string;
+}
+const shared: SharedDrawState = {
+  boot: null,
+  checkpoints: [],
+  loras: [],
+  controlNets: [],
+  presets: [],
+  history: [],
+  current: null,
+  lastFinished: '',
+  resultEntry: null,
+  resultUrl: '',
+};
 
 // 共享内存：跨子 Tab 保持生成状态，避免切换后进度丢失
 interface SharedDrawState {
@@ -107,11 +166,13 @@ const shared: SharedDrawState = {
 /* ------------------------------------------------------------------ studio */
 
 const SIZE_PRESETS: Array<{ value: string; labelZh: string; labelEn: string; w: number; h: number }> = [
-  { value: '768x1152', labelZh: '768×1152 竖图', labelEn: '768×1152 portrait', w: 768, h: 1152 },
-  { value: '512x768', labelZh: '512×768', labelEn: '512×768', w: 512, h: 768 },
-  { value: '1024x1024', labelZh: '1024×1024 方图', labelEn: '1024×1024 square', w: 1024, h: 1024 },
-  { value: '1152x768', labelZh: '1152×768 横图', labelEn: '1152×768 landscape', w: 1152, h: 768 },
+  { value: '512x512', labelZh: '512×512', labelEn: '512×512', w: 512, h: 512 },
+  { value: '768x768', labelZh: '768×768', labelEn: '768×768', w: 768, h: 768 },
+  { value: '1024x1024', labelZh: '1024×1024', labelEn: '1024×1024', w: 1024, h: 1024 },
+  { value: '768x1152', labelZh: '768×1152', labelEn: '768×1152', w: 768, h: 1152 },
+  { value: '1152x768', labelZh: '1152×768', labelEn: '1152×768', w: 1152, h: 768 },
   { value: '832x1216', labelZh: '832×1216', labelEn: '832×1216', w: 832, h: 1216 },
+  { value: '1216x832', labelZh: '1216×832', labelEn: '1216×832', w: 1216, h: 832 },
   { value: 'custom', labelZh: '自定义', labelEn: 'Custom', w: 0, h: 0 },
 ];
 
@@ -181,18 +242,17 @@ const studioPanel: WebUiPanel = {
     let busy = false;
 
     // 包装容器
-    const root = ctx.ui.h('div', 'coo-draw-studio');
     const left = ctx.ui.h('div', 'coo-draw-left');
     const right = ctx.ui.h('div', 'coo-draw-right');
-    root.append(left, right);
-    ctx.root.append(root);
 
     /* --------------------------- 左栏：参数设置 --------------------------- */
-    const paramSheet = ctx.ui.sheet({
-      title: t('参数设置', 'Parameters'),
-      desc: t('正向/反向提示词、模型与采样参数；支持尺寸预设联动与高级折叠。', 'Prompt, checkpoint and sampler settings; size presets are linked and advanced section is collapsible.'),
-    });
-    left.append(paramSheet.el);
+    const pageWrap = ctx.ui.h('div','coo-page-wrap');
+    const pageContent = ctx.ui.h('div','coo-page-content');
+    pageWrap.append(pageContent);
+    pageContent.append(left, right);
+    ctx.root.append(pageWrap);
+    // 参数区：无冗余标题，左栏即参数区
+    const paramSheet = { el: left, body: left } as unknown as ReturnType<typeof ctx.ui.sheet>;
 
     // 工作流
     const workflowRow = ctx.ui.rowbar();
@@ -206,34 +266,53 @@ const studioPanel: WebUiPanel = {
     workflowRow.append(ctx.ui.field(t('工作流', 'Workflow'), workflowSelect));
     const workflowHint = ctx.ui.msgline('');
     // 参数映射 ℹ️ 图标
-    const infoBtn = ctx.ui.button('ℹ️', { size: 'sm', variant: 'plain' });
+    const infoBtn = document.createElement('button');
+    infoBtn.className='coo-info-btn';
     infoBtn.title = t('查看参数映射', 'View param mapping');
+    infoBtn.append(svgIcon('info', 16));
+    infoBtn.style.display='inline-flex'; infoBtn.style.alignItems='center'; infoBtn.style.justifyContent='center';
     infoBtn.addEventListener('click', async () => {
       try {
         const res = await ctx.invoke<PresetDetail>('presetDetail', [state.workflow]);
         if (!res.ok || !res.preset) throw new Error(res.error ?? '读取失败');
         const body = document.createElement('div');
-        const tbl = ctx.ui.table({ head: ['param', 'node', 'field', 'type'] });
-        for (const m of res.preset.mapping) tbl.addRow([m.param, m.node_id, m.field, m.ui_type]);
+        const intro = ctx.ui.msgline(t(`当前工作流支持通过画室调整以下 ${res.preset.mapping.length} 个参数`, `This workflow exposes ${res.preset.mapping.length} adjustable parameters`));
+        body.append(intro);
+        const tbl = ctx.ui.table({ head: [t('参数','Param'), t('类型','Type')] });
+        for (const m of res.preset.mapping) {
+          const label = (PARAM_LABELS[m.param] || m.param);
+          tbl.addRow([label, m.ui_type]);
+        }
         body.append(tbl.el);
-        if (res.preset.warnings.length) body.append(ctx.ui.msgline(res.preset.warnings.join('；'), true));
+        // 已按要求移除底部 CheckpointLoader 告警
         ctx.ui.drawer(res.preset.name, body);
       } catch (e) { ctx.ui.toast(errText(e), 'bad'); }
     });
     workflowRow.append(infoBtn);
     paramSheet.body.append(workflowRow, workflowHint);
 
+    const makeCounter = (ta: HTMLTextAreaElement, limit=500): HTMLElement => {
+      const wrap = ctx.ui.h('div','coo-prompt-wrap');
+      const counter = ctx.ui.h('div','coo-prompt-counter','0 / 500');
+      const update = (): void => { const len=ta.value.length; counter.textContent = `${len} / ${limit}`; counter.classList.toggle('warn', len>limit*0.8 && len<=limit); counter.classList.toggle('over', len>limit); };
+      ta.addEventListener('input', update); update();
+      wrap.append(ta, counter);
+      // move width to wrap
+      return wrap;
+    };
     const positive = ctx.ui.textarea({
       value: '', rows: 4,
       placeholder: t('想画什么？例如：塞尔达站在海边看日落，金色时刻，电影感', 'What should it be? e.g. Zelda watching sunset by sea, golden hour, cinematic'),
       onInput: (v) => { state.positive = v; },
     }); positive.style.width = '100%';
-    paramSheet.body.append(ctx.ui.field(t('正向提示词', 'Positive prompt'), positive));
+    const posWrap = makeCounter(positive, 500);
+    paramSheet.body.append(ctx.ui.field(t('正向提示词', 'Positive prompt'), posWrap));
 
     const negative = ctx.ui.textarea({
       value: state.negative, rows: 2, onInput: (v) => { state.negative = v; },
     }); negative.style.width = '100%';
-    paramSheet.body.append(ctx.ui.field(t('反向提示词', 'Negative prompt'), negative));
+    const negWrap = makeCounter(negative, 500);
+    paramSheet.body.append(ctx.ui.field(t('反向提示词', 'Negative prompt'), negWrap));
 
     // 模型 Checkpoint（含空状态）
     const checkpointWrap = ctx.ui.h('div', '');
@@ -257,8 +336,11 @@ const studioPanel: WebUiPanel = {
       if (!needsCheckpoint) {
         checkpointSelect.style.display = 'none';
         checkpointEmpty.style.display = 'block';
+        checkpointEmpty.className = 'coo-empty-card coo-empty-card--neutral';
         checkpointEmpty.replaceChildren();
         const tt = ctx.ui.h('div', 'title', t('当前工作流无需 Checkpoint', 'This workflow does not require a checkpoint'));
+        tt.prepend(svgIcon('info', 14));
+        tt.style.display='inline-flex'; tt.style.alignItems='center'; tt.style.gap='6px';
         const sub = ctx.ui.msgline(t('已按工作流自动隐藏模型选择。', 'Checkpoint selection hidden for this workflow.'));
         checkpointEmpty.append(tt, sub);
         return;
@@ -266,8 +348,11 @@ const studioPanel: WebUiPanel = {
       if (!checkpoints.length) {
         checkpointSelect.style.display = 'none';
         checkpointEmpty.style.display = 'block';
+        checkpointEmpty.className = 'coo-empty-card coo-empty-card--warn';
         checkpointEmpty.replaceChildren();
-        const warn = ctx.ui.h('div', 'title', `⚠️ ${t('未检测到 Checkpoint 模型', 'No checkpoint found')}`);
+        const warn = ctx.ui.h('div', 'title', t('未检测到 Checkpoint 模型', 'No checkpoint found'));
+        warn.prepend(svgIcon('warn', 14));
+        warn.style.display='inline-flex'; warn.style.alignItems='center'; warn.style.gap='6px';
         const msg = ctx.ui.msgline(t(
           `当前工作流「${presets.find(p => p.id === state.workflow)?.name ?? state.workflow}」可能需要一个 Checkpoint 模型才能正常出图。`,
           `Workflow “${presets.find(p => p.id === state.workflow)?.name ?? state.workflow}” may need a checkpoint.`,
@@ -293,8 +378,11 @@ const studioPanel: WebUiPanel = {
     renderCheckpointEmpty();
 
     // LoRA 列表（搜索+勾选，隐藏扩展名，预设标签）
-    const loraTitle = ctx.ui.h('div', 'coo-group-title', t('LoRA 列表（搜索+勾选）', 'LoRAs (search & select)'));
-    paramSheet.body.append(loraTitle);
+    const loraHeader = ctx.ui.h('div','coo-lora-header');
+    const loraTitle = ctx.ui.h('div', 'coo-group-title', t('LoRA 列表', 'LoRA list'));
+    const loraCount = ctx.ui.h('div','coo-lora-count','');
+    loraHeader.append(loraTitle, loraCount);
+    paramSheet.body.append(loraHeader);
     const loraSearch = ctx.ui.input({ type: 'search', placeholder: t('搜索 LoRA（名称/别名/分类/触发词）', 'Search LoRAs (name/alias/category/trigger)') });
     loraSearch.style.width = '100%';
     paramSheet.body.append(loraSearch);
@@ -305,25 +393,18 @@ const studioPanel: WebUiPanel = {
     const btnClear = ctx.ui.button(t('清空', 'Clear'), { size: 'sm' });
     loraToolbar.append(btnAll, btnInverse, btnClear);
     paramSheet.body.append(loraToolbar);
-    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '300px' });
+    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '400px' });
     // 使其可滚动不撑开
     (loraTable.el as HTMLElement).classList.add('coo-lora-list');
     paramSheet.body.append(loraTable.el);
-    const loraCount = ctx.ui.msgline('');
-    paramSheet.body.append(loraCount);
 
     const renderLoraCount = (): void => {
-      const missing = boot.defaults.filter((item) => !loras.some((l) => l.path === item.path));
-      loraCount.textContent = t(
-        `已选 ${state.loras.size} 个${missing.length ? ` · 默认里 ${missing.length} 个文件丢失` : ''}`,
-        `${state.loras.size} selected${missing.length ? ` · ${missing.length} default missing` : ''}`,
-      );
-      loraCount.classList.toggle('bad', missing.length > 0);
+      loraCount.textContent = t(`已选 ${state.loras.size} 个`, `${state.loras.size} selected`);
     };
     const renderLoraTable = (): void => {
       const query = loraSearch.value.trim().toLowerCase();
       const filtered = loras.filter((item) => !query || [item.path, item.name, item.category, ...item.aliases, ...item.trigger_words].some((v) => v.toLowerCase().includes(query)));
-      loraTable.clear(filtered.length ? undefined : t('没有匹配的 LoRA', 'No matching LoRA'));
+      if(!filtered.length){ loraTable.clear(t('没有匹配的 LoRA，试试别的关键词','No matching LoRA, try another keyword')); return; } else loraTable.clear(undefined);
       for (const record of filtered.slice(0, 300)) {
         const checked = state.loras.has(record.path);
         const box = ctx.ui.checkbox('', {
@@ -345,22 +426,27 @@ const studioPanel: WebUiPanel = {
         sub.textContent = [record.path, record.category || t('未分类', 'uncategorized'), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
         sub.title = record.path;
         nameCell.append(title, sub);
-        if (boot.defaults.some((item) => item.path === record.path)) {
-          const tag = pill(ctx, t('预设', 'preset'), 'on');
-          tag.title = t('默认启用', 'Enabled by default');
-          nameCell.append(tag);
-        }
+        // 已去掉预设标签，勾选状态即启用
+        const weightWrap = ctx.ui.h('div','coo-weight-stepper');
         const weightInput = ctx.ui.input({
           type: 'number', value: String(state.loras.get(record.path) ?? record.weight ?? 0.75), cls: 'mono coo-gen-weight',
         });
-        weightInput.min = '0.05'; weightInput.max = '2'; weightInput.step = '0.05';
+        weightInput.min = '-2'; weightInput.max = '2'; weightInput.step = '0.05';
         weightInput.disabled = !checked;
+        weightInput.title = t('双击恢复默认值 0.75','Double-click to reset to 0.75');
+        weightInput.addEventListener('dblclick', () => { weightInput.value='0.75'; if(state.loras.has(record.path)) state.loras.set(record.path, 0.75); });
         weightInput.addEventListener('change', () => {
-          const v = Math.min(2, Math.max(0.05, num(weightInput.value, 0.75)));
+          const v = Math.min(2, Math.max(-2, num(weightInput.value, 0.75)));
+          if (Math.abs(v) > 2) { ctx.ui.toast(t('权重超出范围 -2 ~ 2','Weight out of range -2 ~ 2'),'bad'); }
           weightInput.value = String(v);
           if (state.loras.has(record.path)) state.loras.set(record.path, v);
         });
-        loraTable.addRow([box.el, nameCell, weightInput]);
+        const dec = document.createElement('button'); dec.textContent='−'; dec.className=''; dec.style.cssText='width:22px;height:22px;border:1px solid var(--line,rgba(127,127,127,.2));border-radius:4px;cursor:pointer;background:rgba(127,127,127,.06)';
+        const inc = document.createElement('button'); inc.textContent='+'; inc.style.cssText='width:22px;height:22px;border:1px solid var(--line,rgba(127,127,127,.2));border-radius:4px;cursor:pointer;background:rgba(127,127,127,.06)';
+        dec.addEventListener('click', ()=>{ const v=Math.max(-2, num(weightInput.value,0.75)-0.05); weightInput.value=v.toFixed(2); if(state.loras.has(record.path)) state.loras.set(record.path, v); persistLora(); });
+        inc.addEventListener('click', ()=>{ const v=Math.min(2, num(weightInput.value,0.75)+0.05); weightInput.value=v.toFixed(2); if(state.loras.has(record.path)) state.loras.set(record.path, v); persistLora(); });
+        weightWrap.append(dec, weightInput, inc);
+        loraTable.addRow([box.el, nameCell, weightWrap]);
       }
       renderLoraCount();
     };
@@ -371,6 +457,12 @@ const studioPanel: WebUiPanel = {
       state.loras = next; renderLoraTable();
     });
     btnClear.addEventListener('click', () => { state.loras.clear(); renderLoraTable(); });
+    const LORA_STORE_KEY='coo-draw-last-loras';
+    const persistLora = (): void => { try{ localStorage.setItem(LORA_STORE_KEY, JSON.stringify([...state.loras.entries()])); }catch{} };
+    const restoreLora = (): void => { try{ const raw=localStorage.getItem(LORA_STORE_KEY); if(!raw) return; const arr=JSON.parse(raw) as Array<[string,number]>; if(!Array.isArray(arr)) return; state.loras = new Map(arr.filter(([k,v])=> typeof k==='string' && typeof v==='number' && loras.some(l=>l.path===k))); }catch{} };
+    // 首次加载时尝试恢复上次选择（覆盖 defaults）
+    restoreLora();
+    const patchEmptyCheck = (): void => { if(loraSearch.value.trim() && !loras.filter((item) => [item.path, item.name, item.category, ...item.aliases, ...item.trigger_words].some((v) => v.toLowerCase().includes(loraSearch.value.trim().toLowerCase()))).length){ /* empty handled in render */ } };
     loraSearch.addEventListener('input', renderLoraTable);
     renderLoraTable();
 
@@ -400,7 +492,7 @@ const studioPanel: WebUiPanel = {
     }); sizeSelect.value = state.sizePreset;
     const widthInput = ctx.ui.input({ type: 'number', value: String(state.width), cls: 'mono coo-gen-num' }); widthInput.min='64'; widthInput.max='4096'; widthInput.step='8';
     const heightInput = ctx.ui.input({ type: 'number', value: String(state.height), cls: 'mono coo-gen-num' }); heightInput.min='64'; heightInput.max='4096'; heightInput.step='8';
-    const swapBtn = ctx.ui.button('⇄', { size: 'sm', variant: 'plain' }); swapBtn.title = t('交换宽高', 'Swap width/height');
+    const swapBtn = document.createElement('button'); swapBtn.className='btn plain sm coo-swap-btn'; swapBtn.title = t('交换宽高', 'Swap width/height'); swapBtn.append(svgIcon('swap',16), document.createTextNode(t(' 交换',' Swap'))); (swapBtn as HTMLButtonElement).type='button';
     sizeRow.append(ctx.ui.field(t('尺寸预设', 'Size preset'), sizeSelect), ctx.ui.field(t('宽', 'Width'), widthInput), ctx.ui.field(t('高', 'Height'), heightInput), swapBtn);
     sizeRow.classList.add('coo-swap-btn');
     sizeGroup.append(sizeTitle, sizeRow);
@@ -408,16 +500,19 @@ const studioPanel: WebUiPanel = {
 
     // 高级折叠
     const advGroup = ctx.ui.h('div', 'coo-group');
-    const advToggle = document.createElement('button'); advToggle.className = 'coo-adv-toggle'; advToggle.textContent = t('【高级 ▼】（默认折叠）', 'Advanced ▼ (collapsed)');
+    const advToggle = document.createElement('button'); advToggle.className = 'coo-adv-toggle'; advToggle.setAttribute('aria-expanded','false');
+    const advLabel = ctx.ui.h('span','', t('高级','Advanced')); advLabel.style.fontWeight='600';
+    const advArrow = svgIcon('chevronRight',14); advArrow.classList.add('coo-adv-arrow');
+    advToggle.append(advLabel, advArrow);
     const advBody = ctx.ui.h('div', 'coo-adv-body hidden');
     const batchInput = ctx.ui.input({ type: 'number', value: String(state.batch), cls: 'mono coo-gen-num' }); batchInput.min='1'; batchInput.max='8'; batchInput.step='1';
     batchInput.addEventListener('change', () => { state.batch = Math.max(1, Math.min(8, Math.round(num(batchInput.value, state.batch)))); batchInput.value = String(state.batch); });
     const seedInput = ctx.ui.input({ type: 'number', value: String(state.seed), cls: 'mono coo-gen-num' }); seedInput.min='-1'; seedInput.max='9007199254740991'; seedInput.step='1';
     seedInput.addEventListener('change', () => { const v = Math.trunc(num(seedInput.value, state.seed)); seedInput.value = String(v); state.seed = v; });
-    const randBtn = ctx.ui.button('🎲', { size: 'sm' }); randBtn.title = t('随机种子', 'Random seed');
+    const randBtn = document.createElement('button'); randBtn.className='coo-info-btn'; randBtn.title = t('随机生成种子','Randomize seed'); randBtn.append(svgIcon('shuffle',14));
     randBtn.addEventListener('click', () => { state.seed = -1; seedInput.value = '-1'; });
     advBody.append(ctx.ui.field(t('批次', 'Batch'), batchInput), ctx.ui.field(t('种子', 'Seed'), seedInput), randBtn);
-    advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.textContent = hidden ? t('【高级 ▼】（默认折叠）', 'Advanced ▼ (collapsed)') : t('【高级 ▲】', 'Advanced ▲'); });
+    advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.setAttribute('aria-expanded', hidden? 'false':'true'); advArrow.style.transform = hidden ? 'rotate(0deg)' : 'rotate(90deg)'; });
     advGroup.append(advToggle, advBody);
     paramSheet.body.append(advGroup);
 
@@ -448,7 +543,7 @@ const studioPanel: WebUiPanel = {
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
 
-    // Sticky 操作按钮
+    // Sticky 操作按钮 - 全宽底部固定，不遮挡内容
     const sticky = ctx.ui.h('div', 'coo-sticky-bar');
     const stickyHint = ctx.ui.h('div', 'hint', '');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
@@ -457,7 +552,7 @@ const studioPanel: WebUiPanel = {
     cancelBtn.disabled = true;
     cancelBtn.style.border = '1px solid var(--line, rgba(127,127,127,.3))';
     sticky.append(stickyHint, generateBtn, cancelBtn, openBtn);
-    left.append(sticky);
+    ctx.root.append(sticky);
     const genLine = ctx.ui.msgline(''); left.append(genLine);
     const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); stickyHint.textContent = text; };
 
@@ -582,24 +677,38 @@ const studioPanel: WebUiPanel = {
     // 连接卡片化
     const connCard = ctx.ui.h('div', 'coo-conn-card');
     const connHead = ctx.ui.h('div', 'coo-conn-head');
-    const connTitle = ctx.ui.h('div', 'coo-conn-title', `🔌 ${t('ComfyUI 连接', 'ComfyUI Connection')}`);
-    const connBadge = ctx.ui.h('span', 'pill coo-conn-badge', boot.health.ok ? `🟢 ${t('在线','Online')}` : `🔴 ${t('离线','Offline')}`);
+    const connTitle = ctx.ui.h('div', 'coo-conn-title', t('ComfyUI 连接', 'ComfyUI Connection'));
+    connTitle.prepend(svgIcon('plug', 16));
+    const connBadge = ctx.ui.h('span', 'pill coo-conn-badge', '');
+    const dot = ctx.ui.h('span','coo-conn-dot '+(boot.health.ok?'on':'off')); connBadge.append(dot, document.createTextNode(boot.health.ok ? t('在线','Online') : t('离线','Offline')));
     connBadge.style.background = boot.health.ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
     connHead.append(connTitle, connBadge);
-    const connMeta = ctx.ui.h('div', 'coo-conn-meta');
+    const connMeta = ctx.ui.h('div', 'coo-conn-kv');
+    const kvRow = (k:string, v: string|HTMLElement, action?: HTMLElement): HTMLElement => {
+      const kk = ctx.ui.h('div','k', k);
+      const vv = ctx.ui.h('div','v');
+      if(typeof v==='string'){ const span=ctx.ui.h('span','truncate', v); span.title=v; vv.append(span); } else vv.append(v);
+      if(action) vv.append(action);
+      const wrap = ctx.ui.h('div',''); wrap.style.display='contents'; wrap.append(kk, vv);
+      return wrap;
+    };
     const renderConnMeta = (): void => {
       connMeta.replaceChildren();
-      const version = boot.health.version ? `v${boot.health.version}` : '';
-      const sys = boot.health.system ?? '';
-      const top = ctx.ui.h('div', '', `${boot.health.ok ? '🟢' : '🔴'} ${boot.health.ok ? t('在线','Online') : t('离线','Offline')}  ${version} ${sys} · ${boot.health.devices?.[0] ?? ''}`);
-      const addr = ctx.ui.h('div', '', `${t('地址','URL')}  ${boot.config.url} `);
+      const versionVal = `${boot.health.version? 'v'+boot.health.version : ''} ${boot.health.system ?? ''}`.trim() || '—';
+      const deviceRaw = boot.health.devices?.[0] ?? '—';
+      const deviceEl = ctx.ui.h('span','truncate', deviceRaw); deviceEl.title = deviceRaw;
+      const addrText = ctx.ui.h('span','truncate', boot.config.url); addrText.title = boot.config.url;
       const editBtn = ctx.ui.button(t('编辑','Edit'), { size: 'sm' }); editBtn.addEventListener('click', () => { urlRow.style.display = urlRow.style.display === 'none' ? 'flex' : 'none'; });
-      addr.append(editBtn);
-      const modelInfo = ctx.ui.h('div', '', `${t('模型','Checkpoint')} ${checkpoints.length} · LoRA ${loras.length}`);
-      const outInfo = ctx.ui.h('div', '', `${t('输出','Output')}  ${boot.config.output_dir} `);
       const openOut = ctx.ui.button(t('打开','Open'), { size: 'sm' }); openOut.addEventListener('click', () => { void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开','Opening'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
-      outInfo.append(openOut);
-      connMeta.append(top, addr, modelInfo, outInfo);
+      const outText = ctx.ui.h('span','truncate', boot.config.output_dir); outText.title = boot.config.output_dir;
+      connMeta.append(
+        kvRow(t('状态','Status'), boot.health.ok ? t('在线','Online') : t('离线','Offline')),
+        kvRow(t('版本','Version'), versionVal),
+        kvRow(t('设备','Device'), deviceEl),
+        kvRow(t('地址','URL'), addrText, editBtn),
+        kvRow(t('模型','Model'), `Checkpoint ${checkpoints.length} · LoRA ${loras.length}`),
+        kvRow(t('输出','Output'), outText, openOut),
+      );
     };
     renderConnMeta();
     const urlRow = ctx.ui.h('div', 'coo-conn-url-row'); urlRow.style.display = 'none';
@@ -611,7 +720,7 @@ const studioPanel: WebUiPanel = {
     const launchBtn = ctx.ui.button(t('一键启动','Launch'), { size: 'sm', variant: 'primary' }); launchBtn.disabled = !boot.launch.configured;
     const stopBtn = ctx.ui.button(t('关闭 ComfyUI','Stop ComfyUI'), { size: 'sm', variant: 'plain' }); stopBtn.disabled = !boot.launch.stop_configured;
     stopBtn.style.color = 'var(--danger, #c44)';
-    const refreshBtn = ctx.ui.button('⟳ ' + t('刷新','Refresh'), { size: 'sm' });
+    const refreshBtn = ctx.ui.button(t('刷新','Refresh'), { size: 'sm' }); refreshBtn.prepend(svgIcon('refresh',14));
     connActions.append(launchBtn, refreshBtn, stopBtn);
     if (!boot.launch.configured || !boot.launch.stop_configured) {
       const warn = ctx.ui.msgline(t(!boot.launch.configured ? '没有配置启动脚本。到 World 设置里填「ComfyUI 启动脚本」后可一键启动。' : '没有配置关闭脚本。到 World 设置里填「ComfyUI 关闭脚本」后可一键关闭。', !boot.launch.configured ? 'No launch script. Set it in World settings.' : 'No stop script. Set it in World settings.'), true);
@@ -625,7 +734,7 @@ const studioPanel: WebUiPanel = {
 
     const renderHealth = (health: CooGenBootstrap['health']): void => {
       const ok = health.ok;
-      connBadge.textContent = ok ? `🟢 ${t('在线','Online')}` : `🔴 ${t('离线','Offline')}`;
+      connBadge.replaceChildren(); const d=ctx.ui.h('span','coo-conn-dot '+(ok?'on':'off')); connBadge.append(d, document.createTextNode(ok ? t('在线','Online') : t('离线','Offline')));
       connBadge.style.background = ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
       healthLine.classList.toggle('bad', !ok);
       healthLine.textContent = ok ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`) : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
@@ -677,14 +786,14 @@ const studioPanel: WebUiPanel = {
     });
 
     // 进度模块（右栏下方）
-    const progressCard = ctx.ui.h('div', 'coo-progress-card');
+    const progressCard = ctx.ui.h('div', 'coo-progress-card is-idle');
     const progressTitle = ctx.ui.h('div', 'coo-group-title', t('生成进度','Progress'));
     const progress: WebUiProgress = ctx.ui.progress({ max: Math.max(1, state.steps), value: 0, label: t('等待开始','Idle'), format: (v,m)=> `${Math.round((v/Math.max(1,m))*100)}%` });
     const stageLine = ctx.ui.msgline(''); stageLine.style.fontSize='12px';
     const progressDetail = ctx.ui.h('div', 'coo-progress-detail', '');
     const previewWrap = ctx.ui.h('div', '');
     const previewImg = ctx.ui.h('img', 'coo-preview-thumb'); previewImg.style.display='none'; previewWrap.append(previewImg);
-    const viewWorksBtn = ctx.ui.button(t('→ 查看作品','→ View works'), { variant: 'primary', size: 'sm' }); viewWorksBtn.style.display='none';
+    const viewWorksBtn = ctx.ui.button(t('查看作品','View works'), { variant: 'primary', size: 'sm' }); viewWorksBtn.prepend(svgIcon('arrowRight',14)); viewWorksBtn.style.display='none';
     viewWorksBtn.addEventListener('click', () => {
       const host = ctx.root.closest('.coo-draw-studio')?.parentElement ?? ctx.root;
       // 通过自定义事件让父容器切换 Tab
@@ -700,9 +809,13 @@ const studioPanel: WebUiPanel = {
     const renderTask = (task: GenerateTaskView | null): void => {
       shared.current = task;
       if (!task) {
-        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=''; progressDetail.textContent = t('空闲','Idle'); previewImg.style.display='none'; viewWorksBtn.style.display='none';
+        progressCard.classList.add('is-idle');
+        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent = ''; progressDetail.style.display='none'; previewImg.style.display='none'; viewWorksBtn.style.display='none';
         generateBtn.disabled = busy; cancelBtn.disabled = true; updateGenerateEnabled(); return;
       }
+      progressCard.classList.remove('is-idle');
+      stageLine.style.display=''; progressDetail.style.display='';
+
       const total = Math.max(1, task.progress.total || task.params.steps || 1);
       const cur = task.status === 'done' ? total : Math.min(total, task.progress.current || 0);
       progress.setValue(cur, total); progress.setLabel(task.status==='done'? t('完成','done') : task.status==='error'? t('失败','failed') : task.status==='cancelled'? t('已取消','cancelled') : t('生成中','running'));
@@ -766,7 +879,7 @@ const studioPanel: WebUiPanel = {
         const res = await ctx.invoke<GenerateResponse>('generate', [collect()]);
         if (!alive) return;
         if (!res.ok || !res.task) { say(res.error ?? t('提交失败','Submit failed'), true); return; }
-        current=res.task; shared.current=current; lastFinished=''; shared.lastFinished=''; renderTask(current);
+        current=res.task; shared.current=current; lastFinished=''; shared.lastFinished=''; renderTask(current); persistLora();
         if (res.warnings?.length) say(res.warnings.join('；'), false); else say(t('已提交，等待 ComfyUI…','Submitted; waiting for ComfyUI…'));
         void refreshHistory();
       } catch(e){ say(errText(e), true); } finally { busy=false; generateBtn.disabled=isActive(current); updateGenerateEnabled(); }

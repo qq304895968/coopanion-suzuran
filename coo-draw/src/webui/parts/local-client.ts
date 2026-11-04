@@ -885,17 +885,67 @@ const worksPanel: WebUiPanel = {
 
     // 初始历史
     let allHistory: HistoryEntry[] = shared.history.length ? shared.history : boot.history;
-    // 若共享为空则取 boot
     shared.history = allHistory;
-    // 尝试刷新更多
     let pageLimit = Math.max(50, boot.config.history_limit);
     const fetchHistory = async (limit = pageLimit): Promise<void> => {
       try {
         const res = await ctx.invoke<HistoryResponse>('history', [limit]);
-        if (!alive) return; allHistory = res.history; shared.history = allHistory; renderGallery();
+        if (!alive) return; allHistory = res.history; shared.history = allHistory; refreshModelOptions(); refreshLoraFilterOptions(); renderGallery();
         if (res.task) { shared.current = res.task; }
       } catch {}
     };
+
+    // ===== 本地持久化 =====
+    const VIEWED_KEY = 'coo-works-viewed';
+    const FIELD_KEY = 'coo-works-fields';
+    const loadViewed = (): Set<string> => { try { const raw=localStorage.getItem(VIEWED_KEY); return new Set(raw? JSON.parse(raw) as string[]: []); } catch { return new Set(); } };
+    const saveViewed = (s:Set<string>): void => { try{ localStorage.setItem(VIEWED_KEY, JSON.stringify([...s])); }catch{} };
+    let viewed = loadViewed();
+    const markViewed = (id:string): void => { if (!viewed.has(id)) { viewed.add(id); saveViewed(viewed); dispatchUnread(); } };
+    const dispatchUnread = (): void => {
+      const unread = allHistory.filter(h=> !viewed.has(h.id)).length;
+      // 通知父 Tab 显示红点
+      ctx.root.dispatchEvent(new CustomEvent('coo-works-unread', { detail: unread, bubbles: true }));
+      // 兼容直接操作 segmented 按钮（fallback）
+      try {
+        const host = ctx.root.closest('.coo-draw-studio')?.parentElement ?? document.body;
+        const seg = host.parentElement?.querySelector('[role="tablist"], .segmented') || host.querySelector('.segmented');
+        if (seg) {
+          let dot = seg.querySelector('.coo-tab-dot') as HTMLElement | null;
+          if (unread>0) { if (!dot) { dot=document.createElement('span'); dot.className='coo-tab-dot'; const btn=Array.from(seg.querySelectorAll('button')).find(b=> b.textContent?.includes(t('作品','Works'))); if (btn) btn.append(dot); else (seg as HTMLElement).append(dot); } }
+          else if (dot) dot.remove();
+        }
+      } catch {}
+    };
+
+    // 字段配置
+    type FieldId = 'filename'|'seed'|'size'|'lora'|'model'|'time'|'sampler'|'prompt'|'negative';
+    const DEFAULT_FIELDS: Array<{ id: FieldId; labelZh: string; labelEn: string }> = [
+      { id:'filename', labelZh:'文件名', labelEn:'File' },
+      { id:'seed', labelZh:'种子', labelEn:'Seed' },
+      { id:'size', labelZh:'尺寸', labelEn:'Size' },
+      { id:'lora', labelZh:'LoRA', labelEn:'LoRA' },
+      { id:'model', labelZh:'模型', labelEn:'Model' },
+      { id:'time', labelZh:'时间', labelEn:'Time' },
+      { id:'sampler', labelZh:'采样参数', labelEn:'Sampler' },
+      { id:'prompt', labelZh:'提示词', labelEn:'Prompt' },
+      { id:'negative', labelZh:'反向', labelEn:'Negative' },
+    ];
+    const loadFieldConfig = (): { order: FieldId[]; hidden: Set<string> } => {
+      try {
+        const raw = localStorage.getItem(FIELD_KEY);
+        if (raw) {
+          const o = JSON.parse(raw) as { order?: string[]; hidden?: string[] };
+          const order = (o.order?.filter(x=> DEFAULT_FIELDS.some(f=>f.id===x)) as FieldId[]) ?? DEFAULT_FIELDS.map(f=>f.id);
+          // 补全新增字段
+          for (const f of DEFAULT_FIELDS) if (!order.includes(f.id)) order.push(f.id);
+          return { order, hidden: new Set(o.hidden ?? []) };
+        }
+      } catch {}
+      return { order: DEFAULT_FIELDS.map(f=>f.id), hidden: new Set() };
+    };
+    let fieldConfig = loadFieldConfig();
+    const saveFieldConfig = (): void => { try{ localStorage.setItem(FIELD_KEY, JSON.stringify({ order: fieldConfig.order, hidden: [...fieldConfig.hidden] })); }catch{} };
 
     const root = ctx.ui.h('div', 'coo-works');
     const left = ctx.ui.h('div', 'coo-works-gallery');
@@ -903,149 +953,396 @@ const worksPanel: WebUiPanel = {
     root.append(left, right);
     ctx.root.append(root);
 
-    // 左栏标题
-    const titleRow = ctx.ui.h('div', '');
-    const title = ctx.ui.h('div', 'coo-group-title', t('作品画廊','Gallery'));
-    titleRow.append(title);
-    left.append(titleRow);
-
-    // 筛选栏
+    // ===== 筛选区（单行横向）=====
     const filters = ctx.ui.h('div', 'coo-works-filters');
-    const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词关键字','Search prompts') }); searchInput.style.flex='1';
-    const dateFrom = ctx.ui.input({ type: 'date' }); dateFrom.title = t('开始日期','From');
-    const dateTo = ctx.ui.input({ type: 'date' }); dateTo.title = t('结束日期','To');
-    const modelSelect = ctx.ui.select({ options: [t('全部模型','All models')] }); modelSelect.title=t('模型','Model');
-    const sizeSelect = ctx.ui.select({ options: [t('全部尺寸','All sizes'), ...SIZE_PRESETS.filter(p=>p.value!=='custom').map(p=>p.value)] });
-    const favSelect = ctx.ui.select({ options: [{ value:'', label:t('全部','All') }, { value:'fav', label:t('收藏','Favorites') }] });
-    filters.append(searchInput, dateFrom, dateTo, modelSelect, sizeSelect, favSelect);
+    const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词 / 种子 / 文件名','Search prompt / seed / filename') }) as HTMLInputElement;
+    searchInput.classList.add('coo-filter-search');
+    // 日期范围合并为单个控件
+    const dateWrap = ctx.ui.h('div', 'coo-filter-date');
+    const dateFrom = ctx.ui.input({ type: 'date' }) as HTMLInputElement; dateFrom.title = t('开始日期','From');
+    const dateTo = ctx.ui.input({ type: 'date' }) as HTMLInputElement; dateTo.title = t('结束日期','To');
+    const dateSep = ctx.ui.h('span','', '—');
+    dateWrap.append(dateFrom, dateSep, dateTo);
+    // 模型、尺寸
+    const modelSelect = ctx.ui.select({ options: [{ value:'', label: t('全部模型','All models') }] }) as HTMLSelectElement;
+    const sizeSelect = ctx.ui.select({ options: [{ value:'', label: t('全部尺寸','All sizes') }] }) as HTMLSelectElement;
+    // LoRA 多选下拉（自定义）
+    const loraFilterBtn = ctx.ui.button(t('全部 LoRA','All LoRAs'), { size:'sm' });
+    loraFilterBtn.style.minWidth='110px';
+    let loraFilterSelected = new Set<string>();
+    const loraFilterPanel = ctx.ui.h('div','coo-field-settings'); loraFilterPanel.style.display='none'; loraFilterPanel.style.right='auto'; loraFilterPanel.style.left='0';
+    // 排序
+    const sortSelect = ctx.ui.select({ options: [
+      { value:'time_desc', label: t('时间倒序','Newest') },
+      { value:'time_asc', label: t('时间正序','Oldest') },
+      { value:'size_desc', label: t('尺寸从大到小','Size ↓') },
+      { value:'size_asc', label: t('尺寸从小到大','Size ↑') },
+    ] }) as HTMLSelectElement; sortSelect.value='time_desc';
+    const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size:'sm', variant:'plain' }); clearBtn.style.display='none';
+    filters.append(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterBtn, sortSelect, clearBtn);
+    // LoRA 下拉容器
+    const loraFilterWrap = ctx.ui.h('div',''); loraFilterWrap.style.position='relative'; loraFilterWrap.append(loraFilterBtn, loraFilterPanel);
+    // 将 LoRA 按钮替换为带面板的包装
+    filters.replaceChild(loraFilterWrap, loraFilterBtn);
+    filters.append(loraFilterBtn); // fallback if replace failed? Actually we need to ensure order: search, date, model, size, loraWrap, sort, clear
+    // 重新构建顺序
+    filters.replaceChildren(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterWrap, sortSelect, clearBtn);
     left.append(filters);
 
     // 填充模型下拉
-    {
+    const refreshModelOptions = (): void => {
       const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort();
+      const cur = modelSelect.value;
       modelSelect.replaceChildren(); const optAll = document.createElement('option'); optAll.value=''; optAll.textContent=t('全部模型','All models'); modelSelect.append(optAll);
       for (const m of models) { const o=document.createElement('option'); o.value=m; o.textContent=stripExt(m); o.title=m; modelSelect.append(o); }
-    }
+      if (cur) modelSelect.value = cur;
+      // 尺寸：常用 + 库中尺寸
+      const sizesFromLib = [...new Set(allHistory.map(h=> `${h.width}x${h.height}`))].sort((a,b)=>{
+        const [aw,ah]=a.split('x').map(Number); const [bw,bh]=b.split('x').map(Number); return (bw*bh)-(aw*ah);
+      });
+      const presetSizes = SIZE_PRESETS.filter(p=>p.value!=='custom').map(p=>p.value);
+      const allSizes = [...new Set([...presetSizes, ...sizesFromLib])];
+      const curSize = sizeSelect.value;
+      sizeSelect.replaceChildren(); const sAll=document.createElement('option'); sAll.value=''; sAll.textContent=t('全部尺寸','All sizes'); sizeSelect.append(sAll);
+      for (const s of allSizes) { const o=document.createElement('option'); o.value=s; o.textContent=s; sizeSelect.append(o); }
+      if (curSize) sizeSelect.value = curSize;
+    };
+    refreshModelOptions();
+
+    // LoRA 筛选选项
+    const allLorasInLib = (): Array<{ path:string; name:string }> => {
+      const map = new Map<string, string>();
+      for (const h of allHistory) for (const l of h.loras) if (!map.has(l.path)) map.set(l.path, stripExt(l.name));
+      if (!map.size && boot.loras) for (const l of boot.loras) if (!map.has(l.path)) map.set(l.path, stripExt(l.name));
+      return [...map.entries()].map(([path,name])=>({ path, name })).sort((a,b)=> a.name.localeCompare(b.name));
+    };
+    const refreshLoraFilterOptions = (): void => {
+      const list = allLorasInLib();
+      loraFilterPanel.replaceChildren();
+      if (!list.length) { loraFilterPanel.append(ctx.ui.msgline(t('暂无 LoRA','No LoRA'), false)); return; }
+      for (const item of list) {
+        const row = ctx.ui.h('div','item');
+        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = loraFilterSelected.has(item.path);
+        chk.addEventListener('change', ()=>{ if (chk.checked) loraFilterSelected.add(item.path); else loraFilterSelected.delete(item.path); updateLoraBtn(); renderGallery(); });
+        const lab = ctx.ui.h('span','', item.name); lab.title=item.path; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap';
+        row.append(chk, lab); loraFilterPanel.append(row);
+      }
+      const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.marginTop='8px';
+      const ok = ctx.ui.button(t('确定','OK'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> loraFilterPanel.style.display='none');
+      const clear = ctx.ui.button(t('清空','Clear'), { size:'sm' }); clear.addEventListener('click', ()=>{ loraFilterSelected.clear(); loraFilterPanel.querySelectorAll('input[type="checkbox"]').forEach((c:any)=> c.checked=false); updateLoraBtn(); renderGallery(); });
+      actions.append(clear, ok); loraFilterPanel.append(actions);
+    };
+    const updateLoraBtn = (): void => {
+      if (!loraFilterSelected.size) loraFilterBtn.textContent = t('全部 LoRA','All LoRAs');
+      else loraFilterBtn.textContent = t(`${loraFilterSelected.size} 个 LoRA`, `${loraFilterSelected.size} LoRAs`);
+    };
+    loraFilterBtn.addEventListener('click', ()=>{ loraFilterPanel.style.display = loraFilterPanel.style.display==='none' ? 'block' : 'none'; if (loraFilterPanel.style.display==='block') refreshLoraFilterOptions(); });
+    document.addEventListener('click', (e)=>{ if (!loraFilterWrap.contains(e.target as Node)) loraFilterPanel.style.display='none'; });
+    refreshLoraFilterOptions();
+
+    // 统计行（筛选区下方、画廊上方）
+    const statsRow = ctx.ui.h('div','coo-works-stats');
+    const statsText = ctx.ui.h('span','', '');
+    const statsActions = ctx.ui.h('div','coo-batch-bar');
+    const batchToggle = ctx.ui.button(t('批量模式','Batch'), { size:'sm', variant:'plain' });
+    statsActions.append(batchToggle);
+    statsRow.append(statsText, statsActions);
+    left.append(statsRow);
 
     const grid = ctx.ui.h('div', 'coo-works-grid');
-    const statusLine = ctx.ui.msgline('');
     const loadMoreBtn = ctx.ui.button(t('加载更多','Load more'), { size: 'sm' });
     loadMoreBtn.style.display = allHistory.length >= pageLimit ? '' : 'none';
-    left.append(grid, statusLine, loadMoreBtn);
+    left.append(grid, loadMoreBtn);
 
-    // 批量模式
-    const batchRow = ctx.ui.h('div', 'coo-batch-bar');
-    const batchToggle = ctx.ui.button(t('批量模式','Batch'), { size: 'sm' });
-    const batchActions = ctx.ui.h('div', 'coo-batch-bar'); batchActions.style.display='none';
-    const selCount = ctx.ui.msgline(''); selCount.style.fontSize='12px';
-    const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size: 'sm', variant: 'plain' });
-    const batchExport = ctx.ui.button(t('批量导出','Export'), { size: 'sm' });
-    batchActions.append(batchDel, batchExport, selCount);
-    batchRow.append(batchToggle, batchActions);
-    left.append(batchRow);
+    // 批量状态
     let batchMode = false;
     const selected = new Set<string>();
-    batchToggle.addEventListener('click', ()=>{ batchMode=!batchMode; batchToggle.textContent = batchMode ? t('退出批量','Exit batch') : t('批量模式','Batch'); batchActions.style.display = batchMode ? '' : 'none'; if (!batchMode) { selected.clear(); selCount.textContent=''; renderGallery(); } });
-    batchDel.addEventListener('click', async ()=>{
-      if (!selected.size) return; const ok = await ctx.ui.confirm({ title: t('批量删除？', 'Delete selected?'), body: t(`确定删除 ${selected.size} 张？此操作仅清理索引，文件仍在文件夹中。`, `Delete ${selected.size} pictures? Only index is cleared.`), danger: true }); if (!ok) return; // 前端移除
-      allHistory = allHistory.filter(h=> !selected.has(h.id)); shared.history = allHistory; selected.clear(); selCount.textContent=''; renderGallery();
-      ctx.ui.toast(t('已从画廊移除（文件未删）','Removed from gallery (files kept)'));
-    });
-    batchExport.addEventListener('click', ()=>{ ctx.ui.toast(t('已请求打开文件夹，请手动复制','Open folder to copy')); void ctx.invoke('openFolder'); });
 
-    // 右栏详情
-    const detailTitle = ctx.ui.h('div', 'coo-group-title', t('详情与操作','Details & actions'));
-    right.append(detailTitle);
-    const preview = document.createElement('img'); preview.className='coo-works-preview'; preview.alt=''; preview.style.display='none';
+    // 右栏：对比提示条
+    const compareBar = ctx.ui.h('div','coo-compare-bar'); compareBar.style.display='none';
+    const compareTip = ctx.ui.h('span','', '');
+    const cancelCompare = ctx.ui.button(t('取消对比','Cancel'), { size:'sm' });
+    compareBar.append(compareTip, cancelCompare);
+    right.append(compareBar);
+
+    // 右栏预览区
+    const previewWrap = ctx.ui.h('div','coo-works-preview-wrap'); previewWrap.style.display='none';
+    const preview = document.createElement('img'); preview.alt=''; preview.style.display='block';
+    const overlay = ctx.ui.h('div','coo-preview-overlay', t('点击查看原图','Click to view original'));
+    previewWrap.append(preview, overlay);
     const empty = ctx.ui.placeholder(t('点击左侧缩略图查看大图与操作','Click a thumbnail to view details'));
-    right.append(preview, empty);
-    const metaCard = ctx.ui.sheet({ title: t('元信息','Metadata') }); right.append(metaCard.el);
-    const metaGrid = ctx.ui.h('div', 'coo-meta-grid'); metaCard.body.append(metaGrid);
-    const opsCard = ctx.ui.sheet({ title: t('操作','Actions') }); right.append(opsCard.el);
-    const opsRow = ctx.ui.h('div', 'coo-ops'); opsCard.body.append(opsRow);
+    // 空状态容器（无作品 / 筛选无结果）
+    const emptyState = ctx.ui.h('div','coo-works-empty'); emptyState.style.display='none';
+    const emptyTitle = ctx.ui.h('div','title','');
+    const emptySub = ctx.ui.h('div','sub','');
+    const emptyAction = ctx.ui.h('div',''); emptyState.append(emptyTitle, emptySub, emptyAction);
+    right.append(previewWrap, empty);
+    // 左栏也可能显示空状态（筛选无结果时在画廊区提示）
+    left.append(emptyState);
+
+    // 元信息卡片
+    const metaCard = ctx.ui.h('div','coo-meta-card');
+    const metaHead = ctx.ui.h('div','coo-meta-head');
+    const metaTitle = ctx.ui.h('div','coo-meta-title', t('元信息','Metadata'));
+    const fieldBtn = document.createElement('button'); fieldBtn.className='coo-info-btn'; fieldBtn.title=t('字段设置','Fields'); fieldBtn.textContent='⚙';
+    metaHead.append(metaTitle, fieldBtn);
+    const metaGrid = ctx.ui.h('div', 'coo-meta-grid');
+    metaCard.append(metaHead, metaGrid);
+    // 字段设置面板
+    const fieldPanel = ctx.ui.h('div','coo-field-settings'); fieldPanel.style.display='none';
+    const buildFieldPanel = (): void => {
+      fieldPanel.replaceChildren();
+      for (let i=0;i<fieldConfig.order.length;i++) {
+        const id = fieldConfig.order[i]!;
+        const def = DEFAULT_FIELDS.find(f=>f.id===id)!;
+        const row = ctx.ui.h('div','item');
+        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !fieldConfig.hidden.has(id);
+        chk.addEventListener('change', ()=>{ if (chk.checked) fieldConfig.hidden.delete(id); else fieldConfig.hidden.add(id); saveFieldConfig(); renderMeta(activeEntry); });
+        const lab = ctx.ui.h('span','', zh?def.labelZh:def.labelEn); lab.style.flex='1';
+        const up = ctx.ui.button('↑', { size:'sm' }); up.disabled=i===0; up.addEventListener('click', ()=>{ if(i>0){ const tmp=fieldConfig.order[i-1]!; fieldConfig.order[i-1]=fieldConfig.order[i]!; fieldConfig.order[i]=tmp; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); }});
+        const down = ctx.ui.button('↓', { size:'sm' }); down.disabled=i===fieldConfig.order.length-1; down.addEventListener('click', ()=>{ if(i<fieldConfig.order.length-1){ const tmp=fieldConfig.order[i+1]!; fieldConfig.order[i+1]=fieldConfig.order[i]!; fieldConfig.order[i]=tmp; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); }});
+        row.append(chk, lab, up, down); fieldPanel.append(row);
+      }
+      const reset = ctx.ui.button(t('恢复默认','Reset'), { size:'sm' }); reset.addEventListener('click', ()=>{ fieldConfig = { order: DEFAULT_FIELDS.map(f=>f.id), hidden: new Set() }; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); });
+      fieldPanel.append(reset);
+    };
+    buildFieldPanel();
+    metaHead.style.position='relative'; metaHead.append(fieldPanel);
+    fieldBtn.addEventListener('click', ()=>{ fieldPanel.style.display = fieldPanel.style.display==='none' ? 'block' : 'none'; });
+    document.addEventListener('click', (e)=>{ if (!metaHead.contains(e.target as Node)) fieldPanel.style.display='none'; });
+
+    // 操作卡片（分组）
+    const opsCard = ctx.ui.h('div','coo-meta-card');
+    const opsTitle = ctx.ui.h('div','coo-meta-title', t('操作','Actions'));
+    opsCard.append(opsTitle);
+    const opsGroups = ctx.ui.h('div','coo-ops-groups');
+    opsCard.append(opsGroups);
+    right.append(metaCard, opsCard);
+
+    // 批量操作栏（替代详情）
+    const batchBar = ctx.ui.h('div','coo-works-batch-actions'); batchBar.style.display='none';
+    const batchCount = ctx.ui.h('span','', '');
+    const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size:'sm', variant:'plain' }); batchDel.style.color='#c44';
+    const batchExport = ctx.ui.button(t('批量导出','Export'), { size:'sm' });
+    const batchFav = ctx.ui.button(t('批量收藏','Favorite'), { size:'sm' });
+    batchBar.append(batchCount, batchDel, batchExport, batchFav);
+    right.append(batchBar);
 
     let activeEntry: HistoryEntry | null = shared.resultEntry ?? allHistory[0] ?? null;
-    let previewUrl = '';
-    ctx.own({ dispose: ()=>{ if (previewUrl) URL.revokeObjectURL(previewUrl); } });
+    let activePreviewUrl = '';
+    let compareA: HistoryEntry | null = null;
+    let compareB: HistoryEntry | null = null;
+    let compareMode = false;
+    ctx.own({ dispose: ()=>{ if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl); } });
     const imageUrls: string[] = []; ctx.own({ dispose: ()=>{ for(const u of imageUrls) URL.revokeObjectURL(u); } });
 
-    const buildMeta = (entry: HistoryEntry): void => {
-      metaGrid.replaceChildren();
-      const addRow = (k: string, v: string | HTMLElement, copyVal?: string): void => {
-        const kk = ctx.ui.h('div','k', k); const vv = ctx.ui.h('div','v'); if (typeof v==='string') vv.textContent=v; else vv.append(v);
-        const copy = copyVal ? ctx.ui.copyButton(()=>copyVal, { size:'sm', label: t('复制','Copy') }) : null;
-        metaGrid.append(kk, vv, copy ?? ctx.ui.h('span',''));
-      };
-      addRow(t('文件名','File'), entry.filename, entry.filename);
-      addRow(t('种子','Seed'), String(entry.seed), String(entry.seed));
-      addRow(t('尺寸','Size'), `${entry.width}×${entry.height}`);
-      const loraText = entry.loras.length ? entry.loras.map(l=> `${stripExt(l.name)}@${l.weight}`).join(' + ') : t('无','None');
-      // LoRA 可展开
-      const loraSpan = document.createElement('span'); loraSpan.textContent = entry.loras.length>2 ? `${loraText.slice(0, 60)}…` : loraText;
-      if (entry.loras.length>2) { const exp = ctx.ui.button(t('展开 ▼','Expand ▼'), { size:'sm'}); exp.addEventListener('click', ()=>{ loraSpan.textContent = loraText; exp.style.display='none'; }); loraSpan.append(exp); }
-      addRow('LoRA', loraSpan);
-      addRow(t('时间','Time'), shortDate(entry.created_at));
-      addRow(t('模型','Model'), stripExt(entry.checkpoint), entry.checkpoint);
-      const promptBrief = ctx.ui.h('div','', entry.positive.slice(0, 120)+(entry.positive.length>120?'…':'')); const expandPrompt = ctx.ui.button(t('展开 ▼','Expand ▼'), { size:'sm'}); const promptRowV = ctx.ui.h('div',''); promptRowV.append(promptBrief);
-      if (entry.positive.length>80){ expandPrompt.addEventListener('click', ()=>{ promptBrief.textContent = entry.positive; expandPrompt.style.display='none'; }); promptRowV.append(expandPrompt); }
-      addRow(t('提示词','Prompt'), promptRowV, entry.positive);
-      if (entry.negative) addRow(t('反向','Negative'), entry.negative.slice(0,80)+(entry.negative.length>80?'…':''), entry.negative);
+    const openLightbox = (src:string, filename:string): void => {
+      const box = ctx.ui.h('div','coo-lightbox');
+      const img = document.createElement('img'); img.src=src; img.alt=filename;
+      const close = ctx.ui.h('button','close','×'); close.addEventListener('click', ()=> box.remove());
+      box.append(img, close);
+      box.addEventListener('click', (e)=>{ if (e.target===box) box.remove(); });
+      const onKey = (e:KeyboardEvent)=>{ if (e.key==='Escape') { box.remove(); document.removeEventListener('keydown', onKey); } };
+      document.addEventListener('keydown', onKey);
+      document.body.append(box);
     };
+    previewWrap.addEventListener('click', ()=>{ if (preview.src) openLightbox(preview.src, activeEntry?.filename ?? ''); });
+
+    const renderMeta = (entry: HistoryEntry | null): void => {
+      metaGrid.replaceChildren();
+      if (!entry) { metaGrid.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
+      const addRow = (id: FieldId, label: string, valueEl: HTMLElement | string, copyVal?: string, placeholder?: string): void => {
+        if (fieldConfig.hidden.has(id)) return;
+        const row = ctx.ui.h('div','coo-meta-row');
+        const isMultiline = id==='prompt' || id==='negative' || id==='lora';
+        if (isMultiline) row.classList.add('coo-meta-row--multiline');
+        const kk = ctx.ui.h('div','k', label);
+        const vv = ctx.ui.h('div','v');
+        if (typeof valueEl==='string') {
+          if (!valueEl && placeholder) { const ph=ctx.ui.h('span','placeholder', placeholder); vv.append(ph); }
+          else vv.textContent = valueEl;
+        } else vv.append(valueEl);
+        row.append(kk, vv);
+        if (copyVal) {
+          const copy = ctx.ui.copyButton(()=>copyVal, { size:'sm', label: t('复制','Copy') });
+          copy.classList.add('copy-btn');
+          row.append(copy);
+        }
+        metaGrid.append(row);
+      };
+      // 文件名
+      addRow('filename', t('文件名','File'), entry.filename, entry.filename);
+      // 种子
+      addRow('seed', t('种子','Seed'), String(entry.seed), String(entry.seed));
+      // 尺寸
+      addRow('size', t('尺寸','Size'), `${entry.width}×${entry.height}`);
+      // LoRA chips
+      {
+        if (!fieldConfig.hidden.has('lora')) {
+          const row = ctx.ui.h('div','coo-meta-row coo-meta-row--multiline');
+          const kk = ctx.ui.h('div','k','LoRA');
+          const vv = ctx.ui.h('div','v');
+          if (!entry.loras.length) { const ph=ctx.ui.h('span','placeholder', t('未使用','Not used')); vv.append(ph); }
+          else {
+            const chips = ctx.ui.h('div','coo-lora-chips');
+            for (const l of entry.loras) {
+              const chip = ctx.ui.h('div','coo-lora-chip');
+              const name = stripExt(l.name);
+              const txt = document.createElement('span'); txt.textContent = name; txt.title = l.path;
+              const dot = document.createElement('span'); dot.textContent='·'; dot.className='weight';
+              const w = document.createElement('span'); w.textContent = String(l.weight); w.className='weight';
+              chip.append(txt, dot, w);
+              chip.title = `${l.path} · ${l.weight}`;
+              chips.append(chip);
+            }
+            vv.append(chips);
+          }
+          row.append(kk, vv);
+          metaGrid.append(row);
+        }
+      }
+      // 模型（空占位）
+      addRow('model', t('模型','Model'), entry.checkpoint ? stripExt(entry.checkpoint) : '', entry.checkpoint || undefined, t('未使用','Not used'));
+      // 时间
+      addRow('time', t('时间','Time'), shortDate(entry.created_at));
+      // 采样参数
+      addRow('sampler', t('采样参数','Sampler'), `${entry.sampler} · ${entry.scheduler} · ${t('步数','Steps')} ${entry.steps} · CFG ${entry.cfg}`);
+      // 提示词（无折叠，自动换行）
+      {
+        if (!fieldConfig.hidden.has('prompt')) {
+          const row = ctx.ui.h('div','coo-meta-row coo-meta-row--multiline');
+          const kk = ctx.ui.h('div','k', t('提示词','Prompt'));
+          const vv = ctx.ui.h('div','v', entry.positive);
+          vv.style.whiteSpace='pre-wrap';
+          row.append(kk, vv);
+          const copy = ctx.ui.copyButton(()=>entry.positive, { size:'sm', label: t('复制','Copy') }); copy.classList.add('copy-btn'); row.append(copy);
+          metaGrid.append(row);
+        }
+      }
+      // 反向
+      {
+        if (!entry.negative && fieldConfig.hidden.has('negative')) { /* skip */ }
+        else if (!fieldConfig.hidden.has('negative')) {
+          const row = ctx.ui.h('div','coo-meta-row coo-meta-row--multiline');
+          const kk = ctx.ui.h('div','k', t('反向','Negative'));
+          const vv = ctx.ui.h('div','v');
+          if (!entry.negative) { const ph=ctx.ui.h('span','placeholder', t('未使用','Not used')); vv.append(ph); }
+          else { vv.textContent = entry.negative; vv.style.whiteSpace='pre-wrap'; }
+          row.append(kk, vv);
+          if (entry.negative) { const copy = ctx.ui.copyButton(()=>entry.negative, { size:'sm', label: t('复制','Copy') }); copy.classList.add('copy-btn'); row.append(copy); }
+          metaGrid.append(row);
+        }
+      }
+      // 按 order 重新排序：目前已按 DEFAULT_FIELDS 顺序追加，若用户自定义顺序需重排
+      // 由于我们按顺序 addRow，已天然遵循 fieldConfig.order（上面循环是按 DEFAULT_FIELDS 写死，需改为按 order 遍历）
+      // 为简单起见，重排子节点：
+      const desired = fieldConfig.order.filter(id=> !fieldConfig.hidden.has(id));
+      // 当前 metaGrid 子节点顺序与 desired 对应，上面实现已按固定顺序，需用映射重排
+      // 重新构建：收集所有行按 id 索引
+      // 便于实现，我们改为：先收集所有行 DOM，再按 order 排序
+      // 以上已按硬编码顺序加入，重排如下
+      const rows = Array.from(metaGrid.children) as HTMLElement[];
+      // 映射 id 到 row：通过标题文本匹配（k 内容）
+      const labelMap: Record<string, HTMLElement> = {};
+      for (const r of rows) { const kEl = r.querySelector('.k'); if (kEl) labelMap[kEl.textContent?.trim() ?? ''] = r; }
+      // 由于标签可能本地化，直接按 desired 的标签顺序重排
+      const idToLabel: Record<FieldId,string> = { filename: t('文件名','File'), seed: t('种子','Seed'), size: t('尺寸','Size'), lora:'LoRA', model: t('模型','Model'), time: t('时间','Time'), sampler: t('采样参数','Sampler'), prompt: t('提示词','Prompt'), negative: t('反向','Negative') };
+      const ordered: HTMLElement[] = [];
+      for (const id of desired) { const lbl = idToLabel[id]; const el = labelMap[lbl]; if (el) ordered.push(el); }
+      // 追加未匹配（防止遗漏）
+      for (const r of rows) if (!ordered.includes(r)) ordered.push(r);
+      metaGrid.replaceChildren(...ordered);
+    };
+
     const buildOps = (entry: HistoryEntry | null): void => {
-      opsRow.replaceChildren();
-      if (!entry) { opsRow.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
-      const redraw = ctx.ui.button(t('重画','Repaint'), { size:'sm', variant:'primary' }); redraw.addEventListener('click', ()=>{
-        // 同参同种子重画：把状态写回共享并切换到出图
+      opsGroups.replaceChildren();
+      if (!entry) { opsGroups.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
+      const g1 = ctx.ui.h('div','coo-ops-group');
+      const redraw = ctx.ui.button(t('重画','Repaint'), { size:'sm', variant:'primary' });
+      redraw.style.background='#2ecc71'; redraw.style.borderColor='#2ecc71'; redraw.style.color='#fff';
+      redraw.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'sameSeed' };
         ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true })); const m = ctx as unknown as { switchTab?: (v:string)=>void }; if (m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，将用相同参数重画','Switched to Studio; repaint with same seed'));
       });
-      const tweak = ctx.ui.button(t('微调','Tweak'), { size:'sm'}); tweak.addEventListener('click', ()=>{
+      const tweak = ctx.ui.button(t('微调','Tweak'), { size:'sm'});
+      tweak.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'randomSeed' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，种子将随机','Switched to Studio; seed randomized'));
       });
-      const useAll = ctx.ui.button(t('使用全部参数','Use all params'), { size:'sm'}); useAll.addEventListener('click', ()=>{
+      const useAll = ctx.ui.button(t('使用全部参数','Use all params'), { size:'sm'});
+      useAll.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'useAll' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab',{detail:'studio',bubbles:true})); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('参数已回填到出图页','Params filled to Studio'));
       });
+      g1.append(redraw, tweak, useAll);
+
+      const g2 = ctx.ui.h('div','coo-ops-group');
       const copySeed = ctx.ui.copyButton(()=>String(entry.seed), { label: t('复制种子','Copy seed'), size:'sm' });
-      const toPet = ctx.ui.button(t('发送到桌宠','Send to pet'), { size:'sm'}); toPet.addEventListener('click', ()=>{ void ctx.invoke('sendToPet', [entry.id]).then(res=>ctx.ui.toast((res as any).message, (res as any).ok?'ok':'bad')).catch(e=>ctx.ui.toast(errText(e),'bad')); });
-      const enlarge = ctx.ui.button(t('放大','Enlarge'), { size:'sm'}); enlarge.addEventListener('click', ()=>{ if (preview.src) ctx.ui.lightbox(preview.src, entry.filename); });
-      const fav = ctx.ui.button(t('收藏','Favorite'), { size:'sm'}); fav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); fav.textContent='★ '+t('已收藏','Favorited'); });
-      const del = ctx.ui.button(t('删除','Delete'), { size:'sm', variant:'plain'}); del.style.color='#c44'; del.addEventListener('click', async ()=>{
-        const ok=await ctx.ui.confirm({ title: t('删除这张？','Delete this?'), body: entry.filename, danger:true }); if(!ok) return; // 仅从画廊移除，不删文件
-        allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
+      const toPet = ctx.ui.button(t('发送到桌宠','Send to pet'), { size:'sm'});
+      toPet.addEventListener('click', ()=>{ void ctx.invoke('sendToPet', [entry.id]).then(res=>ctx.ui.toast((res as any).message, (res as any).ok?'ok':'bad')).catch(e=>ctx.ui.toast(errText(e),'bad')); });
+      g2.append(copySeed, toPet);
+
+      const g3 = ctx.ui.h('div','coo-ops-group');
+      const compare = ctx.ui.button(t('对比','Compare'), { size:'sm'});
+      compare.addEventListener('click', ()=>{ enterCompare(entry); });
+      const openFolder = ctx.ui.button(t('打开文件夹','Open folder'), { size:'sm'});
+      openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
+      g3.append(compare, openFolder);
+
+      const g4 = ctx.ui.h('div','coo-ops-group');
+      const fav = ctx.ui.button(t('收藏','Favorite'), { size:'sm'});
+      fav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); fav.textContent='★ '+t('已收藏','Favorited'); });
+      const del = ctx.ui.button(t('删除','Delete'), { size:'sm', variant:'plain'});
+      del.classList.add('btn-danger'); del.style.color='#e74c3c';
+      del.addEventListener('click', async ()=>{
+        const ok=await ctx.ui.confirm({ title: t('删除这张？','Delete this?'), body: t('确定删除这张作品吗？此操作不可恢复。','Delete this picture? This cannot be undone.'), danger:true }); if(!ok) return;
+        allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; if (activeEntry?.id===entry.id) { activeEntry=allHistory[0]??null; if (activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } } renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
       });
-      const compare = ctx.ui.button(t('对比','Compare'), { size:'sm'}); compare.addEventListener('click', ()=>{
-        // 简单对比：让用户再选一张并排
-        ctx.ui.toast(t('请再点一张图进行对比','Click another picture to compare'));
-        const handler = (e: Event)=>{
-          const target = (e.target as HTMLElement).closest('.coo-works-tile') as HTMLElement | null;
-          if (!target) return;
-          const id = target.dataset.id; if (!id || id===entry.id) return;
-          const other = allHistory.find(h=>h.id===id); if (!other) return;
-          document.removeEventListener('click', handler);
-          // 并排对比 drawer
-          const body = document.createElement('div'); body.style.display='flex'; body.style.gap='8px'; body.style.flexWrap='wrap';
-          const aImg = document.createElement('img'); aImg.src = preview.src; aImg.style.maxWidth='48%'; aImg.style.borderRadius='8px';
-          const bImg = document.createElement('img'); bImg.style.maxWidth='48%'; bImg.style.borderRadius='8px';
-          body.append(aImg, bImg);
-          void ctx.invokeBinary('image', [other.id]).then(blob=>{ const url=URL.createObjectURL(blob); bImg.src=url; imageUrls.push(url); }).catch(()=>{});
-          ctx.ui.drawer(t('对比','Compare'), body);
-        };
-        setTimeout(()=> document.addEventListener('click', handler, { once:true }), 100);
-      });
-      const openFolder = ctx.ui.button(t('打开文件夹','Open folder'), { size:'sm'}); openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
-      opsRow.append(redraw, tweak, useAll, copySeed, toPet, enlarge, fav, del, compare, openFolder);
+      g4.append(fav, del);
+
+      opsGroups.append(g1,g2,g3,g4);
+    };
+
+    const enterCompare = (a: HistoryEntry): void => {
+      compareA = a; compareMode = true; compareBar.style.display='flex'; compareTip.textContent = t('已选 1 张，请在左侧画廊再选 1 张进行对比','Selected 1, pick another in gallery to compare');
+      // 高亮提示：画廊可点击
+      ctx.ui.toast(t('请在左侧画廊再选 1 张','Pick another in gallery'));
+    };
+    const exitCompare = (): void => { compareMode=false; compareA=null; compareB=null; compareBar.style.display='none'; renderMeta(activeEntry); buildOps(activeEntry); if (activeEntry) void showDetail(activeEntry); };
+    cancelCompare.addEventListener('click', exitCompare);
+    const showCompare = async (a: HistoryEntry, b: HistoryEntry): Promise<void> => {
+      compareB = b;
+      // 右栏切换为对比视图
+      previewWrap.style.display='none'; empty.style.display='none';
+      metaGrid.replaceChildren();
+      const wrap = ctx.ui.h('div','coo-compare-view');
+      const paneA = ctx.ui.h('div','pane'); const paneB = ctx.ui.h('div','pane');
+      const imgA = document.createElement('img'); imgA.style.width='100%'; imgA.style.borderRadius='8px'; imgA.style.border='1px solid var(--line, rgba(127,127,127,.18))';
+      const imgB = document.createElement('img'); imgB.style.width='100%'; imgB.style.borderRadius='8px'; imgB.style.border='1px solid var(--line, rgba(127,127,127,.18))';
+      const infoA = ctx.ui.h('div','', `${t('种子','Seed')} ${a.seed} · ${a.width}×${a.height} · ${shortDate(a.created_at)}`); infoA.style.fontSize='12px'; infoA.style.color='#8a8f98'; infoA.style.marginTop='6px';
+      const promptA = ctx.ui.h('div','', a.positive.slice(0,120)+(a.positive.length>120?'…':'')); promptA.style.fontSize='12px'; promptA.style.lineHeight='1.5';
+      const infoB = ctx.ui.h('div','', `${t('种子','Seed')} ${b.seed} · ${b.width}×${b.height} · ${shortDate(b.created_at)}`); infoB.style.fontSize='12px'; infoB.style.color='#8a8f98'; infoB.style.marginTop='6px';
+      const promptB = ctx.ui.h('div','', b.positive.slice(0,120)+(b.positive.length>120?'…':'')); promptB.style.fontSize='12px'; promptB.style.lineHeight='1.5';
+      paneA.append(imgA, infoA, promptA); paneB.append(imgB, infoB, promptB); wrap.append(paneA, paneB);
+      const closeBtn = ctx.ui.button(t('关闭对比','Close'), { size:'sm' }); closeBtn.addEventListener('click', exitCompare);
+      metaGrid.append(wrap, closeBtn);
+      opsGroups.replaceChildren(closeBtn);
+      // 加载图片
+      try { const blob=await ctx.invokeBinary('image', [a.id]); const url=URL.createObjectURL(blob); imageUrls.push(url); imgA.src=url; } catch {}
+      try { const blob=await ctx.invokeBinary('image', [b.id]); const url=URL.createObjectURL(blob); imageUrls.push(url); imgB.src=url; } catch {}
     };
 
     const showDetail = async (entry: HistoryEntry): Promise<void> => {
       activeEntry = entry;
+      markViewed(entry.id);
+      // 对比模式下，第二选
+      if (compareMode && compareA && entry.id!==compareA.id) { await showCompare(compareA, entry); for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id || (el as HTMLElement).dataset.id===compareA.id); } renderGallery(); return; }
       try {
         const blob = await ctx.invokeBinary('image', [entry.id]);
         if (!alive) return;
-        const url = URL.createObjectURL(blob); if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = url; preview.src = url; preview.style.display='block'; empty.style.display='none';
-      } catch(e){ empty.textContent = errText(e); empty.style.display=''; preview.style.display='none'; }
-      buildMeta(entry); buildOps(entry);
-      // 高亮选中
+        const url = URL.createObjectURL(blob); if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl); activePreviewUrl = url; preview.src = url; previewWrap.style.display='block'; empty.style.display='none';
+      } catch(e){ empty.textContent = errText(e); empty.style.display=''; previewWrap.style.display='none'; }
+      renderMeta(entry); buildOps(entry);
       for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id); }
+      renderGallery(); // 刷新红点
     };
 
     const filtered = (): HistoryEntry[] => {
@@ -1054,54 +1351,99 @@ const worksPanel: WebUiPanel = {
       const to = dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : Infinity;
       const model = modelSelect.value;
       const size = sizeSelect.value;
-      return allHistory.filter(h=>{
-        if (q && !(`${h.positive} ${h.negative} ${h.filename}`.toLowerCase().includes(q))) return false;
+      let list = allHistory.filter(h=>{
+        if (q && !(`${h.positive} ${h.negative} ${String(h.seed)} ${h.filename}`.toLowerCase().includes(q))) return false;
         if (h.created_at < from || h.created_at > to) return false;
         if (model && h.checkpoint !== model) return false;
-        if (size && size !== t('全部尺寸','All sizes') && size !== 'All sizes' && `${h.width}x${h.height}` !== size) return false;
-        // fav filter stub
+        if (size && `${h.width}x${h.height}` !== size) return false;
+        if (loraFilterSelected.size) { const has = h.loras.some(l=> loraFilterSelected.has(l.path)); if (!has) return false; }
         return true;
       });
+      // 排序
+      const sort = sortSelect.value;
+      if (sort==='time_asc') list = [...list].sort((a,b)=> a.created_at - b.created_at);
+      else if (sort==='size_desc') list = [...list].sort((a,b)=> (b.width*b.height) - (a.width*a.height));
+      else if (sort==='size_asc') list = [...list].sort((a,b)=> (a.width*a.height) - (b.width*b.height));
+      else list = [...list].sort((a,b)=> b.created_at - a.created_at);
+      return list;
     };
 
     const renderGallery = (): void => {
       const list = filtered();
+      const total = allHistory.length;
+      // 统计行
+      if (!total) {
+        statsText.textContent = t('共 0 张','0 pictures');
+      } else if (list.length===total) {
+        statsText.textContent = t(`共 ${total} 张`, `${total} pictures`);
+      } else {
+        statsText.textContent = t(`筛选出 ${list.length} 张 / 共 ${total} 张`, `${list.length} / ${total} pictures`);
+      }
+      // 清除筛选按钮显隐
+      const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelSelect.value || !!sizeSelect.value || loraFilterSelected.size>0;
+      clearBtn.style.display = hasFilter ? '' : 'none';
+
       grid.replaceChildren();
-      statusLine.textContent = list.length ? t(`共 ${list.length} 张 · ${boot.config.output_dir}`, `${list.length} pictures · ${boot.config.output_dir}`) : t('没有匹配的作品，试着改筛选或搜索','No matches; adjust filters');
+      // 空状态
+      if (!total) {
+        emptyState.style.display='flex'; grid.style.display='none'; loadMoreBtn.style.display='none';
+        emptyTitle.textContent = t('还没有作品','No works yet');
+        emptySub.textContent = t('去「出图」页画一张吧','Go to Studio and create one');
+        emptyAction.replaceChildren();
+        const go = ctx.ui.button(t('前往出图','Go to Studio'), { variant:'primary' });
+        go.style.background='#2ecc71'; go.style.borderColor='#2ecc71'; go.style.color='#fff';
+        go.addEventListener('click', ()=>{ ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab',{ detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); });
+        emptyAction.append(go);
+        dispatchUnread(); return;
+      }
+      if (!list.length) {
+        emptyState.style.display='flex'; grid.style.display='none'; loadMoreBtn.style.display='none';
+        emptyTitle.textContent = t('没有匹配的作品','No matches');
+        emptySub.textContent = t('试试调整筛选条件','Try adjusting filters');
+        emptyAction.replaceChildren();
+        const c = ctx.ui.button(t('清除筛选','Clear'), { size:'sm' }); c.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; sizeSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortSelect.value='time_desc'; renderGallery(); });
+        emptyAction.append(c);
+        dispatchUnread(); return;
+      }
+      emptyState.style.display='none'; grid.style.display='grid';
       loadMoreBtn.style.display = allHistory.length < pageLimit ? 'none' : '';
-      // 新图置顶且带 NEW 标记（通过共享 lastFinished 判断）
-      for (const entry of list.slice(0, loadMoreBtn.style.display==='' ? pageLimit : 2000)) {
+
+      const visible = list.slice(0, loadMoreBtn.style.display==='' ? pageLimit : 2000);
+      for (const entry of visible) {
         const tile = ctx.ui.h('button', 'coo-works-tile'); tile.type='button'; (tile as HTMLElement).dataset.id = entry.id;
-        if (activeEntry?.id===entry.id) tile.classList.add('sel');
-        const img = ctx.ui.h('img',''); img.alt = entry.filename; img.loading='lazy'; img.dataset.id = entry.id;
-        const label = ctx.ui.h('span','lab', `${entry.seed} · ${entry.width}×${entry.height}`);
-        // hover 预览完整比例：用 title 展示
-        tile.title = `${entry.filename}\n${entry.positive.slice(0,120)}`;
-        // batch checkbox
+        if (activeEntry?.id===entry.id || (compareA && compareA.id===entry.id) || (compareB && compareB.id===entry.id)) tile.classList.add('sel');
+        const img = ctx.ui.h('img',''); img.alt = entry.filename; img.loading='lazy'; (img as any).dataset.id = entry.id;
+        const label = ctx.ui.h('span','lab', `${entry.width}×${entry.height}`);
+        tile.title = `${entry.filename}\n${t('种子','Seed')}: ${entry.seed}\n${t('尺寸','Size')}: ${entry.width}×${entry.height}\n${t('时间','Time')}: ${shortDate(entry.created_at)}`;
         if (batchMode) {
           const chk = document.createElement('input'); chk.type='checkbox'; chk.className='chk'; chk.checked = selected.has(entry.id);
-          chk.addEventListener('click', (e)=>{ e.stopPropagation(); if (chk.checked) selected.add(entry.id); else selected.delete(entry.id); selCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : ''; });
+          chk.addEventListener('click', (e)=>{ e.stopPropagation(); if (chk.checked) selected.add(entry.id); else selected.delete(entry.id); batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张','0 selected'); });
           tile.append(chk);
         }
-        tile.append(img, label);
-        tile.addEventListener('click', ()=>{ if (batchMode) { if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id); selCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : ''; renderGallery(); return; } void showDetail(entry); });
-        grid.append(tile);
-        // lazy load image
-        void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); imageUrls.push(url); img.src=url; }).catch(()=>{ img.alt='×'; });
-        // 新图红点
-        if (entry.id === shared.current?.images[0]?.id) {
-          const badge = ctx.ui.h('span','pill', 'NEW'); (badge as HTMLElement).style.position='absolute'; (badge as HTMLElement).style.top='6px'; (badge as HTMLElement).style.right='6px'; (badge as HTMLElement).style.fontSize='10px'; (badge as HTMLElement).style.background='rgba(220,60,60,.9)'; (badge as HTMLElement).style.color='#fff'; tile.style.position='relative'; tile.append(badge);
+        // 红点：未查看且不在已查看集合
+        if (!viewed.has(entry.id)) {
+          const dot = ctx.ui.h('span','coo-works-dot'); tile.append(dot);
         }
+        tile.append(img, label);
+        tile.addEventListener('click', ()=>{
+          if (batchMode) { if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id); batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张','0 selected'); renderGallery(); return; }
+          void showDetail(entry);
+        });
+        grid.append(tile);
+        void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); imageUrls.push(url); img.src=url; }).catch(()=>{ img.alt='×'; });
       }
-      if (list.length===0) { grid.append(ctx.ui.placeholder(t('没有作品','No works'))); }
+      dispatchUnread();
     };
 
+    // 筛选事件
     searchInput.addEventListener('input', renderGallery);
     dateFrom.addEventListener('change', renderGallery);
     dateTo.addEventListener('change', renderGallery);
     modelSelect.addEventListener('change', renderGallery);
     sizeSelect.addEventListener('change', renderGallery);
-    favSelect.addEventListener('change', renderGallery);
+    sortSelect.addEventListener('change', renderGallery);
+    clearBtn.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; sizeSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortSelect.value='time_desc'; renderGallery(); });
+
     loadMoreBtn.addEventListener('click', async ()=>{
       pageLimit += 50;
       await fetchHistory(pageLimit);
@@ -1109,24 +1451,46 @@ const worksPanel: WebUiPanel = {
       ctx.ui.toast(t(`已加载至 ${allHistory.length} 张`,`Loaded ${allHistory.length}`));
     });
 
-    // 自动选中第一张或共享结果
+    // 批量模式
+    batchToggle.addEventListener('click', ()=>{
+      batchMode=!batchMode;
+      batchToggle.textContent = batchMode ? t('退出批量','Exit batch') : t('批量模式','Batch');
+      if (batchMode) {
+        batchBar.style.display='flex'; previewWrap.style.display='none'; metaCard.style.display='none'; opsCard.style.display='none';
+        batchCount.textContent = t('已选 0 张','0 selected');
+      } else {
+        batchBar.style.display='none'; metaCard.style.display=''; opsCard.style.display='';
+        selected.clear();
+        if (activeEntry) { previewWrap.style.display='block'; void showDetail(activeEntry); } else { previewWrap.style.display='none'; empty.style.display=''; }
+      }
+      renderGallery();
+    });
+    batchDel.addEventListener('click', async ()=>{
+      if (!selected.size) return; const ok = await ctx.ui.confirm({ title: t('批量删除？', 'Delete selected?'), body: t(`确定删除 ${selected.size} 张？此操作不可恢复。`, `Delete ${selected.size} pictures? This cannot be undone.`), danger: true }); if (!ok) return;
+      allHistory = allHistory.filter(h=> !selected.has(h.id)); shared.history = allHistory;
+      // 清理选中
+      for (const id of [...selected]) viewed.delete(id);
+      saveViewed(viewed);
+      selected.clear(); batchCount.textContent=t('已选 0 张','0 selected'); renderGallery();
+      if (activeEntry && !allHistory.some(h=>h.id===activeEntry!.id)) { activeEntry=allHistory[0]??null; if(activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } }
+      ctx.ui.toast(t('已删除','Deleted'));
+    });
+    batchExport.addEventListener('click', ()=>{ ctx.ui.toast(t('已请求打开文件夹，请手动复制','Open folder to copy')); void ctx.invoke('openFolder'); });
+    batchFav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); });
+
+    // 自动选中
     renderGallery();
     if (activeEntry) void showDetail(activeEntry);
     else if (allHistory[0]) void showDetail(allHistory[0]);
 
-    // 监听新图生成事件：若有新图，自动置顶并选中
-    const onNewImage = (): void => { void fetchHistory(pageLimit); };
-    // 简单轮询新图：若共享 current 变为 done 则刷新
+    // 轮询新图
     ctx.interval(async ()=>{
       if (!alive) return;
-      try { const res = await ctx.invoke<HistoryResponse>('history', [pageLimit]); if (!alive) return; if (res.history.length !== allHistory.length || res.history[0]?.id !== allHistory[0]?.id) { allHistory = res.history; shared.history = allHistory; // 更新模型下拉
-        const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort(); modelSelect.replaceChildren(); const optAll=document.createElement('option'); optAll.value=''; optAll.textContent=t('全部模型','All models'); modelSelect.append(optAll); for(const m of models){ const o=document.createElement('option'); o.value=m; o.textContent=stripExt(m); modelSelect.append(o);} renderGallery(); if (res.history[0] && (!activeEntry || activeEntry.id !== res.history[0].id)) { // 自动选中新图
-          const newEnt = res.history[0]; // 小红点由 render 处理
-          // 可选：自动切换详情
-        } } } catch {}
+      try { const res = await ctx.invoke<HistoryResponse>('history', [pageLimit]); if (!alive) return; if (res.history.length !== allHistory.length || res.history[0]?.id !== allHistory[0]?.id) { allHistory = res.history; shared.history = allHistory; refreshModelOptions(); refreshLoraFilterOptions(); renderGallery(); } } catch {}
     }, 2000);
   },
 };
+
 
 /* ------------------------------------------------------------------ loras */
 

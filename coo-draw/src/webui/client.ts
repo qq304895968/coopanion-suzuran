@@ -112,6 +112,22 @@ const localPanel: WebUiPanel = {
       const detail = (e as CustomEvent).detail as string;
       if (detail && LOCAL_SUBS.some(s => s.value === detail)) switchTo(detail);
     });
+    // 作品未读红点（Tab 标题）
+    host.addEventListener('coo-works-unread', (e: Event) => {
+      const unread = (e as CustomEvent<number>).detail;
+      // 找到“作品”分段按钮
+      const btn = seg.el.querySelectorAll('button');
+      for (const b of Array.from(btn)) {
+        const txt = b.textContent || '';
+        if (txt.includes('作品') || txt.includes('Works')) {
+          let dot = b.querySelector('.coo-tab-dot') as HTMLElement | null;
+          if (unread > 0) {
+            if (!dot) { dot = doc.createElement('span'); dot.className = 'coo-tab-dot'; b.append(dot); }
+          } else if (dot) dot.remove();
+          break;
+        }
+      }
+    });
 
     async function show(value: string): Promise<void> {
       if (value === current) return;

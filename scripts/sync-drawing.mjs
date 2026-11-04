@@ -1,4 +1,4 @@
-/** Canonical coo-draw modules remain physically mirrored for standalone legacy installs. */
+/** Shared coo-draw modules used to be mirrored into standalone legacy packages; the register is now empty. */
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -39,6 +39,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const check = args.includes('--check');
   const drift = syncDrawing({ check });
   for (const item of drift) console.log(`${check ? 'DRIFT' : 'SYNC'} ${item.source} -> ${item.mirror}`);
-  console.log(`${drawingMirrors.length} drawing mirrors; ${drift.length} ${check ? 'out of sync' : 'updated'}.`);
+  if (!drawingMirrors.length) {
+    console.log('No drawing mirrors registered: coo-draw is the only drawing package.');
+  } else {
+    console.log(`${drawingMirrors.length} drawing mirrors; ${drift.length} ${check ? 'out of sync' : 'updated'}.`);
+  }
   if (check && drift.length) process.exitCode = 1;
 }

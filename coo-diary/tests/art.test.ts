@@ -24,7 +24,7 @@ beforeEach(() => {
 afterEach(() => rmSync(scratch, { recursive: true, force: true }));
 
 function writeConfig(saveDir: string): void {
-  writeFileSync(join(botDir, 'config.json'), `${JSON.stringify({ worlds: { 'pet-draw': { saveDir } } })}\n`);
+  writeFileSync(join(botDir, 'config.json'), `${JSON.stringify({ worlds: { draw: { saveDir } } })}\n`);
 }
 
 function seed(root: string, id: string, file: string, createdAt: string): void {
@@ -51,7 +51,7 @@ function seed(root: string, id: string, file: string, createdAt: string): void {
 }
 
 describe('找画夹', () => {
-  it('优先用 worlds.pet-draw.saveDir,绝对路径原样', () => {
+  it('用 worlds.draw.saveDir,绝对路径原样', () => {
     const dir = join(scratch, 'pictures');
     writeConfig(dir);
     expect(artFolder(botDir, dataDir)).toEqual({ dir, configured: true });
@@ -62,7 +62,7 @@ describe('找画夹', () => {
     expect(artFolder(botDir, dataDir)).toEqual({ dir: join(dataDir, 'pictures'), configured: true });
   });
 
-  it('优先读合并后的 worlds.draw.saveDir,旧配置仍然兼容', () => {
+  it('优先读 worlds.draw.saveDir,旧配置仍然兼容', () => {
     const merged = join(scratch, 'draw');
     const legacy = join(scratch, 'legacy');
     writeFileSync(join(botDir, 'config.json'), `${JSON.stringify({

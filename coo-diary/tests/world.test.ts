@@ -51,7 +51,7 @@ const PNG = Buffer.from(
 function configurePetDraw(saveDir: string): void {
   writeFileSync(
     join(botDir, 'config.json'),
-    `${JSON.stringify({ worlds: { 'pet-draw': { saveDir } } }, null, 2)}\n`,
+    `${JSON.stringify({ worlds: { draw: { saveDir } } }, null, 2)}\n`,
     'utf8',
   );
 }

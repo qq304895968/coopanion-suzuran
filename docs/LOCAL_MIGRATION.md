@@ -31,7 +31,7 @@
 
 初稿编写时，本会话分支为上述固定名称，HEAD 是 `784b9e9`，大量成果尚未提交；这是历史状态，不是固定的交付提交号。
 
-**后续用户已要求提交并推送完整成果。** 本次交付沿用固定分支，并保留远端原始上传提交 `ebd11017ec7836e608182660b5ee49fbf3862649` 的历史；不强推、不修改 main。最终可获取性以远端分支为准：按 §2 查询并核对完整文件，若已包含本手册及十包源码，就直接使用该提交。旧报告中的“未推送”描述对应各自的验证轮次，不能据此否定后续提交。
+**后续用户已要求提交并推送完整成果。** 本次交付沿用固定分支，并保留远端原始上传提交 `ebd11017ec7836e608182660b5ee49fbf3862649` 的历史；不强推、不修改 main。最终可获取性以远端分支为准：按 §2 查询并核对完整文件，若已包含本手册及完整源码，就直接使用该提交。旧报告中的“未推送”描述对应各自的验证轮次，不能据此否定后续提交。
 
 因此：
 
@@ -45,14 +45,14 @@
 
 | 项目 | 交接值 |
 | --- | --- |
-| 工作区 | 10 个独立 World 扩展；不是完整桌面应用，没有根 `npm start` |
+| 工作区 | 8 个独立 World 扩展；不是完整桌面应用，没有根 `npm start` |
 | Node | 清单最低 ≥22.15；**复现统一用 22.22.3**，宿主探针还需要该 Node 的代理/CA 参数 |
 | pnpm / TS / Vitest | **11.28.6 / 5.7.3 / 2.1.9** |
 | 开发 SDK / Node 类型 / tsx | **Cortico 0.2.8 / @types/node 22.19.0 / tsx 4.19.2** |
-| 锁文件 | 根 `pnpm-lock.yaml`，必须和根及十包清单一起同步 |
+| 锁文件 | 根 `pnpm-lock.yaml`，必须和根及八包清单一起同步 |
 | 宿主源码检查对象 | Coopanion **0.2.17**，固定 Cortico **0.2.12**，World **API 6** |
 | 最近整仓 Linux 结果 | **525 通过、8 跳过**：494 个 Vitest + 31 个脚本测试；另有类型、构建、smoke 等 |
-| 宿主 SDK 复核 | 十包加载/自描述、18 组类型检查；同一批 **494 通过、6 跳过**；8 个面板资源可索引 |
+| 宿主 SDK 复核 | 八包加载/自描述、18 组类型检查；同一批 **494 通过、6 跳过**；8 个面板资源可索引 |
 
 本手册编写是文档交接，不是又一次本机实测。上表是已有记录，dsh 必须重新记录本机结果。不要把两个 SDK 下的同一批测试相加，也不要按旧报告的“源文件数”判断成功。
 
@@ -85,7 +85,7 @@
 **路径一：工作区快照（远端尚未包含成果时使用）。**导出必须包含未跟踪文件及点文件，保留源素材/离线数据；不带 `.git`、依赖、构建、缓存、真实部署数据或密钥。至少应有：
 
 - 根 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`.gitignore`、`.gitattributes`；
-- §4.1 的十个包，含清单、源码、测试、脚本、`describe.json` 和必要素材；
+- §4.1 的八个包，含清单、源码、测试、脚本、`describe.json` 和必要素材；
 - `scripts/`、`patch-pet-host.ps1`、`.github/workflows/validate.yml`、本手册与现有报告。
 
 仅有文档、一个补丁片段或 `README.md` 不是完整成果。记录快照来源/日期；如有压缩包，用 `Get-FileHash -Algorithm SHA256` 记录摘要，摘要不能替代来源确认。
@@ -160,10 +160,10 @@ if ($LASTEXITCODE -ne 0) { throw '源码/工具链结构不完整，先修复再
 - 先在仓库外备份旧源码（包括未跟踪/用户自改文件），记录 `git status --short` 和现有暂存状态；若宿主通过链接读取旧代码，修改前先停止宿主。
 - 参考快照保持只读，按 §4 的文件组比较。优先看路径和 diff 统计，只有冲突才读函数正文，例如：
   `git diff --no-index --stat -- "<旧目录>/qq-final/src" "<参考目录>/qq-final/src"`。此命令退出 1 通常只是“有差异”，不是执行故障。
-- 根工具链、十包清单/配置与根锁作为一组同步；QQ World 和抽出的模块作为一组同步；不要只复制 `world.ts`。
+- 根工具链、八包清单/配置与根锁作为一组同步；QQ World 和抽出的模块作为一组同步；不要只复制 `world.ts`。
 - 共同基线可靠时做三方合并；没有基线时逐个冲突文件确认，不用“强行覆盖”或无关历史合并冒充三方合并。
-- 本地修改若落在 25 个绘图镜像中，先合入 `coo-draw` 的 canonical 文件，再同步；五个 World 文件不在镜像表，须分别合入。
-- 本地第 11 个包、私有 provider / Bot / 人格扩展不删除。推荐保留旧目录、使用干净十包工作区；纳入新工作区属于额外改动，需另行更新清单/锁/检查。
+- 绘图镜像已清空（旧 `pet-draw` / `coo-gen` 已删除），绘图只有 `coo-draw` 一个来源，不再需要合并镜像。
+- 本地额外的包、私有 provider / Bot / 人格扩展不删除。推荐保留旧目录、使用干净八包工作区；纳入新工作区属于额外改动，需另行更新清单/锁/检查。
 - 冲突解决后先做对应定点检查，再跑全量。新行为超过 §4 范围时标明“本地额外修改”，不要宣称和已验证快照完全相同。
 
 ### 3.1 必须保留的内容：代码路径变了不等于数据也应搬走
@@ -225,11 +225,9 @@ if ((Get-Item -LiteralPath '.cache/untrack-paths.nul').Length -gt 0) {
 | arknights | cortico-world-arknights | `worlds.arknights` | 无 |
 | coo-diary | cortico-world-coo-diary | `worlds.diary` | `dist/webui.js` |
 | coo-draw | cortico-world-coo-draw | `worlds.draw` | `dist/webui.js`、`dist/webui.css` |
-| coo-gen | cortico-world-coo-gen | `worlds.coo-gen` | `dist/webui.js`、`dist/webui.css` |
 | coo-mood | cortico-world-coo-mood | `worlds.mood` | `dist/webui.js` |
 | coo-screen | cortico-world-coo-screen | `worlds.screen` | 无；Windows 限定 |
 | emote-pics | cortico-world-emote-pics | `worlds.emote-pics` | `dist/webui-20261029-3.js`、同名 `.css` |
-| pet-draw | cortico-world-pet-draw | `worlds.pet-draw` | `dist/webui.js` |
 | qq-final | **cortico-world-qq-local** | **`worlds.qqbot`** | `dist/console.js`、`dist/console.css` |
 
 QQ 旧 README 仍有上游 `qq-final` / `qq-better` 的历史称呼；本次安装/过滤应以实际 manifest 为准。不要误装同名上游包，也不要把配置键改成目录名。所有包仍为 World API 6，版本未作为新发行版发布。
@@ -238,8 +236,8 @@ QQ 旧 README 仍有上游 `qq-final` / `qq-better` 的历史称呼；本次安�
 
 | 编号 | 同步 / 查看位置 | 已实现内容；移植时不可退化 |
 | --- | --- | --- |
-| M01 工具链 | 根 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`.gitignore`、`.gitattributes` | 私有十包工作区、固定版本、hoisted 布局、统一锁；源码素材保留，依赖/构建/缓存不入 Git |
-| M02 包配置 | 十包 `package.json`、`tsconfig*.json`、`vitest.config.ts`；各包已有 `scripts/` | Node/Web 类型检查与测试入口一致；不要回退成每包随意装最新 SDK，或删 Windows `os` 限制 |
+| M01 工具链 | 根 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`.gitignore`、`.gitattributes` | 私有八包工作区、固定版本、hoisted 布局、统一锁；源码素材保留，依赖/构建/缓存不入 Git |
+| M02 包配置 | 八包 `package.json`、`tsconfig*.json`、`vitest.config.ts`；各包已有 `scripts/` | Node/Web 类型检查与测试入口一致；不要回退成每包随意装最新 SDK，或删 Windows `os` 限制 |
 | M03 仓库检查 | `scripts/check-repository.mjs`、`check-metadata.mjs`、`check-python.py`、`.github/workflows/validate.yml` | 校验源码政策/资源/固定工具链/自描述；Python 仅 AST；CI 配置不等于已在远端通过 |
 | M04 QQ 拆分 | `qq-final/src/sender.ts`、`admin-tools.ts`、`console/declaration.ts` 与 `world.ts` | 发送队列、群管工具、面板声明已抽出；一起同步。保持日语语音→中文正文→下一条消息、失败恢复、去重/限速/权限保护，不继续为减行数大改 World |
 | M05 QQ 脱敏 | `qq-final/src/logging.ts`、`driver.ts`；`tests/driver.test.ts` | URL 日志不带 userinfo/query/hash，错误遮罩已知 token 及编码形式；连接鉴权逻辑保留，异常传播也不能漏密钥 |
@@ -248,22 +246,19 @@ QQ 旧 README 仍有上游 `qq-final` / `qq-better` 的历史称呼；本次安�
 | M08 日记 | `coo-diary/src/store.ts`、`tests/store.test.ts`、`tests/world.test.ts` | 先筛真实日期/普通文件并降序排序，再限制读取 400 候选；日历日期按 UTC 算星期，不重复跨时区；测试固定时区，保留追加写与路径/大小保护 |
 | M09 余额 | `api-balance/src/balance.ts`、`src/webui/client.ts`、`tests/`、文档/自描述 | 负金额为 `-$1,234.50`；保留更严格的密钥全值脱敏，修测试错误假设；浏览器 SDK 类型对齐 |
 | M10 表情图 | `emote-pics/scripts/build-webui.mjs`、清单/TS/Vitest 配置、`tests/` | 补齐原来缺失的构建与 7 项概率/冷却/强制/格式大小/来源测试；不是重写表情行为，不改带日期的产物名 |
-| M11 绘图镜像 | `scripts/drawing-mirrors.json`、`sync-drawing.mjs`；`coo-draw/src/api/`、`src/local/` 对应模块 | 明确 9 个 API + 16 个本地镜像；canonical 在 coo-draw，单向同步旧包，保留独立安装，不建立运行时跨包相对导入 |
+| M11 绘图镜像 | `scripts/drawing-mirrors.json`、`sync-drawing.mjs` | 清单为空：旧 `pet-draw` / `coo-gen` 已删除，`coo-draw/src/api/`、`src/local/` 是唯一实现，不建立运行时跨包相对导入 |
 | M12 预览脚本 | `coo-draw/scripts/preview-options.ts`、`persona-samples.ts`、`reference-img2img.ts`；对应预览测试 | 显式配置/输出路径，默认只计划；`--run` 才生成，默认 `.preview`；不重新写死作者磁盘 |
 | M13 心情安装 | `coo-mood/scripts/install-into-coopanion.mjs`、`scripts/tests/install-mood.test.mjs` | 显式 `--home/--extensions`，默认 dry-run；冲突拒绝、先备份、失败回滚。原有原子存储不改。不是通用升级器 |
 | M14 宿主补丁 | `patch-pet-host.ps1`、`scripts/tests/patch-host.test.mjs` | 显式 `-HostRoot`，`-Apply` 才应用；先验证全计划，精确幂等标记、备份/回滚。源码锚点匹配不是渲染验收 |
-| M15 自描述 | 十包 manifest 所指 `describe.json`、根 `check-metadata.mjs` | 补齐余额文档/描述，刷新 coo-gen、coo-mood、emote-pics、QQ 的过期描述；变化后用导出器生成，不手写 JSON 掩盖差异 |
+| M15 自描述 | 八包 manifest 所指 `describe.json`、根 `check-metadata.mjs` | 补齐余额文档/描述，刷新 coo-mood、emote-pics、QQ 的过期描述；变化后用导出器生成，不手写 JSON 掩盖差异 |
 | M16 原生测试隔离 | `coo-screen/tests/`、`scripts/check-python.py`、CI 环境 | 6 项截屏集成需 Windows + 显式 `COOPANION_SCREEN_INTEGRATION=1`；普通验证不抓屏、不启动侧车 |
-| M17 目录 IPC 修正 | `coo-diary/src/world.ts`、`coo-draw/src/api/world.ts`、`coo-draw/src/local/world.ts`、`pet-draw/src/world.ts`、`coo-gen/src/world.ts` | 五处不再因 `process.send()` true 跳过系统命令；保留 Windows COM / macOS open / Linux xdg-open；API 绘图日志是 `folder open requested`，不冒充窗口已显示 |
-| M18 新兼容回归 | `scripts/tests/folder-compat.test.mjs`、相关四包 CHANGELOG / 日记 README | 15 个函数分支测试覆盖五处×三平台，模拟 IPC 成功但仍要求原生调用；不是三平台桌面实测，不能删它恢复旧私有 IPC 判断 |
+| M17 目录 IPC 修正 | `coo-diary/src/world.ts`、`coo-draw/src/api/world.ts`、`coo-draw/src/local/world.ts` | 三处不再因 `process.send()` true 跳过系统命令；保留 Windows COM / macOS open / Linux xdg-open；API 绘图日志是 `folder open requested`，不冒充窗口已显示 |
+| M18 新兼容回归 | `scripts/tests/folder-compat.test.mjs`、相关包 CHANGELOG / 日记 README | 函数分支测试覆盖三处×三平台（删除旧绘图包前是五处、15 项），模拟 IPC 成功但仍要求原生调用；不是三平台桌面实测，不能删它恢复旧私有 IPC 判断 |
 | M19 宿主探针 | `scripts/check-host.mjs`、`scripts/tests/host-check.test.mjs`、`docs/HOST_VALIDATION*` | 指定实际宿主 SDK，临时安装链接、真实源码 HTTP/IPC 探针；6 项工具保护测试；`--full` 才加类型/测试，不启动真实 Core/桌面 |
 
 源码/测试不要遗漏的耦合关系：M04—M07 一起处理 QQ；M01—M03 与所有包清单一起处理；M11 不包含 World 文件，**不能代替 M17**。日记/余额/QQ 的保护逻辑与对应回归测试一起迁。
 
-25 个共享模块的 basename（映射文件为最终准则）：
-
-- API：`art-store.ts`、`config.ts`、`draw.ts`、`persona.ts`、`popup.ts`、`quota.ts`、`reference.ts`、`store.ts`、`style.ts`。
-- Local：`comfy.ts`、`config.ts`、`fs-util.ts`、`launch.ts`、`lora.ts`、`model-paths.ts`、`models.ts`、`output.ts`、`png.ts`、`presets.ts`、`settings.ts`、`tasks.ts`、`tools.ts`、`translate.ts`、`types.ts`、`workflow.ts`。
+绘图共享模块的登记表 `scripts/drawing-mirrors.json` 现在是空数组：合并前登记的 25 个基名（API 9 个、本地 16 个）全部只在 `coo-draw/src/api/` 与 `coo-draw/src/local/` 里维护一次。
 
 ## 5. 代码级验证：先做，不需要部署路径
 
@@ -315,7 +310,7 @@ try {
 
 `install` 可能访问 npm registry，并执行工作区批准的依赖构建；这不是离线安装。**不要**用非冻结安装或升级依赖来掩盖清单与锁不匹配。
 
-`validate` 已包含：仓库政策→25 组镜像→脚本测试→十包 Node/Web 类型→Vitest→心情 smoke→八包面板构建→资源/元数据→各包局部检查。成功后不必把每一步再重复全跑一遍；Python AST 另跑一次即可。
+`validate` 已包含：仓库政策→脚本测试→八包 Node/Web 类型→Vitest→心情 smoke→八包面板构建→资源/元数据→各包局部检查。成功后不必把每一步再重复全跑一遍；Python AST 另跑一次即可。
 
 Linux / macOS 可用同样的根命令，外部命令串行短路，保留原环境变量：
 
@@ -343,18 +338,18 @@ git diff --check && git diff --cached --check
 | QQ | `Invoke-Pnpm --filter cortico-world-qq-local typecheck`；`Invoke-Pnpm --filter cortico-world-qq-local test` |
 | 日记 | `Invoke-Pnpm --filter cortico-world-coo-diary test` |
 | 余额 | `Invoke-Pnpm --filter cortico-world-api-balance test` |
-| 绘图三包 | 分别使用 `cortico-world-coo-draw` / `cortico-world-pet-draw` / `cortico-world-coo-gen` 的 `test` |
+| 绘图 | `Invoke-Pnpm --filter cortico-world-coo-draw test` |
 | 表情图 | `Invoke-Pnpm --filter cortico-world-emote-pics test` / `build` |
 | 文件夹 IPC | `node --test scripts/tests/folder-compat.test.mjs` |
 | 安装/补丁/探针保护 | `Invoke-Pnpm test:tooling` |
-| 镜像 | 先 `Invoke-Pnpm check:mirrors`；核实 canonical 合并正确后才 `Invoke-Pnpm sync:drawing` |
+| 镜像 | `node scripts/sync-drawing.mjs --check`（清单为空，恒通过） |
 | 过期自描述 | 先 `Invoke-Pnpm check:metadata`；确认源码变更属实后才 `Invoke-Pnpm describe:all`，检查生成 diff |
 
 有意修改源码默认工具/事件/提示词才重新生成元数据；别把部署私人提示词移进源码。只修失败范围，随后全量复核一次并记录结果。
 
 ## 6. 可选：对照官方宿主源码，不替代安装包/GUI 验收
 
-无须把开发依赖升级为 0.2.12。源码副本应放 `CodeRoot/.cache/`，含固定子模块；不克隆到十包内部或源码根旁冒充第 11 个包。
+无须把开发依赖升级为 0.2.12。源码副本应放 `CodeRoot/.cache/`，含固定子模块；不克隆到八包内部或源码根旁冒充第 9 个包。
 
 ```powershell
 $HostSourceRoot = Join-Path $CodeRoot '.cache\host-source-v0.2.17'
@@ -374,7 +369,7 @@ Invoke-Pnpm check:host --host-root "$HostSourceRoot" --full --report "$Report"
 
 先前 `validate` 已构建面板；若跳过了它，先 `Invoke-Pnpm build`。报告路径必须是**新文件**，且不能位于宿主源码树内。既有宿主探针结果来自 Linux；上面的 Windows 命令是复现步骤，不是已经在 Windows 实测通过的声明，必须记录本机实际结果。
 
-验收看：十包定义/元数据/加载、18 组类型、494/6 的既有测试基线、8 个面板资产以及 `LIMIT` 内容。退出 0 表示探针完成，不表示图片气泡或桌面已经通过。不要把 405 改成 200、去掉 Origin 检查或关闭测试来制造通过。
+验收看：八包定义/元数据/加载、18 组类型、既有测试基线、8 个面板资产以及 `LIMIT` 内容。退出 0 表示探针完成，不表示图片气泡或桌面已经通过。不要把 405 改成 200、去掉 Origin 检查或关闭测试来制造通过。
 
 此命令只接受完整源码树，不接受安装器/`.asar`；它不执行正式 `core/boot.ts`，不启动 Electron。官方发布包在本次沙箱下载失败，本地若已取得包可另做包级检查，但不能用源码结果冒充。实际宿主不是 v0.2.17 时，另行对照该版本，不强套上述 SHA。
 
@@ -387,7 +382,7 @@ Invoke-Pnpm check:host --host-root "$HostSourceRoot" --full --report "$Report"
 - [ ] 私密备份实际 `BotDir/config.json`、密钥/人格文件、World 数据、`ExtensionsDir/package.json`、该工作区锁文件与原安装/链接目标；记录实际应用版本及私有补丁。
 - [ ] 全部自动检查通过；新源码的依赖、面板产物已生成；没有把源码根或宿主目录的 package.json 搞混。
 - [ ] 已处理相对图片/资料路径，原日记/画夹/心情/模型目录仍可达。
-- [ ] 新启用 `coo-draw` 时停用旧 `pet-draw` / `coo-gen`，不删除它们的安装和数据；如果继续用旧方案，不强制改成合并画室。
+- [ ] 绘图只安装 `coo-draw`。若部署里还装着旧的 `cortico-world-pet-draw` / `cortico-world-coo-gen`，停用（或卸下）它们，但保留其安装目录与画夹数据。
 
 启动宿主可能触发主动发话、模型调用、ASR 或 ComfyUI 自动启动。即使“只打开界面”，也不能默认是无外部副作用操作；测试配置先审查这些开关，不放宽群管权限。
 
@@ -446,7 +441,7 @@ if ($LASTEXITCODE -ne 0) { throw '安装目标无法解析；先处理链接/安
 
 核对目标是新源码或已更新的安装副本，而非旧目录；`package.json.version` 没有为本轮发布而变更，**只看版本号不够**。确认构建产物与源文件；随后整进程重启，必要时刷新该扩展页面缓存。Windows 错误包名、旧链接和旧浏览器 bundle 是优先排查项，不先重写代码。
 
-合并画室首次启用会保留旧配置并补充默认键，使用 `draw-migrated.json` 标记；旧画夹与本地数据仍兼容 `pet-draw` / `coo-gen` 目录。不要删标记来强制重迁，不批量搬/清历史图，验收前备份数据与配置。
+合并画室首次启用会保留旧配置并补充默认键，使用 `draw-migrated.json` 标记；旧画夹（`worlds.pet-draw.saveDir`，留空时落到 `<dataDir>/pet-draw`）与本地出图数据目录继续可读。不要删标记来强制重迁，不批量搬/清历史图，验收前备份数据与配置。
 
 ### 7.3 特殊脚本不是常规升级必选项
 
@@ -502,7 +497,7 @@ ASR/TTS、ffmpeg、音频设备、NapCat 协议差异、ComfyUI 模型/GPU需要
 | 拉分支后只有 README / 缺根锁 | §1、§2：成果没发布或没导出未跟踪文件；索取完整源码，不自己补写整个仓库 |
 | `not a git repository` | §3A：快照新副本初始化 Git；不对旧目录重置/重新克隆覆盖 |
 | `check:repo` 报生成物/子包锁 | §3.2：索引与磁盘残留分别处理；不能 `git clean` 或清整个部署目录 |
-| 冻结安装失败 | 根和十包 package.json / workspace / lock 是否为同一成果；检查 pnpm 版本，不删除锁或升级 SDK |
+| 冻结安装失败 | 根和八包 package.json / workspace / lock 是否为同一成果；检查 pnpm 版本，不删除锁或升级 SDK |
 | Windows `spawnSync pwsh ENOENT` | §5.1：PowerShell 7 未进入 PATH；不是业务代码错误，不删两个夹具测试 |
 | `registerHooks` / `--use-env-proxy` 不支持 | `node --version` / PATH；使用 22.22.3，不改 SDK 源码绕过 |
 | 新版面板缺样式/仍旧布局 | 本机 build、manifest 文件名、实际安装链接/副本、浏览器缓存；不从旧 dist 拼产物 |

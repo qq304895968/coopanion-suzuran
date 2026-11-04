@@ -9,7 +9,7 @@
 1. 停止 Coopanion，备份部署 `config.json`、扩展工作区 `package.json` 和扩展数据目录。
 2. 用测试副本，不要让第一轮验收写生产日记、发真实群公告或修改真实群成员。
 3. 在仓库根执行 `pnpm install --frozen-lockfile`、`pnpm validate`。
-4. 安装源码包前构建 `dist`。加载 API 6 兼容宿主；新包使用合并画室时停用 `pet-draw` / `coo-gen`。
+4. 安装源码包前构建 `dist`。加载 API 6 兼容宿主；绘图只装 `coo-draw`，部署里残留的 `pet-draw` / `coo-gen` 要停用（保留数据，不要删画夹）。
 5. 如果已有面板资源被浏览器强缓存，重载/清除该扩展资源缓存；本轮保留了原来的资源 URL，不冒充已发布的新版本。
 
 ## 1. QQ / NapCat

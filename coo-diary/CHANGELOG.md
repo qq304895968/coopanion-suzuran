@@ -1,5 +1,7 @@
 ## Unreleased
 
+- 画画插件统一为合并后的 `cortico-world-coo-draw`：画夹仍读 `worlds.draw.saveDir`；旧的 `pet-draw` World 已不再随本仓库发布。
+
 - 对照官方 Coopanion 0.2.17 确认其不处理 `companion:open-folder`；不再用 `process.send()` 的布尔值跳过系统文件管理器。保留原生打开与复制路径兜底，桌面可见性仍须实机验收。旧的 0.2.13 私有宿主 IPC 不再作为默认路径。
 
 - 先过滤并按日期降序排列文件，再限制最多读取 400 个候选，避免旧文件挤掉最近日记。

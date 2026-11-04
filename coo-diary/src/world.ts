@@ -58,7 +58,7 @@ export interface DiaryWorldOptions {
   /** `worlds.diary` 的活引用。 */
   cfg: DiaryConfigSection;
   timezone: string;
-  /** 部署目录:从这里读 config.json 的 `worlds.draw.saveDir`(兼容旧 `worlds.pet-draw.saveDir`)。 */
+  /** 部署目录:从这里读 config.json 的 `worlds.draw.saveDir`。 */
   botDir?: string;
   /** 部署数据目录:画画插件没设 saveDir 时,画夹默认在 `<dataDir>/pet-draw`。 */
   dataDir?: string;

@@ -1,7 +1,8 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { forbiddenPath, workspacePackages } from '../check-repository.mjs';
 import { drawingMirrors, syncDrawing } from '../sync-drawing.mjs';
@@ -21,10 +22,15 @@ test('repository policy blocks generated files, credentials and competing locks'
   for (const path of ['pnpm-lock.yaml', '.env.example', 'a/.env.template', 'arknights/data/operators.json', 'coo-screen/sidecar/capture.py', 'qq-final/src/console/style.css']) assert.equal(forbiddenPath(path), null, path);
 });
 
-test('all ten packages and the 25 reviewed source mirrors are declared', () => {
-  assert.equal(workspacePackages().length, 10);
-  assert.equal(drawingMirrors.length, 25);
-  assert.equal(new Set(drawingMirrors.map(pair => pair.mirror)).size, 25);
+test('all eight packages are declared, every listed directory exists, and no legacy drawing mirror remains', () => {
+  const names = workspacePackages();
+  assert.equal(names.length, 8);
+  // 已删除的包如果留在清单里，pnpm install 会直接报错；这里先给出可读的失败。
+  assert.ok(!names.includes('pet-draw'));
+  assert.ok(!names.includes('coo-gen'));
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  for (const name of names) assert.ok(existsSync(join(root, name, 'package.json')), `missing workspace package: ${name}`);
+  assert.equal(drawingMirrors.length, 0);
 });
 
 test('mirror checking never modifies a divergent destination', () => {

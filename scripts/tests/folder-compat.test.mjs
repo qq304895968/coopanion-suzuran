@@ -11,8 +11,6 @@ const files = [
   'coo-diary/src/world.ts',
   'coo-draw/src/api/world.ts',
   'coo-draw/src/local/world.ts',
-  'pet-draw/src/world.ts',
-  'coo-gen/src/world.ts',
 ];
 
 for (const file of files) {

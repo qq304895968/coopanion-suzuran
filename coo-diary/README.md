@@ -16,7 +16,7 @@ Owner: `src/definition.ts`
 ## 配置
 
 走部署的 `config.json` 的 `worlds.diary` 段,也能在 WebUI 的「日记」页面改。三项都立即生效。
-引用画时会自动读 `worlds.pet-draw.saveDir`(留空时是 `<dataDir>/pet-draw`),不需要在日记这边再配一次。
+引用画时会自动读 `worlds.draw.saveDir`(留空时是 `<dataDir>/pet-draw`),不需要在日记这边再配一次。
 
 | 键 | 类型 | 默认 | 说明 |
 |---|---|---|---|
@@ -50,13 +50,13 @@ Owner: `src/definition.ts`
 
 ## 和画画插件联动
 
-画画插件(`cortico-world-pet-draw`)把图存进画夹并写一份 `index.json`;日记只读这份索引,不调用对方的工具。
+画画插件(`cortico-world-coo-draw`)把图存进画夹并写一份 `index.json`;日记只读这份索引,不调用对方的工具。
 
 1. **回想**:`diary_art` 默认看今天,列出画过的画;`attach` 默认 true,最多 4 张图作为附件给模型看。
 2. **引用**:把 `diary_art` 或 `pet_draw` 回执里的 id 填进 `diary_write.arts`。图会复制到
    `<日记目录>/images/<日期>/`,正文末尾写 `![主题](images/<日期>/<id>.png)`;之后画夹里重命名或换评价也不影响日记。
-3. **画新的**:绘画 World 开着时,先调用 `pet_draw`,再用它回执里的 id 写日记。日记的提示词会把这条流程教给桌宠;
-   绘画 World 没开时只写文字。
+3. **画新的**:画室 World 开着时,先调用 `pet_draw`,再用它回执里的 id 写日记。日记的提示词会把这条流程教给桌宠;
+   画室 World 没开时只写文字。
 
 ```markdown
 # 2026-10-28 星期三
@@ -77,9 +77,9 @@ Owner: `src/definition.ts`
    `attach` 默认 true,最多 4 张原图作为附件给模型看。
 2. **引用**:把 id 填进 `diary_write.moments`。截图会复制到 `<日记目录>/images/<日期>/moment-*.png`,
    正文里写成一段 `> 深刻瞬间 9/10:……` 加图片;`includeMemorable: true` 收录那一天全部瞬间。
-3. **照着画**:把 `diary_moment` 回执里的原图路径填进 `pet_draw` 的 `referencePath`,让绘画插件
+3. **照着画**:把 `diary_moment` 回执里的原图路径填进 `pet_draw` 的 `referencePath`,让画室
    用这张图当图生图参考;不要再用 `referenceName` / `referenceQuery` 搜关键词。画好后把新画 id
-   填进 `diary_write.arts`,这一刻的屏幕和画就都在日记里了。绘画 World 开着时,日记提示词默认
+   填进 `diary_write.arts`,这一刻的屏幕和画就都在日记里了。画室 World 开着时,日记提示词默认
    会先照着这一刻画一张(一个瞬间最多一张);用户明确说不要画时除外。
 
 ## 日记目录面板

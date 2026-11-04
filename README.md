@@ -1,13 +1,13 @@
 # Coopanion · Suzuran 扩展工作区
 
-这是 **10 个 Cortico World API 6 扩展**的源码仓库，不包含 Coopanion / Electron 桌面宿主本身。不能把它当作一个 `npm start` 就能运行的完整桌宠应用。
+这是 **8 个 Cortico World API 6 扩展**的源码仓库，不包含 Coopanion / Electron 桌面宿主本身。不能把它当作一个 `npm start` 就能运行的完整桌宠应用。
 
 - **本地移植与验证统一入口（含可直接交给 dsh 的短指令）**：[本地迁移手册](docs/LOCAL_MIGRATION.md)
 - **本次审查的问题、修改方法、验证结果与剩余边界**：[修复清单](docs/REPAIR_PLAN.md)
 - **部署前的人工验收与回滚**：[验收指南](docs/ACCEPTANCE.md)
 - **官方 v0.2.17 的源码模块兼容验证与新发现**：[宿主验证报告](docs/HOST_VALIDATION.md)（不是发布包/桌面验收）
 
-获取已提交成果时，使用 `arena/13094e18-coopanion-suzuran`，并确认该提交包含上述迁移手册与完整十包源码。旧报告中的“尚未提交/推送”是当轮检查记录；当前交付状态以远端分支和实际提交号为准。源码获取、备份及本地验证步骤统一见迁移手册，不要把初始提交 `784b9e9` 当成修复版本。
+获取已提交成果时，使用 `arena/13094e18-coopanion-suzuran`，并确认该提交包含上述迁移手册与完整八包源码。旧报告中的“尚未提交/推送”是当轮检查记录；当前交付状态以远端分支和实际提交号为准。源码获取、备份及本地验证步骤统一见迁移手册，不要把初始提交 `784b9e9` 当成修复版本。
 
 ## 目录与选择
 
@@ -17,13 +17,11 @@
 | `arknights` | 明日方舟离线知识 / 黑流拓扑 | 内置数据和源素材不是缓存，不要随意删除 |
 | `coo-diary` | 按天追加 Markdown 日记、回忆绘画与截图 | 配置自己的绝对目录 |
 | `coo-draw` | 合并的画室：API 绘画 + 本地 ComfyUI | **新安装优先选择** |
-| `coo-gen` | 独立旧版 ComfyUI 出图 | 兼容保留，不与合并画室同时启用 |
-| `pet-draw` | 独立旧版人设绘画 | 兼容保留，不与合并画室同时启用 |
 | `coo-mood` | 心情状态与情境互动 | 状态保存在部署数据目录 |
 | `coo-screen` | Windows 热键截屏、记忆瞬间 | 真实截屏需要 Windows 交互桌面与 Python |
 | `emote-pics` | 对话表情图 / 桌面弹图 | 配置图片目录；桌面行为需宿主验收 |
 | `qq-final` | OneBot / NapCat QQ 接入、语音、群管理等 | 需要自己的 NapCat，先用测试账号/测试群验收 |
-| `scripts` | 工作区检查、绘图镜像、元数据生成、脚本安全测试 | 默认检查不访问真实模型服务 |
+| `scripts` | 工作区检查、元数据生成、脚本安全测试 | 默认检查不访问真实模型服务 |
 
 ## 开发环境
 
@@ -52,19 +50,18 @@ Linux 安装时 `coo-screen` 的 Windows 平台提示是预期行为：其纯逻
 
 | 命令 | 范围 |
 | --- | --- |
-| `pnpm validate` | 仓库策略 → 绘图镜像 → 脚本测试 → 全量类型检查 → 单元/契约测试 → 心情 smoke → 构建 → 资源/元数据/扩展局部检查 |
-| `pnpm typecheck` | 十个包的 Node 代码，以及有浏览器端的包的独立浏览器配置 |
-| `pnpm test` | 十个包的 Vitest 测试；不会主动连接真实 NapCat、调用付费绘画或抓屏 |
-| `pnpm test:tooling` | 镜像、安装器与宿主补丁的安全测试，只使用临时夹具 |
+| `pnpm validate` | 仓库策略 → 脚本测试 → 全量类型检查 → 单元/契约测试 → 心情 smoke → 构建 → 资源/元数据/扩展局部检查 |
+| `pnpm typecheck` | 八个包的 Node 代码，以及有浏览器端的包的独立浏览器配置 |
+| `pnpm test` | 八个包的 Vitest 测试；不会主动连接真实 NapCat、调用付费绘画或抓屏 |
+| `pnpm test:tooling` | 镜像注册表、安装器与宿主补丁的安全测试，只使用临时夹具 |
 | `pnpm test:smoke` | 心情模块已有的纯本地 smoke（模型、存储、World 回合、小故事） |
 | `pnpm build` | 构建八个浏览器面板；余额包同时生成自描述 |
 | `pnpm check:artifacts` | 核对 manifest 声明的 JS / CSS / 图标 / 自描述文件存在且非空 |
 | `pnpm check:host --host-root <宿主源码目录> --full` | 显式使用该宿主的 SDK 验证加载、HTTP/IPC、类型和测试；需要含固定 Cortico 子模块的源码，不启动 Electron |
-| `pnpm check:metadata` | 使用 SDK 导出器检查十个包的 `describe.json` 是否与源码一致，不启动 World |
+| `pnpm check:metadata` | 使用 SDK 导出器检查八个包的 `describe.json` 是否与源码一致，不启动 World |
 | `pnpm describe:all` | 明确重新生成有差异的 `describe.json`；修改工具、事件或提示词后执行 |
 | `pnpm check:packages` | 执行各包现有的本地 `check` / `check:manifest`；不等同于官方发布认证 |
-| `pnpm sync:drawing` | 从 `coo-draw` 同步明确登记的 25 个共享文件到旧包 |
-| `pnpm check:mirrors` | 只报告镜像差异，绝不写文件 |
+| `node scripts/sync-drawing.mjs --check` | 检查绘图镜像清单；旧绘图包删除后清单为空，恒通过 |
 | `python scripts/check-python.py` | 只解析三个 Python 侧车文件，不启动侧车 |
 
 只检查一个包：
@@ -75,15 +72,13 @@ pnpm --filter cortico-world-qq-local typecheck
 pnpm --filter cortico-world-emote-pics build
 ```
 
-## 为什么保留三个绘图包
+## 绘图包只有 `coo-draw`
 
-`coo-draw/src/api/` 和 `coo-draw/src/local/` 是登记的共享模块的唯一维护来源，映射见 `scripts/drawing-mirrors.json`。
+`cortico-world-coo-draw` 把合并前的 `cortico-world-pet-draw`(API 绘画)和 `cortico-world-coo-gen`(本地 ComfyUI 出图)收进了同一个 World：`coo-draw/src/api/` 与 `coo-draw/src/local/` 分别是这两部分的实现。
 
-- 改共享文件后执行 `pnpm sync:drawing`，再运行测试。
-- 不要直接编辑映射中的旧包文件；CI 会发现漂移。
-- 各包的 World、definition、配置适配和独有模块仍独立维护，**不能盲目整目录覆盖**。
-- 不改成跨包相对路径导入，是为了保留旧包复制/打包后独立安装的能力。
-- 合并画室与旧包同时启用会产生重复工具；选择一套，不要都启用。
+- 世界 id 仍是 `draw`，配置段是 `worlds.draw`；配置键沿用旧的 `pet-draw` / `coo-gen` 字段名，旧部署的 `worlds.pet-draw.*` / `worlds.coo-gen.*` 由 World 自己一次性迁移。
+- 旧的两个包已从工作区删除，不再镜像、不再发布；`scripts/drawing-mirrors.json` 保留为空清单，`node scripts/sync-drawing.mjs --check` 因此恒为通过。
+- 只安装 `coo-draw` 即可。人设对话里的 `pet_draw`、本地出图工具和面板都在这个包里。
 
 ## 构建与安装边界
 

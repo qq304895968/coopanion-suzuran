@@ -105,27 +105,6 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@22.19.0)
 
-  coo-gen:
-    devDependencies:
-      '@types/node':
-        specifier: 22.19.0
-        version: 22.19.0
-      cortico:
-        specifier: 0.2.8
-        version: 0.2.8
-      esbuild:
-        specifier: 0.28.2
-        version: 0.28.2
-      tsx:
-        specifier: 4.19.2
-        version: 4.19.2
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@22.19.0)
-
   coo-mood:
     devDependencies:
       '@types/node':
@@ -157,27 +136,6 @@ importers:
         version: 2.1.9(@types/node@22.19.0)
 
   emote-pics:
-    devDependencies:
-      '@types/node':
-        specifier: 22.19.0
-        version: 22.19.0
-      cortico:
-        specifier: 0.2.8
-        version: 0.2.8
-      esbuild:
-        specifier: 0.28.2
-        version: 0.28.2
-      tsx:
-        specifier: 4.19.2
-        version: 4.19.2
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@22.19.0)
-
-  pet-draw:
     devDependencies:
       '@types/node':
         specifier: 22.19.0

@@ -1,6 +1,6 @@
 # cortico-world-coo-draw
 
-Coopanion 桌宠的「画室」：把原来的 **API 绘画**（`pet-draw`）和 **本地出图**（`coo-gen`）合并成一个 World，一个入口、两个页签，并且让「桌宠主动画」和「日记配图」各自选择画法。日记里的画仍然保持铃兰的人设笔触。
+Coopanion 桌宠的「画室」：把原来的 **API 绘画**（原 `cortico-world-pet-draw`）和 **本地出图**（原 `cortico-world-coo-gen`）合并成一个 World，一个入口、两个页签，并且让「桌宠主动画」和「日记配图」各自选择画法。这两个独立包已不再单独发布。日记里的画仍然保持铃兰的人设笔触。
 
 - **API 绘画**：千问 `qwen-image-3.0`，固定 512×512，画风由人设决定；画完弹图、问评价、收进画夹。
 - **本地出图**：借你的 ComfyUI，模型 / LoRA / 工作流 / 采样参数自己选，结果进自己的目录和历史。
@@ -139,7 +139,7 @@ World 设置里有两个下拉（`worlds.draw.routePet` / `worlds.draw.routeDiar
 - 首次启动从 `worlds.pet-draw` / `worlds.coo-gen` 迁移到 `worlds.draw`：只补仍是默认值的键，旧配置保留；迁移标记在 `<dataDir>/draw-migrated.json`，只跑一次。
 - 画夹默认仍是 `<dataDir>/pet-draw`；本地设置、历史和工作流仍是 `<dataDir>/coo-gen/`。旧图、旧历史、旧 LoRA 设置都不动。
 - 日记读画夹时优先 `worlds.draw.saveDir`，旧 `worlds.pet-draw.saveDir` 仍兼容；默认目录不变。
-- 建议把旧的 `pet-draw` / `coo-gen` World 停用（保留安装即可），否则工具名会和「画室」重复。
+- 旧的 `pet-draw` / `coo-gen` 包已从工作区删除，本包是绘图唯一实现；部署里若还装着它们，停用并卸下扩展链接即可，画夹与本地数据目录都不动。
 
 ## 工具
 

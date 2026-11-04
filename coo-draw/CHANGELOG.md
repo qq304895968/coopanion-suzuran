@@ -4,7 +4,7 @@
 
 - 对照官方 Coopanion 0.2.17 确认其不处理 `companion:open-folder`；不再用 `process.send()` 的布尔值跳过系统文件管理器。保留原生打开与复制路径兜底，桌面可见性仍须实机验收。旧的 0.2.13 私有宿主 IPC 不再作为默认路径。
 
-- 为与旧独立包共有的 25 个模块建立显式镜像同步和差异检查（见根 scripts/drawing-mirrors.json）。
+- 合并前的 `cortico-world-pet-draw` 与 `cortico-world-coo-gen` 已从工作区删除，本包是绘图唯一实现；根 `scripts/drawing-mirrors.json` 保持空清单，不再需要镜像同步和差异检查。
 - 开发预览脚本改为显式配置路径、可覆盖输出目录和默认 dry-run；参考图脚本也必须加 --run 才执行。
 - 统一工具链，增加预览参数安全回归测试。
 

@@ -1,7 +1,8 @@
 /**
  * 和画画 World 的只读联动。
  *
- * 画画插件把画存进 `worlds.draw.saveDir`(旧版是 `worlds.pet-draw.saveDir`;留空时是 `<dataDir>/pet-draw`),
+ * 画画插件（`cortico-world-coo-draw`）把画存进 `worlds.draw.saveDir`(留空时是 `<dataDir>/pet-draw`，
+ * 兼容合并前旧包留下的数据目录),
  * 并在根目录写一份 `index.json`。日记不调用对方的工具,只读这份索引:
  * 按日期挑画、把引用的图复制进 `<日记目录>/images/<日期>/`,再在 Markdown 里用相对路径引用。
  */
@@ -71,7 +72,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * 从部署的 config.json 读画夹目录。
- * 合并后的「画室」写在 `worlds.draw.saveDir`；旧版 `worlds.pet-draw.saveDir` 仍然兼容。
+ * 合并后的「画室」写在 `worlds.draw.saveDir`；合并前的旧画夹配置没有其他读取方。
  */
 export function petDrawSaveDir(botDir: string): string {
   try {

@@ -20,7 +20,25 @@ function hostFixture() {
   writeFileSync(join(root, 'web/pet.css'), '.bubble { color: black; }\n');
   return root;
 }
-const invoke = (root, ...args) => execFileSync('pwsh', ['-NoProfile', '-File', script, '-HostRoot', root, ...args], { encoding: 'utf8' });
+// 优先 pwsh（PowerShell 7），没有时退回系统自带的 Windows PowerShell 5.1。
+function powerShell() {
+  for (const candidate of ['pwsh', 'powershell']) {
+    try {
+      execFileSync(candidate, ['-NoProfile', '-Command', 'exit 0'], { stdio: 'ignore' });
+      return candidate;
+    } catch {
+      // 继续试下一个。
+    }
+  }
+  return '';
+}
+const shell = powerShell();
+function invoke(root, ...args) {
+  // 用 -Command 传参：两种 PowerShell 都按普通参数绑定，-Confirm:$false 才不会被当成字符串。
+  // 脚本永远放在最后，path 型参数会吞掉它后面的 token。
+  const quote = (text) => `'${text.replace(/'/g, "''")}'`;
+  return execFileSync(shell, ['-NoProfile', '-Command', `& ${quote(script)} ${['-HostRoot', quote(root), ...args].join(' ')}`], { encoding: 'utf8' });
+}
 
 test('patch source requires explicit apply and uses precise idempotency markers', () => {
   assert.match(source, /\[switch\]\$Apply/);
@@ -29,7 +47,7 @@ test('patch source requires explicit apply and uses precise idempotency markers'
   assert.match(source, /'\/\/ a picture leaves on its own clock'/);
   assert.doesNotMatch(source, /D:\\daily use/);
 });
-test('PowerShell patch: dry run, backup, apply and second-run idempotency on fixture', { skip: process.platform !== 'win32' }, () => {
+test('PowerShell patch: dry run, backup, apply and second-run idempotency on fixture', { skip: !shell }, () => {
   const root = hostFixture();
   const file = join(root, 'src/server.ts');
   const original = readFileSync(file, 'utf8');
@@ -45,7 +63,7 @@ test('PowerShell patch: dry run, backup, apply and second-run idempotency on fix
   assert.match(invoke(root, '-Apply', '-Confirm:$false'), /Already patched/);
   assert.equal(readFileSync(file, 'utf8'), patched);
 });
-test('PowerShell patch preflights every anchor before any writes', { skip: process.platform !== 'win32' }, () => {
+test('PowerShell patch preflights every anchor before any writes', { skip: !shell }, () => {
   const root = hostFixture();
   const file = join(root, 'src/server.ts');
   const original = readFileSync(file, 'utf8');

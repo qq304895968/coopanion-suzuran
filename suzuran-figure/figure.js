@@ -241,9 +241,11 @@ function createFigure(MODEL, scene, url) {
 
   let skel = null, state = null;
   let bones = {};
-  let legRest = null;      // 两侧踝关节在模型空间里的休息位置 [[x,y],[x,y]]
+  let legRest = null;                    // 两侧踝关节在模型空间里的休息位置 [[x,y],[x,y]]
+  let tailRoots = [], tailLeaves = [];   // 尾巴的根骨 / 尾巴中段
   let post = new Map();
   let pivotEye = null, pivotMouth = null;
+  let eyeSide = [null, null];      // 左/右眼各自的中点
   let stunSlots = [];              // [{ slot, att }]
   let hideOnDizzy = [];
   let pendingNext = false, seq = [];
@@ -252,6 +254,10 @@ function createFigure(MODEL, scene, url) {
   const want = { ...pose };
   let lastT = -1;
   let blinkK = 0, blinkL = 0, blinkR = 0, talkK = 0, dizzyK = 0, lookX = 0, lookY = 0, eyeWidePose = 0;
+  let sleepK = 0;                  // 睡觉闭眼程度 0..1
+  let closedArt = [];              // 模型自带的闭眼图 [{ slot, att }]
+  let openEyeSlots = [];           // 闭眼时要藏起来的睁眼零件
+  let sleepEyes = { keep: new Set(), hide: new Set() };   // 没有闭眼图时，睡觉留哪块、藏哪块
   let mounted = false;
 
   const animOf = (role) => outfit.roleAnim?.[role] || null;
@@ -289,6 +295,15 @@ function createFigure(MODEL, scene, url) {
       bones[role] = next.limbs?.[role] ? skel.findBone(next.limbs[role]) : null;
     }
 
+    // 尾巴骨：根骨（父骨不是尾巴）各摆各的，中段再叠一层相位
+    tailRoots = [];
+    tailLeaves = [];
+    for (const b of skel.bones) {
+      if (!/Tail/i.test(b.data.name)) continue;
+      const parentIsTail = b.data.parent && /Tail/i.test(b.data.parent.name);
+      (parentIsTail ? tailLeaves : tailRoots).push(b);
+    }
+
     // 量一次两侧踝关节：腿长各套服装不一样，IK 要照着它自己的骨架来
     legRest = null;
     if (bones.legL && bones.legR) {
@@ -309,6 +324,25 @@ function createFigure(MODEL, scene, url) {
 
     // 脸：眨眼/张嘴是"一组槽位绕公共中心压扁"，不依赖骨骼支点，四套服装通用
     const face = next.face || {};
+    // 睡觉要闭眼：有的皮肤自带闭眼图（春之颂的 F_L/R_Eyeclose），有就直接换上，
+    // 没有就把眼睛压成一条线（下面的 blinkK）。
+    closedArt = [];
+    openEyeSlots = [];
+    if (face.closed?.length) {
+      const art = [];
+      for (const name of face.closed) {
+        const slot = skel.findSlot(name);
+        if (!slot) continue;
+        const att = rec.data.defaultSkin?.getAttachment(slot.data.index, name) || slot.getAttachment();
+        if (att) art.push({ slot, att, name });
+      }
+      if (art.length) {
+        closedArt = art;
+        const closedNames = new Set(art.map(a => a.name));
+        openEyeSlots = (face.eyes || []).filter(n => !closedNames.has(n));
+      }
+    }
+
     // 量一次 Idle 第一帧：每个脸的槽位画在哪儿，合起来的中心就是眨眼/张嘴的支点
     const boxes = new Map();
     const measure = (list) => {
@@ -344,6 +378,43 @@ function createFigure(MODEL, scene, url) {
       post.set(name, { kind: 'eye', side: b && pivotEye ? (b.cx < pivotEye.cx ? 0 : 1) : 0, soft: /lash|lid/i.test(name) });
     }
     for (const name of face.mouth || []) post.set(name, { kind: 'mouth' });
+
+    // 左右眼各算一个支点：两只眼睛分开压，才不会往脸中间挤
+    for (const side of [0, 1]) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+      for (const [name, it] of post) {
+        if (it.kind !== 'eye' || it.side !== side) continue;
+        const b = boxes.get(name);
+        if (!b) continue;
+        x0 = Math.min(x0, b.cx - b.w / 2); x1 = Math.max(x1, b.cx + b.w / 2);
+        y0 = Math.min(y0, b.cy - b.h / 2); y1 = Math.max(y1, b.cy + b.h / 2);
+        n++;
+      }
+      eyeSide[side] = n ? { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 } : null;
+    }
+
+    // 没有自带闭眼图的皮肤（默认/雪霁/弃土花开）：整只眼睛一起压成一条线，
+    // 只把比主眼小很多的碎零件（高光等）藏掉，免得压扁以后糊成一块灰斑。
+    sleepEyes = { keep: new Set(), hide: new Set() };
+    if (!closedArt.length) {
+      const bySide = [[], []];
+      for (const name of face.eyes || []) {
+        const b = boxes.get(name);
+        const it = post.get(name);
+        if (!b || !it) continue;
+        bySide[it.side].push({ name, b, soft: it.soft });
+      }
+      for (const list of bySide) {
+        if (!list.length) continue;
+        // 整只眼睛一起压成一条线；只把比主眼小很多的碎零件（高光、眉毛残片）藏掉，
+        // 免得它们被压扁以后变成一块糊在脸侧的灰斑。
+        const maxArea = Math.max(...list.map(x => x.b.area));
+        for (const o of list) {
+          if (o.b.area < maxArea * .35) sleepEyes.hide.add(o.name);
+          else sleepEyes.keep.add(o.name);
+        }
+      }
+    }
 
     // 晕：有的服装自带螺旋眼。螺旋图在皮肤里，但平时挂在一个空槽位上、绘制顺序在脸皮下面，
     // 所以直接按左右两边换到"最大的那只眼睛"的槽位上，再把它同侧其余的零件藏掉（睫毛留着）。
@@ -504,7 +575,18 @@ function createFigure(MODEL, scene, url) {
     const ear = pose.earPerk - pose.earDroop;
     add(bones.earL, ear * .5 + Math.sin(t * 1.7) * 1.2);
     add(bones.earR, -ear * .5 + Math.sin(t * 1.7 + 1.1) * 1.2);
-    add(bones.tail, Math.sin(t * (2.2 + Math.abs(pose.tail) * 2.4)) * (2.2 + Math.abs(pose.tail) * 5) + pose.tail * 4);
+    // 尾巴：绕根骨慢摆（0.25~0.4 Hz），每条尾巴再各自带一点相位差；
+    // 不再整团上下平移——那是把摆幅全压在根骨上的结果。
+    const tailEnergy = Math.abs(pose.tail);
+    const tw = 1.5 + tailEnergy * 1.1;                    // 角速度 rad/s（慢）
+    const tamp = 1.2 + tailEnergy * 1.9;                  // 单条尾巴的摆幅（度）
+    const rootAmp = tailRoots.length > 2 ? tamp * .4 : tamp * .5;
+    for (let i = 0; i < tailRoots.length; i++) {
+      add(tailRoots[i], Math.sin(t * tw + i * .8) * rootAmp + pose.tail * 1.2);
+    }
+    for (let i = 0; i < tailLeaves.length; i++) {
+      add(tailLeaves[i], Math.sin(t * tw + i * 1.15 + .7) * tamp * .45);
+    }
 
     if (frame.mode === 'dizzy') add(bones.head, Math.sin(t * 9) * 5);
     if (pose.shiver) {
@@ -525,8 +607,22 @@ function createFigure(MODEL, scene, url) {
     const batches = [];
     let cur = null;
     const k = outfit.scale, ox = outfit.origin[0], oy = outfit.origin[1];
-    const hideSet = dizzyK > .5 && hideOnDizzy.length ? new Set(hideOnDizzy) : null;
-    const overrides = dizzyK > .5 && stunSlots.length ? new Map(stunSlots.map(s => [s.slot.data.name, s.att])) : null;
+    let hideSet = dizzyK > .5 && hideOnDizzy.length ? new Set(hideOnDizzy) : null;
+    let overrides = dizzyK > .5 && stunSlots.length ? new Map(stunSlots.map(s => [s.slot.data.name, s.att])) : null;
+
+    // 睡觉：没有闭眼图的皮肤只留一条线
+    if (sleepK > .5 && !closedArt.length && sleepEyes.hide.size) {
+      hideSet = hideSet || new Set();
+      for (const n of sleepEyes.hide) hideSet.add(n);
+    }
+
+    // 睡觉：换成模型自带的闭眼图（春之颂那种），顺手把睁眼的零件藏掉
+    if (sleepK > .5 && closedArt.length) {
+      hideSet = hideSet || new Set();
+      for (const n of openEyeSlots) hideSet.add(n);
+      overrides = overrides || new Map();
+      for (const a of closedArt) overrides.set(a.slot.data.name, a.att);
+    }
 
     for (const slot of skel.drawOrder) {
       const name = slot.data.name;
@@ -551,11 +647,13 @@ function createFigure(MODEL, scene, url) {
       const item = post.get(name);
       if (item && item.kind === 'eye' && pivotEye && !outfit.face.nativeBlink) {
         const shut = item.side === 0 ? blinkL : blinkR;
-        const kk = 1 - (item.soft ? .55 : .92) * shut;
+        const deep = sleepK > .5 && !closedArt.length ? .9 : (item.soft ? .55 : .92);
+        const kk = 1 - deep * shut;
         const wide = 1 + .10 * eyeWidePose;
+        const pe = eyeSide[item.side] || pivotEye;
         for (let i = 0; i < n * 2; i += 2) {
-          verts[i] = pivotEye.cx + (verts[i] - pivotEye.cx) * wide;
-          verts[i + 1] = pivotEye.cy + (verts[i + 1] - pivotEye.cy) * kk;
+          verts[i] = pe.cx + (verts[i] - pe.cx) * wide;
+          verts[i + 1] = pe.cy + (verts[i + 1] - pe.cy) * kk;
         }
       } else if (item && item.kind === 'mouth' && pivotMouth) {
         const open = clamp(talkK, 0, 1) * .9 + clamp(pose.mouth, 0, 1) * .45;
@@ -591,18 +689,27 @@ function createFigure(MODEL, scene, url) {
 
   function uvOf(att, n) {
     if (att.type === 0) return att.uvs;
-    let uvs = uvCache.get(att);
-    if (uvs && uvs.length === n * 2) return uvs;
+    const uvs0 = uvCache.get(att);
+    if (uvs0 && uvs0.length === n * 2) return uvs0;
     const reg = att.region, ru = att.regionUVs;
-    uvs = new Float32Array(n * 2);
+    const uvs = new Float32Array(n * 2);
+    uvCache.set(att, uvs);
     const du = reg.u2 - reg.u, dv = reg.v2 - reg.v;
-    if (reg.rotate) {
-      // 图集里躺着的图（rotate: 90）：regionUVs 是没转的坐标，采样时要沿着对角线换一下，
-      // 而且方向是 (1-y, x)——和 RegionAttachment.setRegion 那套 (y, 1-x) 差一个 180°，
-      // 这批 Unity 导出的模型是前者（拿脸部的开孔和眼球对齐验证过）。
+    // 图集里的图可能是 0/90/180/270 度躺着的。regionUVs 存的是没转的自然坐标，
+    // 采样时按旋转角度把 (x, y) 换到页面上的位置：
+    //   0   → (x, y)        90  → (y, 1-x)
+    //   180 → (1-x, 1-y)    270 → (1-y, x)
+    const rot = reg.rotate || 0;
+    if (rot === 90 || rot === 270) {
       for (let i = 0; i < n * 2; i += 2) {
-        uvs[i] = reg.u + du * (1 - ru[i + 1]);
-        uvs[i + 1] = reg.v + dv * ru[i];
+        const rx = ru[i], ry = ru[i + 1];
+        if (rot === 90) { uvs[i] = reg.u + du * ry; uvs[i + 1] = reg.v + dv * (1 - rx); }
+        else { uvs[i] = reg.u + du * (1 - ry); uvs[i + 1] = reg.v + dv * rx; }
+      }
+    } else if (rot === 180) {
+      for (let i = 0; i < n * 2; i += 2) {
+        uvs[i] = reg.u + du * (1 - ru[i]);
+        uvs[i + 1] = reg.v + dv * (1 - ru[i + 1]);
       }
     } else {
       for (let i = 0; i < n * 2; i += 2) {
@@ -657,7 +764,11 @@ function createFigure(MODEL, scene, url) {
       for (const key2 in pose) pose[key2] = lerp(pose[key2], want[key2], k);
 
       const auto = clamp(Math.max(frame.blink || 0, frame.eyeClose || 0), 0, 1);
-      blinkK = Math.max(auto, frame.mode === 'sleep' ? .92 : pose.squint);
+      // 睡觉：一直闭着（不是眨一下就睁），0.45 秒内合上，醒了再睁开
+      const sleepWant = frame.mode === 'sleep' ? 1 : 0;
+      sleepK += (sleepWant - sleepK) * (1 - Math.exp(-dt * 5));
+      if (sleepK < .002) sleepK = 0;
+      blinkK = Math.max(auto, pose.squint, sleepK * (closedArt.length ? 0 : .985));
       blinkL = blinkK;
       blinkR = blinkK;
       if (key === 'wink') blinkR = Math.max(blinkR, .95);

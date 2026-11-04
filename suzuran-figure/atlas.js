@@ -50,7 +50,13 @@ export function parseAtlas(text) {
       case 'size': { const n = val.split(',').map(Number); cur.width = n[0]; cur.height = n[1]; break; }
       case 'orig': { const n = val.split(',').map(Number); cur.originalWidth = n[0]; cur.originalHeight = n[1]; break; }
       case 'offset': { const n = val.split(',').map(Number); cur.offsetX = n[0]; cur.offsetY = n[1]; break; }
-      case 'rotate': cur.rotate = val === 'true' || val === '90' || val === '270'; break;
+      // 3.8 的图集里 rotate 有 0 / true(=90) / 180 / 270 四种，方向不一样，
+      // 不能一律当 90 度处理（F_Face 是 270、F_Skirt 是 true，两者需要的换算正好相反）。
+      case 'rotate': {
+        const v = val.toLowerCase();
+        cur.rotate = v === 'true' ? 90 : v === 'false' ? 0 : (Number(v) || 0);
+        break;
+      }
       default: break;
     }
   }
@@ -60,17 +66,19 @@ export function parseAtlas(text) {
     find(name) { return regions.find(r => r.name === name) || null; },
   };
   for (const r of regions) {
-    if (!r.originalWidth) r.originalWidth = r.rotate ? r.height : r.width;
-    if (!r.originalHeight) r.originalHeight = r.rotate ? r.width : r.height;
+    const quarter = r.rotate === 90 || r.rotate === 270;
+    if (!r.originalWidth) r.originalWidth = quarter ? r.height : r.width;
+    if (!r.originalHeight) r.originalHeight = quarter ? r.width : r.height;
   }
   return atlas;
 }
 
 /** 图集里的一块区域 → RegionAttachment 需要的视图（几何自然尺寸 + 页面外框 UV）。 */
 export function regionView(reg, pageW, pageH) {
-  const rot = !!reg.rotate;
-  const footW = rot ? reg.height : reg.width;
-  const footH = rot ? reg.width : reg.height;
+  const rot = reg.rotate || 0;
+  const quarter = rot === 90 || rot === 270;      // 90/270 度才会把长宽换过来
+  const footW = quarter ? reg.height : reg.width;
+  const footH = quarter ? reg.width : reg.height;
   // 往里收半个像素：图集里两块图挨得紧，双线性采样会把邻居的那一条混进来，
   // 表现在头发、轮廓线边上发灰/变粗。收半个像素就只采自己这一块。
   const hw = pageW ? .5 / pageW : 0, hh = pageH ? .5 / pageH : 0;

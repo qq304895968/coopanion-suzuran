@@ -905,24 +905,34 @@ var _RegionAttachment = class extends Attachment {
   setRegion(region) {
     this.region = region;
     const uvs = this.uvs;
-    if (region.rotate) {
-      uvs[2] = region.u;
-      uvs[3] = region.v2;
-      uvs[4] = region.u;
-      uvs[5] = region.v;
-      uvs[6] = region.u2;
-      uvs[7] = region.v;
-      uvs[0] = region.u2;
-      uvs[1] = region.v2;
-    } else {
-      uvs[0] = region.u;
-      uvs[1] = region.v2;
-      uvs[2] = region.u;
-      uvs[3] = region.v;
-      uvs[4] = region.u2;
-      uvs[5] = region.v;
-      uvs[6] = region.u2;
-      uvs[7] = region.v2;
+    const u = region.u, v = region.v, u2 = region.u2, v2 = region.v2;
+    // 四个角在"没转的自然坐标"里是 c1=(0,1) c2=(0,0) c3=(1,0) c4=(1,1)，
+    // 按图集旋转角度换成页面上的 uv：0→(x,y) 90→(y,1-x) 180→(1-x,1-y) 270→(1-y,x)
+    switch (region.rotate || 0) {
+      case 90:
+        uvs[0] = u2; uvs[1] = v2;   // c1
+        uvs[2] = u; uvs[3] = v2;    // c2
+        uvs[4] = u; uvs[5] = v;     // c3
+        uvs[6] = u2; uvs[7] = v;    // c4
+        break;
+      case 180:
+        uvs[0] = u2; uvs[1] = v;
+        uvs[2] = u2; uvs[3] = v2;
+        uvs[4] = u; uvs[5] = v2;
+        uvs[6] = u; uvs[7] = v;
+        break;
+      case 270:
+        uvs[0] = u; uvs[1] = v;
+        uvs[2] = u2; uvs[3] = v;
+        uvs[4] = u2; uvs[5] = v2;
+        uvs[6] = u; uvs[7] = v2;
+        break;
+      default:
+        uvs[0] = u; uvs[1] = v2;
+        uvs[2] = u; uvs[3] = v;
+        uvs[4] = u2; uvs[5] = v;
+        uvs[6] = u2; uvs[7] = v2;
+        break;
     }
   }
   computeWorldVertices(bone, worldVertices, offset, stride) {

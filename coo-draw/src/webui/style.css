@@ -1,3 +1,254 @@
+/* ---------- Studio 双栏布局 ---------- */
+.coo-draw-studio {
+  display: grid;
+  grid-template-columns: 1.62fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .coo-draw-studio {
+    grid-template-columns: 1fr;
+  }
+}
+.coo-draw-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.coo-draw-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+@media (max-width: 960px) {
+  .coo-draw-right { position: static; }
+}
+
+/* 连接卡片 */
+.coo-conn-card {
+  border: 1px solid var(--line, rgba(127,127,127,.18));
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(127,127,127,.04);
+}
+.coo-conn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.coo-conn-title { font-weight: 600; }
+.coo-conn-badge { font-size: 12px; }
+.coo-conn-meta {
+  font-size: 11.5px;
+  line-height: 1.45;
+  opacity: .72;
+  word-break: break-all;
+}
+.coo-conn-meta div { margin: 2px 0; }
+.coo-conn-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.coo-conn-url-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.coo-conn-url-row input { flex: 1; min-width: 160px; }
+
+/* 参数分组 */
+.coo-group {
+  border: 1px solid var(--line, rgba(127,127,127,.14));
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(127,127,127,.02);
+  margin-top: 8px;
+}
+.coo-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .75;
+  margin-bottom: 8px;
+  letter-spacing: .02em;
+}
+.coo-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+.coo-group-grid .field { min-width: 0; }
+.coo-size-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.coo-size-row .field { flex: 1; min-width: 90px; }
+.coo-swap-btn { align-self: flex-end; margin-bottom: 2px; }
+
+/* 高级折叠 */
+.coo-adv-toggle {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px dashed var(--line, rgba(127,127,127,.25));
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: .8;
+}
+.coo-adv-body {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.coo-adv-body.hidden { display: none; }
+
+/* checkpoint 空状态 */
+.coo-empty-card {
+  border: 1px solid rgba(220,80,80,.35);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(220,80,80,.06);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.coo-empty-card .title { font-weight: 600; margin-bottom: 6px; }
+.coo-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* 底部 sticky 操作栏 */
+.coo-sticky-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg, #fff);
+  border: 1px solid var(--line, rgba(127,127,127,.18));
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.06);
+  margin-top: 8px;
+}
+.coo-sticky-bar .hint {
+  margin-right: auto;
+  font-size: 12px;
+  opacity: .65;
+}
+
+/* 进度模块 */
+.coo-progress-card {
+  border: 1px solid var(--line, rgba(127,127,127,.16));
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(127,127,127,.03);
+}
+.coo-progress-idle { font-size: 13px; opacity: .6; }
+.coo-progress-detail { font-size: 12px; opacity: .7; margin-top: 6px; }
+.coo-preview-thumb {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 8px;
+  margin-top: 8px;
+  background: rgba(127,127,127,.06);
+  border: 1px solid var(--line, rgba(127,127,127,.14));
+}
+
+/* LoRA 列表增强 */
+.coo-lora-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.coo-lora-list { max-height: 300px; overflow: auto; }
+
+/* 作品页双栏 */
+.coo-works {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .coo-works { grid-template-columns: 1fr; }
+}
+.coo-works-gallery { min-width: 0; }
+.coo-works-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  align-items: center;
+}
+.coo-works-filters input[type=\"search\"] { flex: 1; min-width: 160px; }
+.coo-works-detail {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 960px) { .coo-works-detail { position: static; } }
+.coo-works-preview {
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--line, rgba(127,127,127,.18));
+  background: rgba(127,127,127,.06);
+}
+.coo-meta-grid {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 4px 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  align-items: center;
+}
+.coo-meta-grid .k { opacity: .62; }
+.coo-meta-grid .v { word-break: break-all; }
+.coo-ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.coo-works-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.coo-works-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1.5px solid var(--line, rgba(127,127,127,.18));
+  border-radius: 9px;
+  background: rgba(127,127,127,.04);
+  cursor: pointer;
+  text-align: left;
+}
+.coo-works-tile.sel { border-color: var(--accent, #5b8def); box-shadow: 0 0 0 2px rgba(91,141,239,.18); }
+.coo-works-tile img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: rgba(127,127,127,.08); }
+.coo-works-tile .lab {
+  padding: 4px 6px;
+  font-size: 11px;
+  opacity: .72;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coo-works-tile .chk {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(255,255,255,.9);
+  border-radius: 4px;
+  padding: 1px;
+}
+.coo-batch-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+
+/* 复用旧样式 */
 .coo-gen-preview {
   display: block;
   max-width: 100%;
@@ -9,14 +260,12 @@
   object-fit: contain;
   background: rgba(127, 127, 127, 0.06);
 }
-
 .coo-gen-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 8px;
   margin: 4px 0 8px;
 }
-
 .coo-gen-tile {
   display: flex;
   flex-direction: column;
@@ -30,11 +279,7 @@
   cursor: zoom-in;
   text-align: left;
 }
-
-.coo-gen-tile:hover {
-  border-color: var(--accent, #5b8def);
-}
-
+.coo-gen-tile:hover { border-color: var(--accent, #5b8def); }
 .coo-gen-thumb {
   display: block;
   width: 100%;
@@ -42,7 +287,6 @@
   object-fit: cover;
   background: rgba(127, 127, 127, 0.08);
 }
-
 .coo-gen-tile-label {
   display: block;
   padding: 4px 6px;
@@ -52,7 +296,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .coo-gen-lora-thumb {
   display: block;
   width: 46px;
@@ -62,42 +305,16 @@
   background: rgba(127, 127, 127, 0.08);
   cursor: zoom-in;
 }
-
 .coo-gen-sub {
   font-size: 11px;
   line-height: 1.35;
   opacity: 0.62;
   word-break: break-all;
 }
-
-.coo-gen-weight {
-  width: 5.5rem;
-  min-width: 0;
-}
-
-.coo-gen-num {
-  width: 5.25rem;
-  min-width: 0;
-}
-
-.coo-gen-extra {
-  margin-top: 6px;
-}
-
-.coo-gen-extra .rowbar {
-  margin-bottom: 6px;
-}
-
-.coo-gen-default-btn {
-  cursor: default;
-  opacity: 1;
-}
-
-.coo-gen td {
-  vertical-align: middle;
-}
-
-.coo-gen .rowbar {
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.coo-gen-weight { width: 5.5rem; min-width: 0; }
+.coo-gen-num { width: 5.25rem; min-width: 0; }
+.coo-gen-extra { margin-top: 6px; }
+.coo-gen-extra .rowbar { margin-bottom: 6px; }
+.coo-gen-default-btn { cursor: default; opacity: 1; }
+.coo-gen td { vertical-align: middle; }
+.coo-gen .rowbar { flex-wrap: wrap; gap: 6px; }

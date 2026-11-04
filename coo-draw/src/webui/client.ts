@@ -1,15 +1,14 @@
 /**
- * 「画室」的两个页签：
- * - api：画夹 + 今天还能画几张（沿用 pet-draw 的画夹面板）；
- * - local：用分段器切换「出图 / LoRA 管理 / 工作流」，三段都是原来的 coo-gen 面板，
- *   通过 mountSlot 嵌进来，invoke 仍按各自的 panel id 路由。
+ * 「画室」顶层面板：
+ * - api：画夹（精简，不再展示冗余的顶部标签；画风/额度等移至配置或用图标入口）
+ * - local：本地出图 —— 二级分段器：出图 / 作品 / LoRA 管理 / 工作流
  */
 import type {
   Disposable, WebUiClientBundle, WebUiPanel, WebUiPanelContext,
 } from 'cortico/web/shared/client-panel.ts';
 import './style.css';
 import { folderPanel } from './parts/api-client.ts';
-import { studioPanel, lorasPanel, workflowsPanel } from './parts/local-client.ts';
+import { studioPanel, lorasPanel, workflowsPanel, worksPanel } from './parts/local-client.ts';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -40,6 +39,7 @@ const STYLE_LABELS: ReadonlyArray<{ value: string; zh: string; en: string }> = [
   { value: 'custom', zh: '自定义画风', en: 'Custom style' },
 ];
 
+// 精简后的 API 面板：只保留画夹与必要说明，去除旧的顶部状态标签
 const apiPanel: WebUiPanel = {
   async mount(ctx: WebUiPanelContext): Promise<void> {
     const zh = ctx.language.startsWith('zh');
@@ -47,118 +47,41 @@ const apiPanel: WebUiPanel = {
 
     await folderPanel.mount(ctx);
 
-    let settings: ApiSettings;
+    // 轻量诊断入口（📊 图标按钮）—— 状态信息移至配置或按需查看
+    let settings: ApiSettings | null = null;
     try {
       settings = await ctx.invoke<ApiSettings>('settings');
-    } catch (error) {
-      const line = ctx.ui.msgline(`${t('读取画风失败：', 'Failed to load style: ')}${message(error)}`, true);
-      ctx.root.append(line);
-      return;
+    } catch {
+      // 读不到也不阻塞画夹
     }
 
-    const styleSheet = ctx.ui.sheet({
-      title: t('画风与额度', 'Style & quota'),
-      desc: t(
-        '画风固定后不会因为别人要求就换。两处路由在 World 设置里改；这里只改共用的人设设定。',
-        'The style is fixed; the two routes live in World settings. These are the shared persona settings.',
-      ),
-    });
-    const styleSelect = ctx.ui.select({
-      value: settings.style,
-      options: STYLE_LABELS.map((item) => ({ value: item.value, label: zh ? item.zh : item.en })),
-      onChange: (value: string) => {
-        void ctx.setConfig('world:draw', { 'worlds.draw.style': value })
-          .then(() => { status.textContent = t('画风已保存', 'Style saved'); status.classList.remove('bad'); })
-          .catch((error: unknown) => { status.textContent = message(error); status.classList.add('bad'); });
-      },
-    });
-    const customInput = ctx.ui.input({
-      value: settings.customStyle,
-      placeholder: t('画风选「自定义」时用这段说明', 'Used when the style is “Custom”'),
-      cls: 'grow',
-    });
-    const customSave = ctx.ui.button(t('保存说明', 'Save note'), {
-      size: 'sm',
-      onClick: () => {
-        void ctx.setConfig('world:draw', { 'worlds.draw.customStyle': customInput.value })
-          .then(() => { status.textContent = t('画风说明已保存', 'Style note saved'); status.classList.remove('bad'); })
-          .catch((error: unknown) => { status.textContent = message(error); status.classList.add('bad'); });
-      },
-    });
-    const customRow = ctx.ui.rowbar();
-    customRow.append(customInput, customSave);
-
-    const limitInput = ctx.ui.input({ type: 'number', value: String(settings.dailyLimit), cls: 'mono' });
-    const limitSave = ctx.ui.button(t('保存额度', 'Save limit'), {
-      size: 'sm',
-      onClick: () => {
-        const value = Math.max(0, Math.min(200, Number(limitInput.value) || 0));
-        void ctx.setConfig('world:draw', { 'worlds.draw.dailyLimit': value })
-          .then(() => {
-            limitInput.value = String(value);
-            status.textContent = t('额度已保存', 'Limit saved');
-            status.classList.remove('bad');
-          })
-          .catch((error: unknown) => { status.textContent = message(error); status.classList.add('bad'); });
-      },
-    });
-    const limitRow = ctx.ui.rowbar();
-    limitRow.append(ctx.ui.field(t('每天最多', 'Per day'), limitInput), limitSave);
-
-    const routeName = (value: string): string => (value === 'local' ? t('本地 ComfyUI', 'Local ComfyUI') : t('API（千问）', 'API (Qianwen)'));
-    const routeLine = ctx.ui.msgline(t(
-      `桌宠主动画：${routeName(settings.routePet)} · 日记配图：${routeName(settings.routeDiary)}（在 World 设置里改）`,
-      `Pet drawings: ${routeName(settings.routePet)} · Diary: ${routeName(settings.routeDiary)} (change in World settings)`,
-    ));
-    const status = ctx.ui.msgline('');
-
-    styleSheet.body.append(
-      ctx.ui.field(t('画风', 'Style'), styleSelect),
-      customRow,
-      routeLine,
-      limitRow,
-      status,
-    );
-    ctx.root.append(styleSheet.el);
-
-    const sheet = ctx.ui.sheet({
-      title: t('额度', 'Quota'),
-      desc: t(
-        '今天还能画几张、每次上限；API 路线的限流来自千问。本地路线不吃这里的额度。',
-        'How many are left today and the per-call cap; the API route uses Qianwen rate limits. The local route does not consume this quota.',
-      ),
-    });
-    const line = ctx.ui.msgline(t('正在查…', 'Checking…'));
-    const refresh = ctx.ui.button(t('刷新', 'Refresh'), {
-      size: 'sm',
-      onClick: () => { void load(true); },
-    });
-    const row = ctx.ui.rowbar();
-    row.append(refresh);
-    sheet.body.append(line, row);
-    ctx.root.append(sheet.el);
-
-    const load = async (force = false): Promise<void> => {
-      line.classList.remove('bad');
-      line.textContent = t('正在查…', 'Checking…');
-      try {
-        const outcome = await ctx.invoke<QuotaOutcome>('quota', [force]);
-        line.textContent = outcome.text.replace(/^\[quota\]\s*/, '');
-        line.classList.toggle('bad', outcome.failed === true);
-      } catch (error) {
-        line.classList.add('bad');
-        line.textContent = message(error);
-      }
-    };
-
-    await load();
+    if (settings) {
+      const row = ctx.ui.rowbar();
+      const info = ctx.ui.msgline(t(
+        `画风：${settings.style} · 路由：主动画 ${settings.routePet === 'local' ? '本地' : 'API'} / 日记 ${settings.routeDiary === 'local' ? '本地' : 'API'}（在 World 设置里改）`,
+        `Style: ${settings.style} · Route: pet ${settings.routePet} / diary ${settings.routeDiary} (in World settings)`,
+      ));
+      const diag = ctx.ui.button('📊', {
+        size: 'sm', variant: 'plain',
+        onClick: async () => {
+          try {
+            const q = await ctx.invoke<QuotaOutcome>('quota', [true]);
+            ctx.ui.toast(q.text.replace(/^\[quota\]\s*/, ''), q.failed ? 'bad' : 'ok');
+          } catch (e) { ctx.ui.toast(message(e), 'bad'); }
+        },
+      });
+      diag.title = t('查看额度/路由详情', 'View quota/route');
+      row.append(info, diag);
+      ctx.root.append(row);
+    }
   },
 };
 
 const LOCAL_SUBS = [
-  { value: 'studio', label: ['出图', 'Studio'], panel: studioPanel },
-  { value: 'loras', label: ['LoRA 管理', 'LoRAs'], panel: lorasPanel },
-  { value: 'workflows', label: ['工作流', 'Workflows'], panel: workflowsPanel },
+  { value: 'studio', label: ['出图', 'Studio'], panel: studioPanel, backend: 'studio' as const },
+  { value: 'works', label: ['作品', 'Works'], panel: worksPanel, backend: 'studio' as const },
+  { value: 'loras', label: ['LoRA 管理', 'LoRAs'], panel: lorasPanel, backend: 'loras' as const },
+  { value: 'workflows', label: ['工作流', 'Workflows'], panel: workflowsPanel, backend: 'workflows' as const },
 ] as const;
 
 const localPanel: WebUiPanel = {
@@ -182,10 +105,17 @@ const localPanel: WebUiPanel = {
     let disposables: Disposable[] = [];
     let current = '';
 
+    // 供子面板触发切换（例如生成完成后“查看作品 →”）
+    const switchTo = (value: string): void => { void show(value); };
+    // 子面板可通过自定义事件请求切换
+    host.addEventListener('coo-switch-tab', (e: Event) => {
+      const detail = (e as CustomEvent).detail as string;
+      if (detail && LOCAL_SUBS.some(s => s.value === detail)) switchTo(detail);
+    });
+
     async function show(value: string): Promise<void> {
       if (value === current) return;
       current = value;
-      // 切换子面板：先撤掉上一块的监听和资源，再挂新的。
       controller?.abort();
       for (const item of disposables.splice(0)) {
         try { item.dispose(); } catch { /* 已释放 */ }
@@ -199,20 +129,23 @@ const localPanel: WebUiPanel = {
 
       const entry = LOCAL_SUBS.find((item) => item.value === value);
       if (!entry) return;
-      // 子面板拿到的 ctx 仍属于「本地出图」面板，但 invoke 加前缀转发给原 studio/loras/workflows。
-      const child: WebUiPanelContext = {
+      // 作品页复用 studio 后端；其它按 backend 前缀转发
+      const prefix = entry.backend;
+      const child: WebUiPanelContext & { switchTab?: (v: string) => void } = {
         ...ctx,
         root: host,
         signal: controller.signal,
-        invoke: (method: string, args?: unknown[]) => ctx.invoke(`${value}.${method}`, args),
-        invokeBinary: (method: string, args?: unknown[]) => ctx.invokeBinary(`${value}.${method}`, args),
+        invoke: (method: string, args?: unknown[]) => ctx.invoke(`${prefix}.${method}`, args),
+        invokeBinary: (method: string, args?: unknown[]) => ctx.invokeBinary(`${prefix}.${method}`, args),
         own: <T extends Disposable>(item: T): T => {
           disposables.push(item);
           return item;
         },
-      };
+      } as any;
+      (child as any).switchTab = switchTo;
+
       try {
-        await entry.panel.mount(child);
+        await entry.panel.mount(child as WebUiPanelContext);
       } catch (error) {
         host.append(ctx.ui.msgline(`${t('面板加载失败：', 'Panel failed: ')}${message(error)}`, true));
       }
@@ -238,6 +171,7 @@ const bundle: WebUiClientBundle = {
     studio: studioPanel,
     loras: lorasPanel,
     workflows: workflowsPanel,
+    works: worksPanel,
   },
 };
 

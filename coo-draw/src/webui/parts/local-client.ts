@@ -1,6 +1,7 @@
-﻿/**
- * 「出图」面板：连接、参数、LoRA、工作流、进度、结果与历史。
- * 只通过 WebUiPanelContext 与宿主交互；不碰 document.body。
+/**
+ * 「本地出图」子面板：出图（左右分栏）+ 作品（新增）+ LoRA 管理 + 工作流
+ * - 出图：左栏参数 + 右栏连接/进度，支持空 checkpoint 提示、尺寸联动、分组展示
+ * - 作品：缩略图画廊 + 详情操作，已与出图共享历史与进度状态
  */
 import type {
   WebUiPanel, WebUiPanelContext, WebUiProgress, WebUiTable,
@@ -15,7 +16,6 @@ interface HistoryResponse {
   history: HistoryEntry[];
   total: number;
 }
-
 interface PresetDetail {
   ok: boolean;
   preset?: {
@@ -28,7 +28,6 @@ interface PresetDetail {
   };
   error?: string;
 }
-
 interface LoraListResponse {
   loras: LoRARecord[];
   defaults: DefaultLoRA[];
@@ -39,16 +38,13 @@ interface LoraListResponse {
 function errText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
 function num(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
-
 function splitList(text: string): string[] {
   return text.split(/[,，;；\n]/).map((item) => item.trim()).filter(Boolean);
 }
-
 function setOptions(select: HTMLSelectElement, values: readonly string[], selected: string): void {
   select.replaceChildren();
   for (const value of values) {
@@ -65,26 +61,59 @@ function setOptions(select: HTMLSelectElement, values: readonly string[], select
   }
   if (selected) select.value = selected;
 }
-
 function objectUrl(ctx: WebUiPanelContext, blob: Blob): string {
   const url = URL.createObjectURL(blob);
   ctx.own({ dispose: () => URL.revokeObjectURL(url) });
   return url;
 }
-
 function pill(ctx: WebUiPanelContext, text: string, tone?: 'on' | 'off' | 'plain'): HTMLSpanElement {
   return ctx.ui.pill(text, tone);
 }
-
 function shortDate(ts: number): string {
   try {
     return new Date(ts).toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
+  } catch { return ''; }
+}
+function stripExt(name: string): string {
+  return name.replace(/\.(safetensors|ckpt|pt|pth)$/i, '');
 }
 
+// 共享内存：跨子 Tab 保持生成状态，避免切换后进度丢失
+interface SharedDrawState {
+  boot: CooGenBootstrap | null;
+  checkpoints: string[];
+  loras: LoRARecord[];
+  controlNets: string[];
+  presets: WorkflowSummary[];
+  history: HistoryEntry[];
+  current: GenerateTaskView | null;
+  lastFinished: string;
+  resultEntry: HistoryEntry | null;
+  resultUrl: string;
+}
+const shared: SharedDrawState = {
+  boot: null,
+  checkpoints: [],
+  loras: [],
+  controlNets: [],
+  presets: [],
+  history: [],
+  current: null,
+  lastFinished: '',
+  resultEntry: null,
+  resultUrl: '',
+};
+
 /* ------------------------------------------------------------------ studio */
+
+const SIZE_PRESETS: Array<{ value: string; labelZh: string; labelEn: string; w: number; h: number }> = [
+  { value: '768x1152', labelZh: '768×1152 竖图', labelEn: '768×1152 portrait', w: 768, h: 1152 },
+  { value: '512x768', labelZh: '512×768', labelEn: '512×768', w: 512, h: 768 },
+  { value: '1024x1024', labelZh: '1024×1024 方图', labelEn: '1024×1024 square', w: 1024, h: 1024 },
+  { value: '1152x768', labelZh: '1152×768 横图', labelEn: '1152×768 landscape', w: 1152, h: 768 },
+  { value: '832x1216', labelZh: '832×1216', labelEn: '832×1216', w: 832, h: 1216 },
+  { value: 'custom', labelZh: '自定义', labelEn: 'Custom', w: 0, h: 0 },
+];
 
 const studioPanel: WebUiPanel = {
   async mount(ctx: WebUiPanelContext): Promise<void> {
@@ -97,12 +126,19 @@ const studioPanel: WebUiPanel = {
     try {
       boot = await ctx.invoke<CooGenBootstrap>('bootstrap');
     } catch (error) {
-      const sheet = ctx.ui.sheet({ title: t('出图', 'Image studio') });
+      const sheet = ctx.ui.sheet({ title: t('出图', 'Studio') });
       sheet.body.append(ctx.ui.msgline(t('读取失败：', 'Failed: ') + errText(error), true));
       ctx.root.append(sheet.el);
       return;
     }
     if (!alive) return;
+    shared.boot = boot;
+    shared.checkpoints = boot.checkpoints;
+    shared.loras = boot.loras;
+    shared.controlNets = boot.control_nets ?? [];
+    shared.presets = boot.presets;
+    if (!shared.history.length) shared.history = boot.history;
+    if (!shared.current) shared.current = boot.task;
 
     const state = {
       workflow: boot.workflow,
@@ -124,222 +160,41 @@ const studioPanel: WebUiPanel = {
       controlStrength: undefined as number | undefined,
       loras: new Map<string, number>(),
       custom: {} as Record<string, string | number>,
+      sizePreset: '768x1152',
     };
+    // 初始化尺寸预设联动：根据初始宽高匹配预设
+    {
+      const match = SIZE_PRESETS.find(p => p.w === state.width && p.h === state.height);
+      state.sizePreset = match ? match.value : 'custom';
+    }
     for (const lora of boot.defaults) state.loras.set(lora.path, lora.weight);
 
     let loras = boot.loras;
     let checkpoints = boot.checkpoints;
     let controlNets = boot.control_nets ?? [];
     let presets = boot.presets;
-    let history = boot.history;
-    let current: GenerateTaskView | null = boot.task;
-    let lastFinished = '';
-    let resultUrl = '';
-    let resultEntry: HistoryEntry | null = null;
-    let resultTaskId = '';
+    let history = shared.history;
+    let current: GenerateTaskView | null = shared.current;
+    let lastFinished = shared.lastFinished;
+    let resultEntry: HistoryEntry | null = shared.resultEntry;
+    let resultUrl = shared.resultUrl;
     let busy = false;
 
-    ctx.own({ dispose: () => { if (resultUrl) URL.revokeObjectURL(resultUrl); } });
+    // 包装容器
+    const root = ctx.ui.h('div', 'coo-draw-studio');
+    const left = ctx.ui.h('div', 'coo-draw-left');
+    const right = ctx.ui.h('div', 'coo-draw-right');
+    root.append(left, right);
+    ctx.root.append(root);
 
-    /* ------------------------------------------------------------- connection */
-
-    const conn = ctx.ui.sheet({
-      title: t('连接', 'Connection'),
-      desc: t('出图走本机 ComfyUI；离线时点「一键启动」或手动启动。', 'Pictures come from local ComfyUI; start it with the button or by hand.'),
+    /* --------------------------- 左栏：参数设置 --------------------------- */
+    const paramSheet = ctx.ui.sheet({
+      title: t('参数设置', 'Parameters'),
+      desc: t('正向/反向提示词、模型与采样参数；支持尺寸预设联动与高级折叠。', 'Prompt, checkpoint and sampler settings; size presets are linked and advanced section is collapsible.'),
     });
-    ctx.root.append(conn.el);
+    left.append(paramSheet.el);
 
-    const healthLine = ctx.ui.msgline('');
-    const healthMeta = ctx.ui.msgline('');
-    const urlRow = ctx.ui.rowbar();
-    const urlInput = ctx.ui.input({ value: boot.config.url, cls: 'mono' });
-    urlInput.style.flex = '1';
-    urlInput.style.minWidth = '240px';
-    const saveUrl = ctx.ui.button(t('保存地址', 'Save URL'), { size: 'sm' });
-    const checkBtn = ctx.ui.button(t('检测', 'Check'), { size: 'sm' });
-    const launchBtn = ctx.ui.button(t('一键启动', 'Launch'), { size: 'sm', variant: 'primary' });
-    launchBtn.disabled = !boot.launch.configured;
-    const stopBtn = ctx.ui.button(t('关闭 ComfyUI', 'Stop ComfyUI'), { size: 'sm', variant: 'plain' });
-    stopBtn.disabled = !boot.launch.stop_configured;
-    const refreshBtn = ctx.ui.button(t('刷新模型/LoRA', 'Refresh models/LoRAs'), { size: 'sm' });
-    urlRow.append(urlInput, saveUrl, checkBtn, launchBtn, stopBtn, refreshBtn);
-    conn.body.append(healthLine, healthMeta, urlRow);
-
-    if (!boot.launch.configured || !boot.launch.stop_configured) {
-      conn.body.append(ctx.ui.msgline(t(
-        !boot.launch.configured
-          ? '没有配置启动脚本。到 World 设置里填「ComfyUI 启动脚本」（.bat / .ps1 / .exe）后这里就能一键启动。'
-          : '没有配置关闭脚本。到 World 设置里填「ComfyUI 关闭脚本」后这里就能一键关闭。',
-        !boot.launch.configured
-          ? 'No launch script configured. Set “ComfyUI launch script” in World settings.'
-          : 'No stop script configured. Set “ComfyUI stop script” in World settings.',
-      ), true));
-    }
-    if (boot.warnings.length) {
-      const warn = ctx.ui.msgline(boot.warnings.join(' · '), true);
-      conn.body.append(warn);
-    }
-
-    const renderHealth = (health: CooGenBootstrap['health']): void => {
-      healthLine.classList.toggle('bad', !health.ok);
-      healthLine.textContent = health.ok
-        ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`)
-        : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
-      healthMeta.textContent = [
-        t('地址', 'URL'),
-        health.url,
-        ...(health.devices?.length ? [health.devices[0]!] : []),
-        t('已保存', 'output'),
-        boot.config.output_dir,
-      ].join(' · ');
-    };
-    renderHealth(boot.health);
-
-    const applyModelRefresh = (res: {
-      checkpoints: string[];
-      samplers: string[];
-      schedulers: string[];
-      control_nets: string[];
-      loras: LoRARecord[];
-      health: CooGenBootstrap['health'];
-    }): void => {
-      checkpoints = res.checkpoints;
-      loras = res.loras;
-      controlNets = res.control_nets ?? [];
-      boot.health = res.health;
-      setOptions(checkpointSelect, checkpoints, state.checkpoint);
-      if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
-      setOptions(samplerSelect, res.samplers, state.sampler);
-      setOptions(schedulerSelect, res.schedulers, state.scheduler);
-      renderHealth(res.health);
-      renderLoraTable();
-      renderHealthMeta();
-      renderExtra();
-    };
-
-    const renderHealthMeta = (): void => {
-      healthMeta.textContent = [
-        t('地址', 'URL'),
-        boot.config.url,
-        `${t('Checkpoint', 'checkpoints')} ${checkpoints.length}`,
-        `LoRA ${loras.length}`,
-        t('默认', 'defaults'),
-        boot.defaults.length,
-        t('输出', 'output'),
-        boot.config.output_dir,
-      ].join(' · ');
-    };
-
-    saveUrl.addEventListener('click', () => {
-      const value = urlInput.value.trim();
-      if (!/^https?:\/\//i.test(value)) {
-        healthLine.classList.add('bad');
-        healthLine.textContent = t('地址要以 http:// 或 https:// 开头', 'The URL must start with http:// or https://');
-        return;
-      }
-      void (async () => {
-        try {
-          await ctx.setConfig('world:draw-local', { 'worlds.draw.localUrl': value });
-          boot.config.url = value;
-          ctx.ui.toast(t('地址已保存，正在检测…', 'URL saved; checking…'));
-          const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health');
-          boot.health = res.health;
-          renderHealth(res.health);
-          await doRefreshModels();
-        } catch (error) {
-          healthLine.classList.add('bad');
-          healthLine.textContent = errText(error);
-        }
-      })();
-    }, { signal: ctx.signal });
-
-    const doRefreshModels = async (): Promise<void> => {
-      try {
-        const res = await ctx.invoke<{
-          checkpoints: string[]; diffusion_models?: string[]; model_root?: string;
-          samplers: string[]; schedulers: string[]; control_nets: string[];
-          loras: LoRARecord[]; health: CooGenBootstrap['health'];
-        }>('refreshModels');
-        if (!alive) return;
-        applyModelRefresh(res);
-      } catch (error) {
-        healthLine.classList.add('bad');
-        healthLine.textContent = t('刷新失败：', 'Refresh failed: ') + errText(error);
-      }
-    };
-
-    refreshBtn.addEventListener('click', () => { void doRefreshModels(); }, { signal: ctx.signal });
-
-    checkBtn.addEventListener('click', () => {
-      void (async () => {
-        try {
-          const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health');
-          if (!alive) return;
-          boot.health = res.health;
-          renderHealth(res.health);
-          if (res.health.ok) await doRefreshModels();
-        } catch (error) {
-          healthLine.classList.add('bad');
-          healthLine.textContent = errText(error);
-        }
-      })();
-    }, { signal: ctx.signal });
-
-    launchBtn.addEventListener('click', () => {
-      void (async () => {
-        const busyHandle = ctx.ui.busy(t('启动 ComfyUI', 'Launching ComfyUI'), t('等待 /system_stats 就绪…', 'Waiting for /system_stats…'));
-        launchBtn.disabled = true;
-        stopBtn.disabled = true;
-        try {
-          const res = await ctx.invoke<{ ok: boolean; message: string }>('launch');
-          if (!alive) return;
-          ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad');
-          healthLine.classList.toggle('bad', !res.ok);
-          healthLine.textContent = res.message;
-          if (res.ok) await doRefreshModels();
-        } catch (error) {
-          ctx.ui.toast(errText(error), 'bad');
-        } finally {
-          busyHandle.dispose();
-          launchBtn.disabled = !boot.launch.configured;
-          stopBtn.disabled = !boot.launch.stop_configured;
-        }
-      })();
-    }, { signal: ctx.signal });
-
-    stopBtn.addEventListener('click', () => {
-      void (async () => {
-        const busyHandle = ctx.ui.busy(t('关闭 ComfyUI', 'Stopping ComfyUI'), t('正在等待进程退出…', 'Waiting for the process to exit…'));
-        stopBtn.disabled = true;
-        launchBtn.disabled = true;
-        try {
-          const res = await ctx.invoke<{ ok: boolean; message: string }>('stop');
-          if (!alive) return;
-          ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad');
-          healthLine.classList.toggle('bad', !res.ok);
-          healthLine.textContent = res.message;
-          const health = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health');
-          if (!alive) return;
-          boot.health = health.health;
-          renderHealth(health.health);
-        } catch (error) {
-          ctx.ui.toast(errText(error), 'bad');
-        } finally {
-          busyHandle.dispose();
-          launchBtn.disabled = !boot.launch.configured;
-          stopBtn.disabled = !boot.launch.stop_configured;
-        }
-      })();
-    }, { signal: ctx.signal });
-
-    /* --------------------------------------------------------------- generate */
-
-    const gen = ctx.ui.sheet({
-      title: t('生成', 'Generate'),
-      desc: t('用户自己的图：模型、LoRA、采样参数都在这里选。', 'Your own picture: pick checkpoint, LoRAs and sampler settings here.'),
-    });
-    ctx.root.append(gen.el);
-
+    // 工作流
     const workflowRow = ctx.ui.rowbar();
     const workflowSelect = ctx.ui.select({
       options: presets.map((item) => ({
@@ -350,188 +205,296 @@ const studioPanel: WebUiPanel = {
     workflowSelect.value = state.workflow;
     workflowRow.append(ctx.ui.field(t('工作流', 'Workflow'), workflowSelect));
     const workflowHint = ctx.ui.msgline('');
-    gen.body.append(workflowRow, workflowHint);
+    // 参数映射 ℹ️ 图标
+    const infoBtn = ctx.ui.button('ℹ️', { size: 'sm', variant: 'plain' });
+    infoBtn.title = t('查看参数映射', 'View param mapping');
+    infoBtn.addEventListener('click', async () => {
+      try {
+        const res = await ctx.invoke<PresetDetail>('presetDetail', [state.workflow]);
+        if (!res.ok || !res.preset) throw new Error(res.error ?? '读取失败');
+        const body = document.createElement('div');
+        const tbl = ctx.ui.table({ head: ['param', 'node', 'field', 'type'] });
+        for (const m of res.preset.mapping) tbl.addRow([m.param, m.node_id, m.field, m.ui_type]);
+        body.append(tbl.el);
+        if (res.preset.warnings.length) body.append(ctx.ui.msgline(res.preset.warnings.join('；'), true));
+        ctx.ui.drawer(res.preset.name, body);
+      } catch (e) { ctx.ui.toast(errText(e), 'bad'); }
+    });
+    workflowRow.append(infoBtn);
+    paramSheet.body.append(workflowRow, workflowHint);
 
     const positive = ctx.ui.textarea({
-      value: '',
-      rows: 4,
-      placeholder: t('想画什么？例如：塞尔达站在海边看日落，金色时刻，电影感', 'What should it be? e.g. Zelda watching the sunset by the sea, golden hour, cinematic'),
-      onInput: (value) => { state.positive = value; },
-    });
-    positive.style.width = '100%';
-    gen.body.append(ctx.ui.field(t('正向提示词', 'Positive prompt'), positive));
+      value: '', rows: 4,
+      placeholder: t('想画什么？例如：塞尔达站在海边看日落，金色时刻，电影感', 'What should it be? e.g. Zelda watching sunset by sea, golden hour, cinematic'),
+      onInput: (v) => { state.positive = v; },
+    }); positive.style.width = '100%';
+    paramSheet.body.append(ctx.ui.field(t('正向提示词', 'Positive prompt'), positive));
 
     const negative = ctx.ui.textarea({
-      value: state.negative,
-      rows: 2,
-      onInput: (value) => { state.negative = value; },
-    });
-    negative.style.width = '100%';
-    gen.body.append(ctx.ui.field(t('反向提示词', 'Negative prompt'), negative));
+      value: state.negative, rows: 2, onInput: (v) => { state.negative = v; },
+    }); negative.style.width = '100%';
+    paramSheet.body.append(ctx.ui.field(t('反向提示词', 'Negative prompt'), negative));
 
-    const modelRow = ctx.ui.rowbar();
-    const checkpointSelect = ctx.ui.select({ options: [] });
-    setOptions(checkpointSelect, checkpoints, state.checkpoint);
-    checkpointSelect.addEventListener('change', () => { state.checkpoint = checkpointSelect.value; }, { signal: ctx.signal });
-    modelRow.append(ctx.ui.field(t('模型', 'Checkpoint'), checkpointSelect));
-    const loraCount = ctx.ui.msgline('');
-    modelRow.append(loraCount);
-    gen.body.append(modelRow);
-    renderHealthMeta();
+    // 模型 Checkpoint（含空状态）
+    const checkpointWrap = ctx.ui.h('div', '');
+    const checkpointLabel = ctx.ui.h('div', 'coo-group-title', t('模型 Checkpoint', 'Checkpoint'));
+    checkpointWrap.append(checkpointLabel);
+    const checkpointSelect = document.createElement('select') as HTMLSelectElement;
+    checkpointSelect.className = 'select';
+    checkpointSelect.style.width = '100%';
+    const checkpointEmpty = ctx.ui.h('div', 'coo-empty-card');
+    checkpointEmpty.style.display = 'none';
+    checkpointWrap.append(checkpointSelect, checkpointEmpty);
+    paramSheet.body.append(checkpointWrap);
 
+    const renderCheckpointEmpty = (): void => {
+      const needsCheckpoint = (() => {
+        const preset = presets.find(p => p.id === state.workflow);
+        // 若工作流类型为纯 LoRA 或映射中无 checkpoint，则不需要
+        if (preset?.kind && preset.kind !== 'txt2img' && preset.kind !== 'img2img' && preset.kind !== 'controlnet') return false;
+        return true;
+      })();
+      if (!needsCheckpoint) {
+        checkpointSelect.style.display = 'none';
+        checkpointEmpty.style.display = 'block';
+        checkpointEmpty.replaceChildren();
+        const tt = ctx.ui.h('div', 'title', t('当前工作流无需 Checkpoint', 'This workflow does not require a checkpoint'));
+        const sub = ctx.ui.msgline(t('已按工作流自动隐藏模型选择。', 'Checkpoint selection hidden for this workflow.'));
+        checkpointEmpty.append(tt, sub);
+        return;
+      }
+      if (!checkpoints.length) {
+        checkpointSelect.style.display = 'none';
+        checkpointEmpty.style.display = 'block';
+        checkpointEmpty.replaceChildren();
+        const warn = ctx.ui.h('div', 'title', `⚠️ ${t('未检测到 Checkpoint 模型', 'No checkpoint found')}`);
+        const msg = ctx.ui.msgline(t(
+          `当前工作流「${presets.find(p => p.id === state.workflow)?.name ?? state.workflow}」可能需要一个 Checkpoint 模型才能正常出图。`,
+          `Workflow “${presets.find(p => p.id === state.workflow)?.name ?? state.workflow}” may need a checkpoint.`,
+        ));
+        const paths = ctx.ui.msgline(t(`请将模型文件放入：${boot.model_root || boot.config.model_root || boot.config.models_dir || 'ComfyUI/models/checkpoints'}`, `Put model files into: ${boot.model_root || boot.config.model_root || boot.config.models_dir || 'ComfyUI/models/checkpoints'}`));
+        const actions = ctx.ui.rowbar();
+        const openDir = ctx.ui.button(t('打开模型目录', 'Open model folder'), { size: 'sm' });
+        openDir.addEventListener('click', () => { void ctx.invoke('openFolder').catch(() => ctx.ui.toast(t('请在配置里查看模型目录路径', 'Check model path in settings'), 'bad')); });
+        const refresh = ctx.ui.button(t('刷新列表', 'Refresh'), { size: 'sm', variant: 'primary' });
+        refresh.addEventListener('click', () => { void doRefreshModels(); });
+        actions.append(openDir, refresh);
+        checkpointEmpty.append(warn, msg, paths, actions);
+      } else {
+        checkpointEmpty.style.display = 'none';
+        checkpointSelect.style.display = '';
+        setOptions(checkpointSelect, checkpoints, state.checkpoint);
+        if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
+        checkpointSelect.value = state.checkpoint;
+      }
+      updateGenerateEnabled();
+    };
+    checkpointSelect.addEventListener('change', () => { state.checkpoint = checkpointSelect.value; updateGenerateEnabled(); });
+    renderCheckpointEmpty();
+
+    // LoRA 列表（搜索+勾选，隐藏扩展名，预设标签）
+    const loraTitle = ctx.ui.h('div', 'coo-group-title', t('LoRA 列表（搜索+勾选）', 'LoRAs (search & select)'));
+    paramSheet.body.append(loraTitle);
     const loraSearch = ctx.ui.input({ type: 'search', placeholder: t('搜索 LoRA（名称/别名/分类/触发词）', 'Search LoRAs (name/alias/category/trigger)') });
     loraSearch.style.width = '100%';
-    gen.body.append(loraSearch);
-    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '230px' });
-    gen.body.append(loraTable.el);
+    paramSheet.body.append(loraSearch);
+    // 快捷按钮
+    const loraToolbar = ctx.ui.h('div', 'coo-lora-toolbar');
+    const btnAll = ctx.ui.button(t('全选', 'Select all'), { size: 'sm' });
+    const btnInverse = ctx.ui.button(t('反选', 'Invert'), { size: 'sm' });
+    const btnClear = ctx.ui.button(t('清空', 'Clear'), { size: 'sm' });
+    loraToolbar.append(btnAll, btnInverse, btnClear);
+    paramSheet.body.append(loraToolbar);
+    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '300px' });
+    // 使其可滚动不撑开
+    (loraTable.el as HTMLElement).classList.add('coo-lora-list');
+    paramSheet.body.append(loraTable.el);
+    const loraCount = ctx.ui.msgline('');
+    paramSheet.body.append(loraCount);
 
     const renderLoraCount = (): void => {
-      const missing = boot.defaults.filter((item) => !loras.some((lora) => lora.path === item.path));
+      const missing = boot.defaults.filter((item) => !loras.some((l) => l.path === item.path));
       loraCount.textContent = t(
         `已选 ${state.loras.size} 个${missing.length ? ` · 默认里 ${missing.length} 个文件丢失` : ''}`,
-        `${state.loras.size} selected${missing.length ? ` · ${missing.length} default file(s) missing` : ''}`,
+        `${state.loras.size} selected${missing.length ? ` · ${missing.length} default missing` : ''}`,
       );
       loraCount.classList.toggle('bad', missing.length > 0);
     };
-
     const renderLoraTable = (): void => {
       const query = loraSearch.value.trim().toLowerCase();
-      const filtered = loras.filter((item) => !query || [item.path, item.name, item.category, ...item.aliases, ...item.trigger_words]
-        .some((value) => value.toLowerCase().includes(query)));
+      const filtered = loras.filter((item) => !query || [item.path, item.name, item.category, ...item.aliases, ...item.trigger_words].some((v) => v.toLowerCase().includes(query)));
       loraTable.clear(filtered.length ? undefined : t('没有匹配的 LoRA', 'No matching LoRA'));
       for (const record of filtered.slice(0, 300)) {
         const checked = state.loras.has(record.path);
         const box = ctx.ui.checkbox('', {
           checked,
-          onChange: (value) => {
-            if (value) {
-              state.loras.set(record.path, record.weight ?? 0.75);
-              weightInput.disabled = false;
-              weightInput.value = String(record.weight ?? 0.75);
-            } else {
-              state.loras.delete(record.path);
-              weightInput.disabled = true;
-            }
+          onChange: (v) => {
+            if (v) { state.loras.set(record.path, record.weight ?? 0.75); }
+            else { state.loras.delete(record.path); }
+            renderLoraTable(); // 重绘以刷新权重框禁用态
             renderLoraCount();
           },
         });
         box.el.setAttribute('aria-label', record.name);
         const nameCell = document.createElement('div');
         const title = document.createElement('div');
-        title.textContent = record.aliases.length ? `${record.name}（${record.aliases.join('/')}）` : record.name;
-        const sub = document.createElement('div');
-        sub.className = 'coo-gen-sub';
+        title.textContent = record.aliases.length ? `${stripExt(record.name)}（${record.aliases.join('/')}）` : stripExt(record.name);
+        title.title = record.path;
+        const sub = document.createElement('div'); sub.className = 'coo-gen-sub';
+        // 隐藏扩展名，hover 显示完整路径
         sub.textContent = [record.path, record.category || t('未分类', 'uncategorized'), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
+        sub.title = record.path;
         nameCell.append(title, sub);
-        if (boot.defaults.some((item) => item.path === record.path)) nameCell.append(pill(ctx, t('默认', 'default'), 'on'));
+        if (boot.defaults.some((item) => item.path === record.path)) {
+          const tag = pill(ctx, t('预设', 'preset'), 'on');
+          tag.title = t('默认启用', 'Enabled by default');
+          nameCell.append(tag);
+        }
         const weightInput = ctx.ui.input({
-          type: 'number',
-          value: String(state.loras.get(record.path) ?? record.weight ?? 0.75),
-          cls: 'mono coo-gen-weight',
+          type: 'number', value: String(state.loras.get(record.path) ?? record.weight ?? 0.75), cls: 'mono coo-gen-weight',
         });
-        weightInput.min = '0.05';
-        weightInput.max = '2';
-        weightInput.step = '0.05';
+        weightInput.min = '0.05'; weightInput.max = '2'; weightInput.step = '0.05';
         weightInput.disabled = !checked;
         weightInput.addEventListener('change', () => {
-          const value = Math.min(2, Math.max(0.05, num(weightInput.value, 0.75)));
-          weightInput.value = String(value);
-          if (state.loras.has(record.path)) state.loras.set(record.path, value);
-        }, { signal: ctx.signal });
+          const v = Math.min(2, Math.max(0.05, num(weightInput.value, 0.75)));
+          weightInput.value = String(v);
+          if (state.loras.has(record.path)) state.loras.set(record.path, v);
+        });
         loraTable.addRow([box.el, nameCell, weightInput]);
       }
       renderLoraCount();
     };
-    loraSearch.addEventListener('input', renderLoraTable, { signal: ctx.signal });
+    btnAll.addEventListener('click', () => { for (const l of loras) state.loras.set(l.path, l.weight ?? 0.75); renderLoraTable(); });
+    btnInverse.addEventListener('click', () => {
+      const next = new Map<string, number>();
+      for (const l of loras) if (!state.loras.has(l.path)) next.set(l.path, l.weight ?? 0.75);
+      state.loras = next; renderLoraTable();
+    });
+    btnClear.addEventListener('click', () => { state.loras.clear(); renderLoraTable(); });
+    loraSearch.addEventListener('input', renderLoraTable);
     renderLoraTable();
 
-    const samplerRow = ctx.ui.rowbar();
-    const samplerSelect = ctx.ui.select({ options: [] });
-    setOptions(samplerSelect, boot.samplers, state.sampler);
-    samplerSelect.addEventListener('change', () => { state.sampler = samplerSelect.value; }, { signal: ctx.signal });
-    const schedulerSelect = ctx.ui.select({ options: [] });
-    setOptions(schedulerSelect, boot.schedulers, state.scheduler);
-    schedulerSelect.addEventListener('change', () => { state.scheduler = schedulerSelect.value; }, { signal: ctx.signal });
-    samplerRow.append(
-      ctx.ui.field(t('采样器', 'Sampler'), samplerSelect),
-      ctx.ui.field(t('调度器', 'Scheduler'), schedulerSelect),
-    );
-    gen.body.append(samplerRow);
+    // 采样参数分组
+    // 基本采样
+    const basicGroup = ctx.ui.h('div', 'coo-group');
+    const basicTitle = ctx.ui.h('div', 'coo-group-title', t('基本采样', 'Sampler'));
+    const basicGrid = ctx.ui.h('div', 'coo-group-grid');
+    const samplerSelect = ctx.ui.select({ options: [] }); setOptions(samplerSelect as unknown as HTMLSelectElement, boot.samplers, state.sampler);
+    samplerSelect.addEventListener('change', () => { state.sampler = samplerSelect.value; });
+    const schedulerSelect = ctx.ui.select({ options: [] }); setOptions(schedulerSelect as unknown as HTMLSelectElement, boot.schedulers, state.scheduler);
+    schedulerSelect.addEventListener('change', () => { state.scheduler = schedulerSelect.value; });
+    const stepsInput = ctx.ui.input({ type: 'number', value: String(state.steps), cls: 'mono' }); stepsInput.min='1'; stepsInput.max='100'; stepsInput.step='1';
+    stepsInput.addEventListener('change', () => { state.steps = Math.max(1, Math.min(100, Math.round(num(stepsInput.value, state.steps)))); stepsInput.value = String(state.steps); updateProgressMax(); });
+    const cfgInput = ctx.ui.input({ type: 'number', value: String(state.cfg), cls: 'mono' }); cfgInput.min='1'; cfgInput.max='30'; cfgInput.step='0.5';
+    cfgInput.addEventListener('change', () => { state.cfg = Math.min(30, Math.max(1, num(cfgInput.value, state.cfg))); cfgInput.value = String(state.cfg); });
+    basicGrid.append(ctx.ui.field(t('采样器', 'Sampler'), samplerSelect), ctx.ui.field(t('调度器', 'Scheduler'), schedulerSelect), ctx.ui.field(t('步数', 'Steps'), stepsInput), ctx.ui.field('CFG', cfgInput));
+    basicGroup.append(basicTitle, basicGrid);
+    paramSheet.body.append(basicGroup);
 
-    const numberRow = ctx.ui.rowbar();
-    const makeNumber = (label: string, key: 'steps' | 'cfg' | 'width' | 'height' | 'batch' | 'seed', min: string, max: string, step: string): HTMLInputElement => {
-      const input = ctx.ui.input({ type: 'number', value: String(state[key]), cls: 'mono coo-gen-num' });
-      input.min = min;
-      input.max = max;
-      input.step = step;
-      input.addEventListener('change', () => {
-        const value = num(input.value, Number(state[key]));
-        input.value = String(value);
-        (state as unknown as Record<string, unknown>)[key] = value;
-      }, { signal: ctx.signal });
-      numberRow.append(ctx.ui.field(label, input));
-      return input;
-    };
-    makeNumber(t('步数', 'Steps'), 'steps', '1', '100', '1');
-    makeNumber('CFG', 'cfg', '1', '30', '0.5');
-    const widthInput = makeNumber(t('宽', 'Width'), 'width', '64', '4096', '8');
-    const heightInput = makeNumber(t('高', 'Height'), 'height', '64', '4096', '8');
-    makeNumber(t('批次', 'Batch'), 'batch', '1', '8', '1');
-    makeNumber(t('种子 (-1 随机)', 'Seed (-1 random)'), 'seed', '-1', '9007199254740991', '1');
-    const sizePresets = [
-      { value: '768x1152', label: t('768 × 1152（竖图）', '768 × 1152 (portrait)'), width: 768, height: 1152 },
-      { value: '512x768', label: '512 × 768', width: 512, height: 768 },
-      { value: '1024x1024', label: t('1024 × 1024（方图）', '1024 × 1024 (square)'), width: 1024, height: 1024 },
-      { value: '1152x768', label: t('1152 × 768（横图）', '1152 × 768 (landscape)'), width: 1152, height: 768 },
-      { value: '832x1216', label: '832 × 1216', width: 832, height: 1216 },
-    ];
+    // 尺寸设置
+    const sizeGroup = ctx.ui.h('div', 'coo-group');
+    const sizeTitle = ctx.ui.h('div', 'coo-group-title', t('尺寸设置', 'Size'));
+    const sizeRow = ctx.ui.h('div', 'coo-size-row');
     const sizeSelect = ctx.ui.select({
-      options: sizePresets.map((item) => ({ value: item.value, label: item.label })),
-    });
+      options: SIZE_PRESETS.map(p => ({ value: p.value, label: zh ? p.labelZh : p.labelEn })),
+    }); sizeSelect.value = state.sizePreset;
+    const widthInput = ctx.ui.input({ type: 'number', value: String(state.width), cls: 'mono coo-gen-num' }); widthInput.min='64'; widthInput.max='4096'; widthInput.step='8';
+    const heightInput = ctx.ui.input({ type: 'number', value: String(state.height), cls: 'mono coo-gen-num' }); heightInput.min='64'; heightInput.max='4096'; heightInput.step='8';
+    const swapBtn = ctx.ui.button('⇄', { size: 'sm', variant: 'plain' }); swapBtn.title = t('交换宽高', 'Swap width/height');
+    sizeRow.append(ctx.ui.field(t('尺寸预设', 'Size preset'), sizeSelect), ctx.ui.field(t('宽', 'Width'), widthInput), ctx.ui.field(t('高', 'Height'), heightInput), swapBtn);
+    sizeRow.classList.add('coo-swap-btn');
+    sizeGroup.append(sizeTitle, sizeRow);
+    paramSheet.body.append(sizeGroup);
+
+    // 高级折叠
+    const advGroup = ctx.ui.h('div', 'coo-group');
+    const advToggle = document.createElement('button'); advToggle.className = 'coo-adv-toggle'; advToggle.textContent = t('【高级 ▼】（默认折叠）', 'Advanced ▼ (collapsed)');
+    const advBody = ctx.ui.h('div', 'coo-adv-body hidden');
+    const batchInput = ctx.ui.input({ type: 'number', value: String(state.batch), cls: 'mono coo-gen-num' }); batchInput.min='1'; batchInput.max='8'; batchInput.step='1';
+    batchInput.addEventListener('change', () => { state.batch = Math.max(1, Math.min(8, Math.round(num(batchInput.value, state.batch)))); batchInput.value = String(state.batch); });
+    const seedInput = ctx.ui.input({ type: 'number', value: String(state.seed), cls: 'mono coo-gen-num' }); seedInput.min='-1'; seedInput.max='9007199254740991'; seedInput.step='1';
+    seedInput.addEventListener('change', () => { const v = Math.trunc(num(seedInput.value, state.seed)); seedInput.value = String(v); state.seed = v; });
+    const randBtn = ctx.ui.button('🎲', { size: 'sm' }); randBtn.title = t('随机种子', 'Random seed');
+    randBtn.addEventListener('click', () => { state.seed = -1; seedInput.value = '-1'; });
+    advBody.append(ctx.ui.field(t('批次', 'Batch'), batchInput), ctx.ui.field(t('种子', 'Seed'), seedInput), randBtn);
+    advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.textContent = hidden ? t('【高级 ▼】（默认折叠）', 'Advanced ▼ (collapsed)') : t('【高级 ▲】', 'Advanced ▲'); });
+    advGroup.append(advToggle, advBody);
+    paramSheet.body.append(advGroup);
+
+    // 尺寸联动
     sizeSelect.addEventListener('change', () => {
-      const preset = sizePresets.find((item) => item.value === sizeSelect.value);
+      const preset = SIZE_PRESETS.find(p => p.value === sizeSelect.value);
       if (!preset) return;
-      state.width = preset.width;
-      state.height = preset.height;
-      widthInput.value = String(preset.width);
-      heightInput.value = String(preset.height);
-    }, { signal: ctx.signal });
-    numberRow.append(ctx.ui.field(t('尺寸预设', 'Size preset'), sizeSelect));
-    gen.body.append(numberRow);
+      state.sizePreset = preset.value;
+      if (preset.value !== 'custom') {
+        state.width = preset.w; state.height = preset.h;
+        widthInput.value = String(preset.w); heightInput.value = String(preset.h);
+      }
+    });
+    const markCustom = (): void => {
+      const match = SIZE_PRESETS.find(p => p.w === num(widthInput.value, state.width) && p.h === num(heightInput.value, state.height) && p.value !== 'custom');
+      if (match) { state.sizePreset = match.value; sizeSelect.value = match.value; }
+      else { state.sizePreset = 'custom'; sizeSelect.value = 'custom'; }
+    };
+    widthInput.addEventListener('change', () => { state.width = Math.max(64, Math.min(4096, Math.round(num(widthInput.value, state.width)/8)*8)); widthInput.value = String(state.width); markCustom(); });
+    heightInput.addEventListener('change', () => { state.height = Math.max(64, Math.min(4096, Math.round(num(heightInput.value, state.height)/8)*8)); heightInput.value = String(state.height); markCustom(); });
+    swapBtn.addEventListener('click', () => {
+      const w = state.width; state.width = state.height; state.height = w;
+      widthInput.value = String(state.width); heightInput.value = String(state.height);
+      markCustom();
+    });
 
+    // 额外输入（img2img / controlnet / custom）
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
-    gen.body.append(extraBox);
+    paramSheet.body.append(extraBox);
 
-    const actionRow = ctx.ui.actions();
+    // Sticky 操作按钮
+    const sticky = ctx.ui.h('div', 'coo-sticky-bar');
+    const stickyHint = ctx.ui.h('div', 'hint', '');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
     const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
-    const openBtn = ctx.ui.button(t('打开保存目录', 'Open output folder'), { variant: 'plain', size: 'sm' });
+    const openBtn = ctx.ui.button(t('打开目录', 'Open folder'), { variant: 'plain', size: 'sm' });
     cancelBtn.disabled = true;
-    actionRow.append(generateBtn, cancelBtn, openBtn);
-    gen.body.append(actionRow);
-    const genLine = ctx.ui.msgline('');
-    gen.body.append(genLine);
-
-    const say = (text: string, bad = false): void => {
-      genLine.textContent = text;
-      genLine.classList.toggle('bad', bad);
-    };
+    cancelBtn.style.border = '1px solid var(--line, rgba(127,127,127,.3))';
+    sticky.append(stickyHint, generateBtn, cancelBtn, openBtn);
+    left.append(sticky);
+    const genLine = ctx.ui.msgline(''); left.append(genLine);
+    const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); stickyHint.textContent = text; };
 
     const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
+    const updateGenerateEnabled = (): void => {
+      const needsCkpt = checkpoints.length === 0 && !(presets.find(p => p.id === state.workflow)?.warnings?.join('') ?? '').includes('无需');
+      // 简化：有 checkpoint 列表为空时禁用生成，提示选择
+      const missingCkpt = checkpoints.length === 0;
+      // 若工作流确实需要而没有，禁用
+      const mustHave = checkpoints.length === 0;
+      // 若有列表但未选
+      const notSelected = checkpoints.length > 0 && !state.checkpoint;
+      const shouldDisable = (mustHave || notSelected) && !isActive(current);
+      // 但若当前工作流无需 checkpoint，则不禁用
+      const preset = presets.find(p=>p.id===state.workflow);
+      const noNeed = preset && (preset.kind === 'imported' && checkpoints.length===0); // fallback
+      // 实际禁用逻辑：没有 checkpoint 且工作流需要时禁用
+      let disable = false;
+      let hint = '';
+      if (checkpoints.length === 0) {
+        // 检查是否真的需要
+        // 若 mapping 中无 checkpoint 则不需
+        // 我们暂时保守：若预设为内置 txt2img/img2img/controlnet 则需要
+        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || (preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet');
+        if (needs) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
+      } else if (!state.checkpoint) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
+      generateBtn.disabled = disable || busy || isActive(current);
+      if (disable && hint) stickyHint.textContent = hint;
+      // 样式提示
+      generateBtn.title = disable ? hint : '';
+    };
 
     const collect = () => ({
-      positive: state.positive,
-      negative: state.negative,
-      checkpoint: state.checkpoint,
+      positive: state.positive, negative: state.negative, checkpoint: state.checkpoint,
       loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
-      sampler: state.sampler,
-      scheduler: state.scheduler,
-      steps: state.steps,
-      cfg: state.cfg,
-      width: state.width,
-      height: state.height,
-      batch: state.batch,
-      seed: state.seed,
+      sampler: state.sampler, scheduler: state.scheduler, steps: state.steps, cfg: state.cfg,
+      width: state.width, height: state.height, batch: state.batch, seed: state.seed,
       workflow: state.workflow,
       ...(state.inputImage ? { inputImage: state.inputImage } : {}),
       ...(state.controlImage ? { controlImage: state.controlImage } : {}),
@@ -541,85 +504,8 @@ const studioPanel: WebUiPanel = {
       ...(Object.keys(state.custom).length ? { custom: state.custom } : {}),
     });
 
-    const renderExtra = (): void => {
-      extraBox.replaceChildren();
-      void loadCustomFields();
-      const preset = presets.find((item) => item.id === state.workflow);
-      const kind = preset?.kind;
-      if (kind !== 'img2img' && kind !== 'controlnet') return;
-      const row = ctx.ui.rowbar();
-      const inputPath = ctx.ui.input({ value: state.inputImage, cls: 'mono', placeholder: t('输入图绝对路径', 'Absolute path to input image') });
-      inputPath.style.flex = '1';
-      inputPath.style.minWidth = '220px';
-      const choose = ctx.ui.button(t('选择…', 'Choose…'), { size: 'sm' });
-      choose.addEventListener('click', () => {
-        void (async () => {
-          try {
-            const picked = await ctx.pickPath({ kind: 'file', extensions: ['png', 'jpg', 'jpeg', 'webp'] });
-            if (picked) {
-              state.inputImage = picked;
-              inputPath.value = picked;
-            }
-          } catch (error) {
-            say(errText(error), true);
-          }
-        })();
-      }, { signal: ctx.signal });
-      inputPath.addEventListener('change', () => { state.inputImage = inputPath.value.trim(); }, { signal: ctx.signal });
-      row.append(ctx.ui.field(t('输入图', 'Input image'), inputPath), choose);
-      extraBox.append(row);
-
-      if (kind === 'controlnet') {
-        const controlRow = ctx.ui.rowbar();
-        const controlPath = ctx.ui.input({ value: state.controlImage, cls: 'mono', placeholder: t('控制图绝对路径', 'Absolute path to control image') });
-        controlPath.style.flex = '1';
-        controlPath.style.minWidth = '220px';
-        const chooseControl = ctx.ui.button(t('选择…', 'Choose…'), { size: 'sm' });
-        chooseControl.addEventListener('click', () => {
-          void (async () => {
-            try {
-              const picked = await ctx.pickPath({ kind: 'file', extensions: ['png', 'jpg', 'jpeg', 'webp'] });
-              if (picked) {
-                state.controlImage = picked;
-                controlPath.value = picked;
-              }
-            } catch (error) {
-              say(errText(error), true);
-            }
-          })();
-        }, { signal: ctx.signal });
-        controlPath.addEventListener('change', () => { state.controlImage = controlPath.value.trim(); }, { signal: ctx.signal });
-        controlRow.append(ctx.ui.field(t('控制图', 'Control image'), controlPath), chooseControl);
-        const controlNetSelect = ctx.ui.select({ options: controlNets });
-        setOptions(controlNetSelect, controlNets, state.controlNet);
-        controlNetSelect.addEventListener('change', () => { state.controlNet = controlNetSelect.value; }, { signal: ctx.signal });
-        controlRow.append(ctx.ui.field(t('ControlNet 模型', 'ControlNet model'), controlNetSelect));
-        extraBox.append(controlRow);
-        const strengthRow = ctx.ui.rowbar();
-        const strength = ctx.ui.input({ type: 'number', value: String(state.controlStrength ?? 1), cls: 'mono coo-gen-num' });
-        strength.min = '0';
-        strength.max = '2';
-        strength.step = '0.05';
-        strength.addEventListener('change', () => { state.controlStrength = Math.min(2, Math.max(0, num(strength.value, 1))); }, { signal: ctx.signal });
-        strengthRow.append(ctx.ui.field(t('控制强度', 'Control strength'), strength));
-        extraBox.append(strengthRow);
-      }
-
-      const denoiseRow = ctx.ui.rowbar();
-      const denoise = ctx.ui.input({ type: 'number', value: String(state.denoise ?? (kind === 'img2img' ? 0.6 : 0.7)), cls: 'mono coo-gen-num' });
-      denoise.min = '0.05';
-      denoise.max = '1';
-      denoise.step = '0.05';
-      denoise.addEventListener('change', () => { state.denoise = Math.min(1, Math.max(0.05, num(denoise.value, 0.6))); }, { signal: ctx.signal });
-      denoiseRow.append(ctx.ui.field(t('重绘幅度', 'Denoise'), denoise));
-      extraBox.append(denoiseRow);
-    };
-
-    const KNOWN_PARAMS = new Set([
-      'positive', 'negative', 'checkpoint', 'steps', 'cfg', 'seed', 'sampler', 'scheduler',
-      'width', 'height', 'batch', 'inputImage', 'controlImage', 'controlNet', 'denoise', 'controlStrength',
-    ]);
-
+    // 工作流 extra 渲染
+    const KNOWN_PARAMS = new Set(['positive','negative','checkpoint','steps','cfg','seed','sampler','scheduler','width','height','batch','inputImage','controlImage','controlNet','denoise','controlStrength']);
     async function loadCustomFields(): Promise<void> {
       const workflowId = state.workflow;
       try {
@@ -628,360 +514,530 @@ const studioPanel: WebUiPanel = {
         const custom = res.preset.mapping.filter((item) => !KNOWN_PARAMS.has(item.param));
         if (!custom.length) return;
         const box = ctx.ui.h('div', 'coo-gen-extra');
-        box.append(ctx.ui.section(t('自定义参数', 'Custom parameters'), t('从导入工作流里自动识别的参数。', 'Auto-detected from the imported workflow.')));
+        box.append(ctx.ui.section(t('自定义参数', 'Custom parameters'), t('从导入工作流里自动识别的参数。', 'Auto-detected from imported workflow.')));
         for (const map of custom) {
-          const current = state.custom[map.param] ?? (typeof map.default === 'number' || typeof map.default === 'string' ? map.default : '');
-          const control = map.ui_type === 'number' || map.ui_type === 'slider' || map.ui_type === 'seed'
-            ? ctx.ui.input({ type: 'number', value: String(current), cls: 'mono coo-gen-num' })
-            : ctx.ui.input({ value: String(current), cls: 'mono' });
+          const currentVal = state.custom[map.param] ?? (typeof map.default === 'number' || typeof map.default === 'string' ? map.default : '');
+          const control = map.ui_type === 'number' || map.ui_type === 'slider' || map.ui_type === 'seed' ? ctx.ui.input({ type: 'number', value: String(currentVal), cls: 'mono coo-gen-num' }) : ctx.ui.input({ value: String(currentVal), cls: 'mono' });
           control.addEventListener('change', () => {
-            if (map.ui_type === 'number' || map.ui_type === 'slider' || map.ui_type === 'seed') {
-              state.custom[map.param] = num(control.value, Number(current) || 0);
-            } else {
-              state.custom[map.param] = control.value;
-            }
-          }, { signal: ctx.signal });
+            if (map.ui_type === 'number' || map.ui_type === 'slider' || map.ui_type === 'seed') state.custom[map.param] = num(control.value, Number(currentVal) || 0);
+            else state.custom[map.param] = control.value;
+          });
           box.append(ctx.ui.field(`${map.ui_label || map.param} (${map.param})`, control));
         }
         extraBox.append(box);
-      } catch {
-        // 导入工作流没有详情时不影响固定表单。
-      }
+      } catch {}
     }
-
-    workflowSelect.addEventListener('change', () => {
-      state.workflow = workflowSelect.value;
-      state.custom = {};
+    const renderExtra = (): void => {
+      extraBox.replaceChildren(); void loadCustomFields();
       const preset = presets.find((item) => item.id === state.workflow);
-      workflowHint.textContent = preset
-        ? t(`${preset.name}${preset.builtin ? '（内置）' : '（导入）'} · 参数映射 ${preset.mapping_count} 项${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`, `${preset.name}${preset.builtin ? ' (built-in)' : ' (imported)'} · ${preset.mapping_count} mapped params${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`)
-        : '';
-      renderExtra();
-    }, { signal: ctx.signal });
+      const kind = preset?.kind;
+      if (kind !== 'img2img' && kind !== 'controlnet') return;
+      const row = ctx.ui.rowbar();
+      const inputPath = ctx.ui.input({ value: state.inputImage, cls: 'mono', placeholder: t('输入图绝对路径', 'Absolute path to input image') }); inputPath.style.flex='1'; inputPath.style.minWidth='220px';
+      const choose = ctx.ui.button(t('选择…', 'Choose…'), { size: 'sm' });
+      choose.addEventListener('click', () => {
+        void (async () => {
+          try { const picked = await ctx.pickPath({ kind: 'file', extensions: ['png','jpg','jpeg','webp'] }); if (picked) { state.inputImage = picked; inputPath.value = picked; } } catch(e){ say(errText(e), true); }
+        })();
+      });
+      inputPath.addEventListener('change', () => { state.inputImage = inputPath.value.trim(); });
+      row.append(ctx.ui.field(t('输入图', 'Input image'), inputPath), choose);
+      extraBox.append(row);
+      if (kind === 'controlnet') {
+        const controlRow = ctx.ui.rowbar();
+        const controlPath = ctx.ui.input({ value: state.controlImage, cls: 'mono', placeholder: t('控制图绝对路径', 'Absolute path to control image') }); controlPath.style.flex='1'; controlPath.style.minWidth='220px';
+        const chooseControl = ctx.ui.button(t('选择…', 'Choose…'), { size: 'sm' });
+        chooseControl.addEventListener('click', () => {
+          void (async () => { try { const picked = await ctx.pickPath({ kind: 'file', extensions: ['png','jpg','jpeg','webp'] }); if (picked) { state.controlImage = picked; controlPath.value = picked; } } catch(e){ say(errText(e), true); } })();
+        });
+        controlPath.addEventListener('change', () => { state.controlImage = controlPath.value.trim(); });
+        controlRow.append(ctx.ui.field(t('控制图', 'Control image'), controlPath), chooseControl);
+        const controlNetSelect = ctx.ui.select({ options: controlNets }); setOptions(controlNetSelect as unknown as HTMLSelectElement, controlNets, state.controlNet);
+        controlNetSelect.addEventListener('change', () => { state.controlNet = controlNetSelect.value; });
+        controlRow.append(ctx.ui.field(t('ControlNet 模型', 'ControlNet model'), controlNetSelect));
+        extraBox.append(controlRow);
+        const strengthRow = ctx.ui.rowbar();
+        const strength = ctx.ui.input({ type: 'number', value: String(state.controlStrength ?? 1), cls: 'mono coo-gen-num' }); strength.min='0'; strength.max='2'; strength.step='0.05';
+        strength.addEventListener('change', () => { state.controlStrength = Math.min(2, Math.max(0, num(strength.value, 1))); });
+        strengthRow.append(ctx.ui.field(t('控制强度', 'Control strength'), strength));
+        extraBox.append(strengthRow);
+      }
+      const denoiseRow = ctx.ui.rowbar();
+      const denoise = ctx.ui.input({ type: 'number', value: String(state.denoise ?? (kind === 'img2img' ? 0.6 : 0.7)), cls: 'mono coo-gen-num' }); denoise.min='0.05'; denoise.max='1'; denoise.step='0.05';
+      denoise.addEventListener('change', () => { state.denoise = Math.min(1, Math.max(0.05, num(denoise.value, 0.6))); });
+      denoiseRow.append(ctx.ui.field(t('重绘幅度', 'Denoise'), denoise));
+      extraBox.append(denoiseRow);
+    };
+    workflowSelect.addEventListener('change', () => {
+      state.workflow = workflowSelect.value; state.custom = {};
+      const preset = presets.find((item) => item.id === state.workflow);
+      workflowHint.textContent = preset ? t(`${preset.name}${preset.builtin ? '（内置）' : '（导入）'} · 参数映射 ${preset.mapping_count} 项${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`, `${preset.name}${preset.builtin ? ' (built-in)' : ' (imported)'} · ${preset.mapping_count} mapped${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`) : '';
+      renderCheckpointEmpty(); renderExtra(); updateGenerateEnabled();
+    });
     const initialPreset = presets.find((item) => item.id === state.workflow);
-    if (initialPreset) {
-      workflowHint.textContent = t(`${initialPreset.name} · 参数映射 ${initialPreset.mapping_count} 项`, `${initialPreset.name} · ${initialPreset.mapping_count} mapped params`);
-    }
+    if (initialPreset) workflowHint.textContent = t(`${initialPreset.name} · 参数映射 ${initialPreset.mapping_count} 项`, `${initialPreset.name} · ${initialPreset.mapping_count} mapped`);
     renderExtra();
 
-    /* --------------------------------------------------------------- progress */
+    /* --------------------------- 右栏：连接 + 进度 --------------------------- */
+    // 连接卡片化
+    const connCard = ctx.ui.h('div', 'coo-conn-card');
+    const connHead = ctx.ui.h('div', 'coo-conn-head');
+    const connTitle = ctx.ui.h('div', 'coo-conn-title', `🔌 ${t('ComfyUI 连接', 'ComfyUI Connection')}`);
+    const connBadge = ctx.ui.h('span', 'pill coo-conn-badge', boot.health.ok ? `🟢 ${t('在线','Online')}` : `🔴 ${t('离线','Offline')}`);
+    connBadge.style.background = boot.health.ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
+    connHead.append(connTitle, connBadge);
+    const connMeta = ctx.ui.h('div', 'coo-conn-meta');
+    const renderConnMeta = (): void => {
+      connMeta.replaceChildren();
+      const version = boot.health.version ? `v${boot.health.version}` : '';
+      const sys = boot.health.system ?? '';
+      const top = ctx.ui.h('div', '', `${boot.health.ok ? '🟢' : '🔴'} ${boot.health.ok ? t('在线','Online') : t('离线','Offline')}  ${version} ${sys} · ${boot.health.devices?.[0] ?? ''}`);
+      const addr = ctx.ui.h('div', '', `${t('地址','URL')}  ${boot.config.url} `);
+      const editBtn = ctx.ui.button(t('编辑','Edit'), { size: 'sm' }); editBtn.addEventListener('click', () => { urlRow.style.display = urlRow.style.display === 'none' ? 'flex' : 'none'; });
+      addr.append(editBtn);
+      const modelInfo = ctx.ui.h('div', '', `${t('模型','Checkpoint')} ${checkpoints.length} · LoRA ${loras.length}`);
+      const outInfo = ctx.ui.h('div', '', `${t('输出','Output')}  ${boot.config.output_dir} `);
+      const openOut = ctx.ui.button(t('打开','Open'), { size: 'sm' }); openOut.addEventListener('click', () => { void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开','Opening'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
+      outInfo.append(openOut);
+      connMeta.append(top, addr, modelInfo, outInfo);
+    };
+    renderConnMeta();
+    const urlRow = ctx.ui.h('div', 'coo-conn-url-row'); urlRow.style.display = 'none';
+    const urlInput = ctx.ui.input({ value: boot.config.url, cls: 'mono' });
+    const saveUrl = ctx.ui.button(t('保存地址','Save URL'), { size: 'sm' });
+    const checkBtn = ctx.ui.button(t('检测','Check'), { size: 'sm' });
+    urlRow.append(urlInput, saveUrl, checkBtn);
+    const connActions = ctx.ui.h('div', 'coo-conn-actions');
+    const launchBtn = ctx.ui.button(t('一键启动','Launch'), { size: 'sm', variant: 'primary' }); launchBtn.disabled = !boot.launch.configured;
+    const stopBtn = ctx.ui.button(t('关闭 ComfyUI','Stop ComfyUI'), { size: 'sm', variant: 'plain' }); stopBtn.disabled = !boot.launch.stop_configured;
+    stopBtn.style.color = 'var(--danger, #c44)';
+    const refreshBtn = ctx.ui.button('⟳ ' + t('刷新','Refresh'), { size: 'sm' });
+    connActions.append(launchBtn, refreshBtn, stopBtn);
+    if (!boot.launch.configured || !boot.launch.stop_configured) {
+      const warn = ctx.ui.msgline(t(!boot.launch.configured ? '没有配置启动脚本。到 World 设置里填「ComfyUI 启动脚本」后可一键启动。' : '没有配置关闭脚本。到 World 设置里填「ComfyUI 关闭脚本」后可一键关闭。', !boot.launch.configured ? 'No launch script. Set it in World settings.' : 'No stop script. Set it in World settings.'), true);
+      connCard.append(connHead, connMeta, urlRow, connActions, warn);
+    } else {
+      connCard.append(connHead, connMeta, urlRow, connActions);
+    }
+    if (boot.warnings.length) connCard.append(ctx.ui.msgline(boot.warnings.join(' · '), true));
+    const healthLine = ctx.ui.msgline(''); healthLine.style.fontSize = '12px'; connCard.append(healthLine);
+    right.append(connCard);
 
-    const progressSheet = ctx.ui.sheet({ title: t('进度', 'Progress') });
-    ctx.root.append(progressSheet.el);
-    const progress: WebUiProgress = ctx.ui.progress({
-      max: Math.max(1, state.steps),
-      value: 0,
-      label: t('等待开始', 'Idle'),
-      format: (value, max) => `${Math.round((value / Math.max(1, max)) * 100)}%`,
+    const renderHealth = (health: CooGenBootstrap['health']): void => {
+      const ok = health.ok;
+      connBadge.textContent = ok ? `🟢 ${t('在线','Online')}` : `🔴 ${t('离线','Offline')}`;
+      connBadge.style.background = ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
+      healthLine.classList.toggle('bad', !ok);
+      healthLine.textContent = ok ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`) : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
+      renderConnMeta();
+    };
+
+    const applyModelRefresh = (res: { checkpoints: string[]; samplers: string[]; schedulers: string[]; control_nets: string[]; loras: LoRARecord[]; health: CooGenBootstrap['health']; }): void => {
+      checkpoints = res.checkpoints; loras = res.loras; controlNets = res.control_nets ?? []; boot.health = res.health;
+      shared.checkpoints = checkpoints; shared.loras = loras; shared.controlNets = controlNets;
+      setOptions(checkpointSelect, checkpoints, state.checkpoint);
+      if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
+      if (checkpoints.length) checkpointSelect.value = state.checkpoint;
+      setOptions(samplerSelect as unknown as HTMLSelectElement, res.samplers, state.sampler);
+      setOptions(schedulerSelect as unknown as HTMLSelectElement, res.schedulers, state.scheduler);
+      renderHealth(res.health); renderLoraTable(); renderCheckpointEmpty();
+    };
+    const doRefreshModels = async (): Promise<void> => {
+      try {
+        const res = await ctx.invoke<{ checkpoints: string[]; diffusion_models?: string[]; model_root?: string; samplers: string[]; schedulers: string[]; control_nets: string[]; loras: LoRARecord[]; health: CooGenBootstrap['health']; }>('refreshModels');
+        if (!alive) return; applyModelRefresh(res);
+      } catch (e) { healthLine.classList.add('bad'); healthLine.textContent = t('刷新失败：','Refresh failed: ') + errText(e); }
+    };
+    saveUrl.addEventListener('click', () => {
+      const value = urlInput.value.trim();
+      if (!/^https?:\/\//i.test(value)) { healthLine.classList.add('bad'); healthLine.textContent = t('地址要以 http:// 或 https:// 开头','URL must start with http:// or https://'); return; }
+      void (async () => {
+        try { await ctx.setConfig('world:draw-local', { 'worlds.draw.localUrl': value }); boot.config.url = value; ctx.ui.toast(t('地址已保存，正在检测…','URL saved; checking…')); const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); boot.health = res.health; renderHealth(res.health); await doRefreshModels(); } catch(e){ healthLine.classList.add('bad'); healthLine.textContent = errText(e); }
+      })();
     });
-    const stageLine = ctx.ui.msgline('');
-    progressSheet.body.append(progress.el, stageLine);
+    refreshBtn.addEventListener('click', () => { void doRefreshModels(); });
+    checkBtn.addEventListener('click', () => {
+      void (async () => { try { const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); if (!alive) return; boot.health = res.health; renderHealth(res.health); if (res.health.ok) await doRefreshModels(); } catch(e){ healthLine.classList.add('bad'); healthLine.textContent = errText(e); } })();
+    });
+    launchBtn.addEventListener('click', () => {
+      void (async () => {
+        const busyHandle = ctx.ui.busy(t('启动 ComfyUI','Launching ComfyUI'), t('等待 /system_stats 就绪…','Waiting for /system_stats…'));
+        launchBtn.disabled = true; stopBtn.disabled = true;
+        try { const res = await ctx.invoke<{ ok: boolean; message: string }>('launch'); if (!alive) return; ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad'); healthLine.classList.toggle('bad', !res.ok); healthLine.textContent = res.message; if (res.ok) await doRefreshModels(); } catch(e){ ctx.ui.toast(errText(e),'bad'); } finally { busyHandle.dispose(); launchBtn.disabled = !boot.launch.configured; stopBtn.disabled = !boot.launch.stop_configured; }
+      })();
+    });
+    stopBtn.addEventListener('click', () => {
+      void (async () => {
+        const ok = await ctx.ui.confirm({ title: t('确定关闭 ComfyUI？','Close ComfyUI?'), body: t('将执行关闭脚本，正在进行的任务会中断。','The stop script will run and interrupt tasks.'), danger: true });
+        if (!ok) return;
+        const busyHandle = ctx.ui.busy(t('关闭 ComfyUI','Stopping ComfyUI'), t('正在等待进程退出…','Waiting for process to exit…'));
+        stopBtn.disabled = true; launchBtn.disabled = true;
+        try { const res = await ctx.invoke<{ ok: boolean; message: string }>('stop'); if (!alive) return; ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad'); healthLine.classList.toggle('bad', !res.ok); healthLine.textContent = res.message; const h = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); if (!alive) return; boot.health = h.health; renderHealth(h.health); } catch(e){ ctx.ui.toast(errText(e),'bad'); } finally { busyHandle.dispose(); launchBtn.disabled = !boot.launch.configured; stopBtn.disabled = !boot.launch.stop_configured; }
+      })();
+    });
 
+    // 进度模块（右栏下方）
+    const progressCard = ctx.ui.h('div', 'coo-progress-card');
+    const progressTitle = ctx.ui.h('div', 'coo-group-title', t('生成进度','Progress'));
+    const progress: WebUiProgress = ctx.ui.progress({ max: Math.max(1, state.steps), value: 0, label: t('等待开始','Idle'), format: (v,m)=> `${Math.round((v/Math.max(1,m))*100)}%` });
+    const stageLine = ctx.ui.msgline(''); stageLine.style.fontSize='12px';
+    const progressDetail = ctx.ui.h('div', 'coo-progress-detail', '');
+    const previewWrap = ctx.ui.h('div', '');
+    const previewImg = ctx.ui.h('img', 'coo-preview-thumb'); previewImg.style.display='none'; previewWrap.append(previewImg);
+    const viewWorksBtn = ctx.ui.button(t('→ 查看作品','→ View works'), { variant: 'primary', size: 'sm' }); viewWorksBtn.style.display='none';
+    viewWorksBtn.addEventListener('click', () => {
+      const host = ctx.root.closest('.coo-draw-studio')?.parentElement ?? ctx.root;
+      // 通过自定义事件让父容器切换 Tab
+      host.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'works', bubbles: true }));
+      // 兼容器：若父提供 switchTab
+      const maybe = ctx as unknown as { switchTab?: (v:string)=>void };
+      if (maybe.switchTab) maybe.switchTab('works');
+    });
+    progressCard.append(progressTitle, progress.el, stageLine, progressDetail, previewWrap, viewWorksBtn);
+    right.append(progressCard);
+
+    let startTime: number | null = null;
     const renderTask = (task: GenerateTaskView | null): void => {
+      shared.current = task;
       if (!task) {
-        progress.setValue(0, 1);
-        progress.setLabel(t('空闲', 'Idle'));
-        stageLine.textContent = '';
-        generateBtn.disabled = busy;
-        cancelBtn.disabled = true;
-        return;
+        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=''; progressDetail.textContent = t('空闲','Idle'); previewImg.style.display='none'; viewWorksBtn.style.display='none';
+        generateBtn.disabled = busy; cancelBtn.disabled = true; updateGenerateEnabled(); return;
       }
       const total = Math.max(1, task.progress.total || task.params.steps || 1);
-      const current = task.status === 'done' ? total : Math.min(total, task.progress.current || 0);
-      progress.setValue(current, total);
-      progress.setLabel(task.status === 'done' ? t('完成', 'done') : task.status === 'error' ? t('失败', 'failed') : task.status === 'cancelled' ? t('已取消', 'cancelled') : t('生成中', 'running'));
-      const elapsed = task.finished_at ? Math.round((task.finished_at - task.created_at) / 1000) : Math.round((Date.now() - task.created_at) / 1000);
-      stageLine.textContent = [
-        task.status,
-        task.progress.message ?? '',
-        `${current}/${total}`,
-        `${elapsed}s`,
-        task.error ?? '',
-      ].filter(Boolean).join(' · ');
-      stageLine.classList.toggle('bad', task.status === 'error');
-      generateBtn.disabled = busy || isActive(task);
-      cancelBtn.disabled = !isActive(task);
-    };
-
-    /* --------------------------------------------------------------- result */
-
-    const resultSheet = ctx.ui.sheet({
-      title: t('结果', 'Result'),
-      desc: t('画好的图会存进保存目录，并写进 PNG 元数据。', 'Saved into the output folder with PNG metadata.'),
-    });
-    ctx.root.append(resultSheet.el);
-    const resultImage = ctx.ui.h('img', 'coo-gen-preview');
-    resultImage.alt = '';
-    resultImage.style.display = 'none';
-    const resultEmpty = ctx.ui.placeholder(t('还没有图。写一句提示词，点「生成」。', 'No picture yet. Write a prompt and press Generate.'));
-    const resultCaption = ctx.ui.msgline('');
-    const resultActions = ctx.ui.rowbar();
-    const resOpen = ctx.ui.button(t('打开文件夹', 'Open folder'), { size: 'sm' });
-    const resPet = ctx.ui.button(t('发送到桌宠', 'Send to pet'), { size: 'sm' });
-    const resCopySeed = ctx.ui.copyButton(() => String(resultEntry?.seed ?? ''), { label: t('复制种子', 'Copy seed'), size: 'sm' });
-    const resAgain = ctx.ui.button(t('重画', 'Generate again'), { size: 'sm' });
-    const resAdjust = ctx.ui.button(t('微调', 'Tweak'), { size: 'sm' });
-    resultSheet.body.append(resultImage, resultEmpty, resultCaption, resultActions);
-    resultActions.append(resOpen, resPet, resCopySeed, resAgain, resAdjust);
-    resultImage.addEventListener('click', () => {
-      if (resultImage.src) ctx.ui.lightbox(resultImage.src, resultCaption.textContent ?? '');
-    });
-    resOpen.addEventListener('click', () => { void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开文件夹', 'Opening folder'))).catch((error) => ctx.ui.toast(errText(error), 'bad')); }, { signal: ctx.signal });
-    resPet.addEventListener('click', () => {
-      if (!resultEntry) return;
-      void ctx.invoke<{ ok: boolean; message: string }>('sendToPet', [resultEntry.id])
-        .then((res) => ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad'))
-        .catch((error) => ctx.ui.toast(errText(error), 'bad'));
-    }, { signal: ctx.signal });
-    const applyEntry = (entry: HistoryEntry): void => {
-      state.positive = entry.positive;
-      state.negative = entry.negative;
-      state.checkpoint = entry.checkpoint || state.checkpoint;
-      state.sampler = entry.sampler;
-      state.scheduler = entry.scheduler;
-      state.steps = entry.steps;
-      state.cfg = entry.cfg;
-      state.width = entry.width;
-      state.height = entry.height;
-      state.batch = entry.batch;
-      state.seed = entry.seed;
-      positive.value = state.positive;
-      negative.value = state.negative;
-      setOptions(checkpointSelect, checkpoints, state.checkpoint);
-      setOptions(samplerSelect, boot.samplers, state.sampler);
-      setOptions(schedulerSelect, boot.schedulers, state.scheduler);
-    };
-
-    resAgain.addEventListener('click', () => {
-      if (resultEntry) applyEntry(resultEntry);
-      state.seed = -1;
-      void generate();
-    }, { signal: ctx.signal });
-    resAdjust.addEventListener('click', () => {
-      if (!resultEntry) return;
-      applyEntry(resultEntry);
-      positive.focus();
-      ctx.ui.toast(t('已把这张的参数填回表单，改完再生成。', 'Parameters loaded back into the form.'));
-    }, { signal: ctx.signal });
-
-    const showResult = async (entry: HistoryEntry): Promise<void> => {
-      try {
-        const url = objectUrl(ctx, await ctx.invokeBinary('image', [entry.id]));
-        if (!alive) return;
-        if (resultUrl) URL.revokeObjectURL(resultUrl);
-        resultUrl = url;
-        resultImage.src = url;
-        resultImage.style.display = 'block';
-        resultEmpty.style.display = 'none';
-        resultEntry = entry;
-        resultCaption.textContent = [
-          entry.filename,
-          `seed ${entry.seed}`,
-          entry.checkpoint,
-          ...(entry.loras.length ? [entry.loras.map((lora) => `${lora.name}@${lora.weight}`).join(' + ')] : []),
-          shortDate(entry.created_at),
-        ].filter(Boolean).join(' · ');
-      } catch (error) {
-        resultCaption.textContent = errText(error);
-        resultCaption.classList.add('bad');
-      }
-    };
-
-    const showTaskResult = (task: GenerateTaskView): void => {
-      if (task.id === resultTaskId) return;
-      const entry = history.find((item) => item.id === task.images[0]?.id);
-      if (entry) {
-        resultTaskId = task.id;
-        void showResult(entry);
-      }
-    };
-
-    /* --------------------------------------------------------------- history */
-
-    const historySheet = ctx.ui.sheet({
-      title: t('最近', 'Recent'),
-      desc: t(`最近 ${boot.config.history_limit} 张；点缩略图看大图。`, `Last ${boot.config.history_limit}; click a thumbnail for a larger view.`),
-    });
-    ctx.root.append(historySheet.el);
-    const historyGrid = ctx.ui.h('div', 'coo-gen-grid');
-    const historyLine = ctx.ui.msgline('');
-    const historyUrls: string[] = [];
-    historySheet.body.append(historyGrid, historyLine);
-    ctx.own({ dispose: () => { for (const url of historyUrls) URL.revokeObjectURL(url); } });
-
-    const observer = typeof IntersectionObserver !== 'undefined'
-      ? new IntersectionObserver((entries) => {
-        for (const item of entries) {
-          if (!item.isIntersecting) continue;
-          const img = item.target as HTMLImageElement;
-          observer?.unobserve(img);
-          const id = img.dataset.id;
-          if (!id || img.dataset.loaded === '1') continue;
-          img.dataset.loaded = '1';
-          void ctx.invokeBinary('image', [id]).then((blob) => {
-            if (!alive) return;
-            const url = URL.createObjectURL(blob);
-            historyUrls.push(url);
-            img.src = url;
-          }).catch(() => {
-            img.alt = '×';
-          });
+      const cur = task.status === 'done' ? total : Math.min(total, task.progress.current || 0);
+      progress.setValue(cur, total); progress.setLabel(task.status==='done'? t('完成','done') : task.status==='error'? t('失败','failed') : task.status==='cancelled'? t('已取消','cancelled') : t('生成中','running'));
+      const elapsed = task.finished_at ? Math.round((task.finished_at - task.created_at)/1000) : startTime ? Math.round((Date.now() - startTime)/1000) : Math.round((Date.now() - task.created_at)/1000);
+      const estimate = cur>0 && cur<total ? Math.round((elapsed/cur)*(total-cur)) : 0;
+      stageLine.textContent = [task.status, task.progress.message ?? '', `${cur}/${total}`, `${elapsed}s`, estimate? t(`预计剩余 ${estimate}s`,`~${estimate}s left`) : '', task.error ?? ''].filter(Boolean).join(' · ');
+      stageLine.classList.toggle('bad', task.status==='error');
+      progressDetail.textContent = task.status==='running' ? t(`步数：${cur} / ${total}  · 已用：${elapsed}s${estimate ? ` · 预计剩余：${estimate}s` : ''}`, `Step ${cur}/${total} · ${elapsed}s${estimate? ` · ~${estimate}s left` : ''}`) : stageLine.textContent;
+      generateBtn.disabled = busy || isActive(task); cancelBtn.disabled = !isActive(task);
+      if (task.status==='done') { viewWorksBtn.style.display=''; // 显示跳转
+        // 尝试加载预览缩略图（最近一张）
+        if (task.images[0]) {
+          void ctx.invokeBinary('image', [task.images[0].id]).then(blob=>{
+            if (!alive) return; const url = URL.createObjectURL(blob); previewImg.src = url; previewImg.style.display='block';
+            previewImg.addEventListener('load', ()=> {}, { once:true });
+          }).catch(()=>{});
         }
-      }, { rootMargin: '240px' })
-      : null;
-    if (observer) ctx.own({ dispose: () => observer.disconnect() });
-
-    const renderHistory = (entries: HistoryEntry[]): void => {
-      for (const url of historyUrls) URL.revokeObjectURL(url);
-      historyUrls.length = 0;
-      historyGrid.replaceChildren();
-      historyLine.textContent = entries.length
-        ? t(`共 ${entries.length} 张 · ${boot.config.output_dir}`, `${entries.length} pictures · ${boot.config.output_dir}`)
-        : t('还没有图。', 'No pictures yet.');
-      for (const entry of entries) {
-        const tile = ctx.ui.h('button', 'coo-gen-tile');
-        tile.type = 'button';
-        const img = ctx.ui.h('img', 'coo-gen-thumb');
-        img.alt = entry.filename;
-        img.dataset.id = entry.id;
-        img.loading = 'lazy';
-        const label = ctx.ui.h('span', 'coo-gen-tile-label', `${entry.seed} · ${entry.width}×${entry.height}`);
-        tile.append(img, label);
-        tile.addEventListener('click', () => {
-          void (async () => {
-            try {
-              const url = await ctx.invokeBinary('image', [entry.id]).then((blob) => objectUrl(ctx, blob));
-              if (alive) ctx.ui.lightbox(url, entry.filename);
-            } catch (error) {
-              ctx.ui.toast(errText(error), 'bad');
-            }
-          })();
-        }, { signal: ctx.signal });
-        historyGrid.append(tile);
-        if (observer) observer.observe(img);
-        else {
-          img.dataset.loaded = '1';
-          void ctx.invokeBinary('image', [entry.id]).then((blob) => {
-            if (!alive) return;
-            const url = URL.createObjectURL(blob);
-            historyUrls.push(url);
-            img.src = url;
-          }).catch(() => {});
-        }
-      }
+      } else if (task.status==='running') { viewWorksBtn.style.display='none'; if (!startTime) startTime = Date.now(); }
+      else { viewWorksBtn.style.display='none'; }
+      updateGenerateEnabled();
     };
-    renderHistory(history);
+    const updateProgressMax = (): void => { if (!current || isActive(current)) {} }; // reserved
 
+    // 历史刷新（供后续完成时调用）
     const refreshHistory = async (): Promise<void> => {
       try {
         const res = await ctx.invoke<HistoryResponse>('history', [Math.max(1, boot.config.history_limit)]);
-        if (!alive) return;
-        history = res.history;
-        renderHistory(history);
-        if (res.task) {
-          current = res.task;
-          renderTask(current);
-          if (current.status === 'done' && current.id !== lastFinished) {
-            lastFinished = current.id;
-            showTaskResult(current);
-          }
-        }
-      } catch { /* 历史刷新失败不阻塞 */ }
+        if (!alive) return; history = res.history; shared.history = history; shared.current = res.task; current = res.task; renderTask(current); if (current && current.status==='done' && current.id !== lastFinished) { lastFinished = current.id; shared.lastFinished = lastFinished; showTaskResult(current); }
+      } catch {}
     };
-
-    /* --------------------------------------------------------------- actions */
-
-    const afterTask = async (task: GenerateTaskView): Promise<void> => {
-      if (task.id === lastFinished) return;
-      lastFinished = task.id;
-      if (task.status === 'done') {
-        await refreshHistory();
-        showTaskResult(task);
-        say(t('画好了，已经保存。', 'Done and saved.'));
-        ctx.ui.toast(t('画好了', 'Done'));
-      } else if (task.status === 'error') {
-        say(task.error ?? t('出图失败', 'Generation failed'), true);
-        ctx.ui.toast(t('出图失败', 'Generation failed'), 'bad');
-      } else if (task.status === 'cancelled') {
-        say(t('已取消。', 'Cancelled.'));
+    const showTaskResult = (task: GenerateTaskView): void => {
+      if (task.id === shared.lastFinished) {} // avoid dup but still show
+      const entry = history.find((item)=> item.id===task.images[0]?.id);
+      if (entry) { shared.resultEntry = entry; resultEntry = entry; // 保存到共享
       }
     };
-
+    const afterTask = async (task: GenerateTaskView): Promise<void> => {
+      if (task.id === lastFinished) return; lastFinished = task.id; shared.lastFinished = lastFinished;
+      if (task.status==='done') { await refreshHistory(); const ent = history.find(h=> h.id===task.images[0]?.id); if (ent) { shared.resultEntry = ent; } say(t('画好了，已经保存。','Done and saved.')); ctx.ui.toast(t('画好了','Done')); // 自动在右栏显示预览已在 renderTask 处理
+      } else if (task.status==='error') { say(task.error ?? t('出图失败','Generation failed'), true); ctx.ui.toast(t('出图失败','Generation failed'),'bad'); }
+      else if (task.status==='cancelled') say(t('已取消。','Cancelled.'));
+    };
     const poll = async (): Promise<void> => {
       if (!current || !isActive(current)) return;
-      try {
-        const res = await ctx.invoke<StatusResponse>('status');
-        if (!alive) return;
-        current = res.task;
-        if (current) {
-          renderTask(current);
-          if (!isActive(current)) await afterTask(current);
-        }
-      } catch { /* 下一次再试 */ }
+      try { const res = await ctx.invoke<StatusResponse>('status'); if (!alive) return; current=res.task; renderTask(current); if (current && !isActive(current)) await afterTask(current); } catch {}
     };
-    ctx.interval(() => { void poll(); }, 800);
-
+    ctx.interval(()=>{ void poll(); }, 800);
     async function generate(): Promise<void> {
       if (busy) return;
-      if (isActive(current)) {
-        say(t('上一张还在画，等它完成或点取消。', 'The previous picture is still running; wait or cancel.'));
-        return;
+      if (isActive(current)) { say(t('上一张还在画，等它完成或点取消。','Previous picture still running; wait or cancel.')); return; }
+      if (!state.positive.trim()) { say(t('先写正向提示词。','Write a positive prompt first.'), true); positive.focus(); return; }
+      // checkpoint 校验
+      if (!state.checkpoint && checkpoints.length>0) { say(t('请先选择 Checkpoint 模型','Select a checkpoint first'), true); return; }
+      if (checkpoints.length===0) {
+        const preset = presets.find(p=>p.id===state.workflow);
+        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
+        if (needs) { say(t('未检测到 Checkpoint，无法生成。请先放入模型并刷新。','No checkpoint detected; put model files and refresh.'), true); return; }
       }
-      if (!state.positive.trim()) {
-        say(t('先写正向提示词。', 'Write a positive prompt first.'), true);
-        positive.focus();
-        return;
-      }
-      busy = true;
-      generateBtn.disabled = true;
-      say(t('正在提交…', 'Submitting…'));
+      busy=true; generateBtn.disabled=true; say(t('正在提交…','Submitting…')); startTime=Date.now();
       try {
         const res = await ctx.invoke<GenerateResponse>('generate', [collect()]);
         if (!alive) return;
-        if (!res.ok || !res.task) {
-          say(res.error ?? t('提交失败', 'Submit failed'), true);
-          return;
-        }
-        current = res.task;
-        lastFinished = '';
-        renderTask(current);
-        if (res.warnings?.length) say(res.warnings.join('；'), false);
-        else say(t('已提交，等待 ComfyUI…', 'Submitted; waiting for ComfyUI…'));
+        if (!res.ok || !res.task) { say(res.error ?? t('提交失败','Submit failed'), true); return; }
+        current=res.task; shared.current=current; lastFinished=''; shared.lastFinished=''; renderTask(current);
+        if (res.warnings?.length) say(res.warnings.join('；'), false); else say(t('已提交，等待 ComfyUI…','Submitted; waiting for ComfyUI…'));
         void refreshHistory();
-      } catch (error) {
-        say(errText(error), true);
-      } finally {
-        busy = false;
-        generateBtn.disabled = isActive(current);
-      }
+      } catch(e){ say(errText(e), true); } finally { busy=false; generateBtn.disabled=isActive(current); updateGenerateEnabled(); }
     }
-
-    generateBtn.addEventListener('click', () => { void generate(); }, { signal: ctx.signal });
-    cancelBtn.addEventListener('click', () => {
+    generateBtn.addEventListener('click', ()=>{ void generate(); });
+    cancelBtn.addEventListener('click', ()=> {
       if (!current) return;
-      void (async () => {
-        try {
-          await ctx.invoke('cancel', [current?.id]);
-          ctx.ui.toast(t('已请求取消', 'Cancel requested'));
-          const res = await ctx.invoke<StatusResponse>('status');
-          if (!alive) return;
-          current = res.task;
-          renderTask(current);
-        } catch (error) {
-          say(errText(error), true);
-        }
-      })();
-    }, { signal: ctx.signal });
-    openBtn.addEventListener('click', () => {
-      void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开文件夹', 'Opening folder'))).catch((error) => ctx.ui.toast(errText(error), 'bad'));
-    }, { signal: ctx.signal });
-
+      void (async ()=>{ try { await ctx.invoke('cancel', [current?.id]); ctx.ui.toast(t('已请求取消','Cancel requested')); const res=await ctx.invoke<StatusResponse>('status'); if (!alive) return; current=res.task; shared.current=current; renderTask(current); } catch(e){ say(errText(e), true); } })();
+    });
+    openBtn.addEventListener('click', ()=>{ void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
     renderTask(current);
     if (current && isActive(current)) void poll();
-    if (current?.status === 'done') showTaskResult(current);
+  },
+};
 
-    // 面板挂载时把最新的结果也显示出来。
-    if (!resultEntry && history[0]) void showResult(history[0]);
+/* ------------------------------------------------------------------ works */
+
+const worksPanel: WebUiPanel = {
+  async mount(ctx: WebUiPanelContext): Promise<void> {
+    const zh = ctx.language.startsWith('zh');
+    const t = (z: string, e: string): string => (zh ? z : e);
+    let alive = true; ctx.own({ dispose: ()=>{ alive=false; } });
+
+    let boot: CooGenBootstrap;
+    try { boot = await ctx.invoke<CooGenBootstrap>('bootstrap'); } catch(e){
+      const sheet = ctx.ui.sheet({ title: t('作品','Works') }); sheet.body.append(ctx.ui.msgline(t('读取失败：','Failed: ')+errText(e), true)); ctx.root.append(sheet.el); return;
+    }
+    if (!alive) return;
+
+    // 初始历史
+    let allHistory: HistoryEntry[] = shared.history.length ? shared.history : boot.history;
+    // 若共享为空则取 boot
+    shared.history = allHistory;
+    // 尝试刷新更多
+    let pageLimit = Math.max(50, boot.config.history_limit);
+    const fetchHistory = async (limit = pageLimit): Promise<void> => {
+      try {
+        const res = await ctx.invoke<HistoryResponse>('history', [limit]);
+        if (!alive) return; allHistory = res.history; shared.history = allHistory; renderGallery();
+        if (res.task) { shared.current = res.task; }
+      } catch {}
+    };
+
+    const root = ctx.ui.h('div', 'coo-works');
+    const left = ctx.ui.h('div', 'coo-works-gallery');
+    const right = ctx.ui.h('div', 'coo-works-detail');
+    root.append(left, right);
+    ctx.root.append(root);
+
+    // 左栏标题
+    const titleRow = ctx.ui.h('div', '');
+    const title = ctx.ui.h('div', 'coo-group-title', t('作品画廊','Gallery'));
+    titleRow.append(title);
+    left.append(titleRow);
+
+    // 筛选栏
+    const filters = ctx.ui.h('div', 'coo-works-filters');
+    const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词关键字','Search prompts') }); searchInput.style.flex='1';
+    const dateFrom = ctx.ui.input({ type: 'date' }); dateFrom.title = t('开始日期','From');
+    const dateTo = ctx.ui.input({ type: 'date' }); dateTo.title = t('结束日期','To');
+    const modelSelect = ctx.ui.select({ options: [t('全部模型','All models')] }); modelSelect.title=t('模型','Model');
+    const sizeSelect = ctx.ui.select({ options: [t('全部尺寸','All sizes'), ...SIZE_PRESETS.filter(p=>p.value!=='custom').map(p=>p.value)] });
+    const favSelect = ctx.ui.select({ options: [{ value:'', label:t('全部','All') }, { value:'fav', label:t('收藏','Favorites') }] });
+    filters.append(searchInput, dateFrom, dateTo, modelSelect, sizeSelect, favSelect);
+    left.append(filters);
+
+    // 填充模型下拉
+    {
+      const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort();
+      modelSelect.replaceChildren(); const optAll = document.createElement('option'); optAll.value=''; optAll.textContent=t('全部模型','All models'); modelSelect.append(optAll);
+      for (const m of models) { const o=document.createElement('option'); o.value=m; o.textContent=stripExt(m); o.title=m; modelSelect.append(o); }
+    }
+
+    const grid = ctx.ui.h('div', 'coo-works-grid');
+    const statusLine = ctx.ui.msgline('');
+    const loadMoreBtn = ctx.ui.button(t('加载更多','Load more'), { size: 'sm' });
+    loadMoreBtn.style.display = allHistory.length >= pageLimit ? '' : 'none';
+    left.append(grid, statusLine, loadMoreBtn);
+
+    // 批量模式
+    const batchRow = ctx.ui.h('div', 'coo-batch-bar');
+    const batchToggle = ctx.ui.button(t('批量模式','Batch'), { size: 'sm' });
+    const batchActions = ctx.ui.h('div', 'coo-batch-bar'); batchActions.style.display='none';
+    const selCount = ctx.ui.msgline(''); selCount.style.fontSize='12px';
+    const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size: 'sm', variant: 'plain' });
+    const batchExport = ctx.ui.button(t('批量导出','Export'), { size: 'sm' });
+    batchActions.append(batchDel, batchExport, selCount);
+    batchRow.append(batchToggle, batchActions);
+    left.append(batchRow);
+    let batchMode = false;
+    const selected = new Set<string>();
+    batchToggle.addEventListener('click', ()=>{ batchMode=!batchMode; batchToggle.textContent = batchMode ? t('退出批量','Exit batch') : t('批量模式','Batch'); batchActions.style.display = batchMode ? '' : 'none'; if (!batchMode) { selected.clear(); selCount.textContent=''; renderGallery(); } });
+    batchDel.addEventListener('click', async ()=>{
+      if (!selected.size) return; const ok = await ctx.ui.confirm({ title: t('批量删除？', 'Delete selected?'), body: t(`确定删除 ${selected.size} 张？此操作仅清理索引，文件仍在文件夹中。`, `Delete ${selected.size} pictures? Only index is cleared.`), danger: true }); if (!ok) return; // 前端移除
+      allHistory = allHistory.filter(h=> !selected.has(h.id)); shared.history = allHistory; selected.clear(); selCount.textContent=''; renderGallery();
+      ctx.ui.toast(t('已从画廊移除（文件未删）','Removed from gallery (files kept)'));
+    });
+    batchExport.addEventListener('click', ()=>{ ctx.ui.toast(t('已请求打开文件夹，请手动复制','Open folder to copy')); void ctx.invoke('openFolder'); });
+
+    // 右栏详情
+    const detailTitle = ctx.ui.h('div', 'coo-group-title', t('详情与操作','Details & actions'));
+    right.append(detailTitle);
+    const preview = document.createElement('img'); preview.className='coo-works-preview'; preview.alt=''; preview.style.display='none';
+    const empty = ctx.ui.placeholder(t('点击左侧缩略图查看大图与操作','Click a thumbnail to view details'));
+    right.append(preview, empty);
+    const metaCard = ctx.ui.sheet({ title: t('元信息','Metadata') }); right.append(metaCard.el);
+    const metaGrid = ctx.ui.h('div', 'coo-meta-grid'); metaCard.body.append(metaGrid);
+    const opsCard = ctx.ui.sheet({ title: t('操作','Actions') }); right.append(opsCard.el);
+    const opsRow = ctx.ui.h('div', 'coo-ops'); opsCard.body.append(opsRow);
+
+    let activeEntry: HistoryEntry | null = shared.resultEntry ?? allHistory[0] ?? null;
+    let previewUrl = '';
+    ctx.own({ dispose: ()=>{ if (previewUrl) URL.revokeObjectURL(previewUrl); } });
+    const imageUrls: string[] = []; ctx.own({ dispose: ()=>{ for(const u of imageUrls) URL.revokeObjectURL(u); } });
+
+    const buildMeta = (entry: HistoryEntry): void => {
+      metaGrid.replaceChildren();
+      const addRow = (k: string, v: string | HTMLElement, copyVal?: string): void => {
+        const kk = ctx.ui.h('div','k', k); const vv = ctx.ui.h('div','v'); if (typeof v==='string') vv.textContent=v; else vv.append(v);
+        const copy = copyVal ? ctx.ui.copyButton(()=>copyVal, { size:'sm', label: t('复制','Copy') }) : null;
+        metaGrid.append(kk, vv, copy ?? ctx.ui.h('span',''));
+      };
+      addRow(t('文件名','File'), entry.filename, entry.filename);
+      addRow(t('种子','Seed'), String(entry.seed), String(entry.seed));
+      addRow(t('尺寸','Size'), `${entry.width}×${entry.height}`);
+      const loraText = entry.loras.length ? entry.loras.map(l=> `${stripExt(l.name)}@${l.weight}`).join(' + ') : t('无','None');
+      // LoRA 可展开
+      const loraSpan = document.createElement('span'); loraSpan.textContent = entry.loras.length>2 ? `${loraText.slice(0, 60)}…` : loraText;
+      if (entry.loras.length>2) { const exp = ctx.ui.button(t('展开 ▼','Expand ▼'), { size:'sm'}); exp.addEventListener('click', ()=>{ loraSpan.textContent = loraText; exp.style.display='none'; }); loraSpan.append(exp); }
+      addRow('LoRA', loraSpan);
+      addRow(t('时间','Time'), shortDate(entry.created_at));
+      addRow(t('模型','Model'), stripExt(entry.checkpoint), entry.checkpoint);
+      const promptBrief = ctx.ui.h('div','', entry.positive.slice(0, 120)+(entry.positive.length>120?'…':'')); const expandPrompt = ctx.ui.button(t('展开 ▼','Expand ▼'), { size:'sm'}); const promptRowV = ctx.ui.h('div',''); promptRowV.append(promptBrief);
+      if (entry.positive.length>80){ expandPrompt.addEventListener('click', ()=>{ promptBrief.textContent = entry.positive; expandPrompt.style.display='none'; }); promptRowV.append(expandPrompt); }
+      addRow(t('提示词','Prompt'), promptRowV, entry.positive);
+      if (entry.negative) addRow(t('反向','Negative'), entry.negative.slice(0,80)+(entry.negative.length>80?'…':''), entry.negative);
+    };
+    const buildOps = (entry: HistoryEntry | null): void => {
+      opsRow.replaceChildren();
+      if (!entry) { opsRow.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
+      const redraw = ctx.ui.button(t('重画','Repaint'), { size:'sm', variant:'primary' }); redraw.addEventListener('click', ()=>{
+        // 同参同种子重画：把状态写回共享并切换到出图
+        (window as any).__coo_draw_repaint = { entry, mode: 'sameSeed' };
+        ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true })); const m = ctx as unknown as { switchTab?: (v:string)=>void }; if (m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，将用相同参数重画','Switched to Studio; repaint with same seed'));
+      });
+      const tweak = ctx.ui.button(t('微调','Tweak'), { size:'sm'}); tweak.addEventListener('click', ()=>{
+        (window as any).__coo_draw_repaint = { entry, mode: 'randomSeed' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，种子将随机','Switched to Studio; seed randomized'));
+      });
+      const useAll = ctx.ui.button(t('使用全部参数','Use all params'), { size:'sm'}); useAll.addEventListener('click', ()=>{
+        (window as any).__coo_draw_repaint = { entry, mode: 'useAll' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab',{detail:'studio',bubbles:true})); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('参数已回填到出图页','Params filled to Studio'));
+      });
+      const copySeed = ctx.ui.copyButton(()=>String(entry.seed), { label: t('复制种子','Copy seed'), size:'sm' });
+      const toPet = ctx.ui.button(t('发送到桌宠','Send to pet'), { size:'sm'}); toPet.addEventListener('click', ()=>{ void ctx.invoke('sendToPet', [entry.id]).then(res=>ctx.ui.toast((res as any).message, (res as any).ok?'ok':'bad')).catch(e=>ctx.ui.toast(errText(e),'bad')); });
+      const enlarge = ctx.ui.button(t('放大','Enlarge'), { size:'sm'}); enlarge.addEventListener('click', ()=>{ if (preview.src) ctx.ui.lightbox(preview.src, entry.filename); });
+      const fav = ctx.ui.button(t('收藏','Favorite'), { size:'sm'}); fav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); fav.textContent='★ '+t('已收藏','Favorited'); });
+      const del = ctx.ui.button(t('删除','Delete'), { size:'sm', variant:'plain'}); del.style.color='#c44'; del.addEventListener('click', async ()=>{
+        const ok=await ctx.ui.confirm({ title: t('删除这张？','Delete this?'), body: entry.filename, danger:true }); if(!ok) return; // 仅从画廊移除，不删文件
+        allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
+      });
+      const compare = ctx.ui.button(t('对比','Compare'), { size:'sm'}); compare.addEventListener('click', ()=>{
+        // 简单对比：让用户再选一张并排
+        ctx.ui.toast(t('请再点一张图进行对比','Click another picture to compare'));
+        const handler = (e: Event)=>{
+          const target = (e.target as HTMLElement).closest('.coo-works-tile') as HTMLElement | null;
+          if (!target) return;
+          const id = target.dataset.id; if (!id || id===entry.id) return;
+          const other = allHistory.find(h=>h.id===id); if (!other) return;
+          document.removeEventListener('click', handler);
+          // 并排对比 drawer
+          const body = document.createElement('div'); body.style.display='flex'; body.style.gap='8px'; body.style.flexWrap='wrap';
+          const aImg = document.createElement('img'); aImg.src = preview.src; aImg.style.maxWidth='48%'; aImg.style.borderRadius='8px';
+          const bImg = document.createElement('img'); bImg.style.maxWidth='48%'; bImg.style.borderRadius='8px';
+          body.append(aImg, bImg);
+          void ctx.invokeBinary('image', [other.id]).then(blob=>{ const url=URL.createObjectURL(blob); bImg.src=url; imageUrls.push(url); }).catch(()=>{});
+          ctx.ui.drawer(t('对比','Compare'), body);
+        };
+        setTimeout(()=> document.addEventListener('click', handler, { once:true }), 100);
+      });
+      const openFolder = ctx.ui.button(t('打开文件夹','Open folder'), { size:'sm'}); openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
+      opsRow.append(redraw, tweak, useAll, copySeed, toPet, enlarge, fav, del, compare, openFolder);
+    };
+
+    const showDetail = async (entry: HistoryEntry): Promise<void> => {
+      activeEntry = entry;
+      try {
+        const blob = await ctx.invokeBinary('image', [entry.id]);
+        if (!alive) return;
+        const url = URL.createObjectURL(blob); if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = url; preview.src = url; preview.style.display='block'; empty.style.display='none';
+      } catch(e){ empty.textContent = errText(e); empty.style.display=''; preview.style.display='none'; }
+      buildMeta(entry); buildOps(entry);
+      // 高亮选中
+      for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id); }
+    };
+
+    const filtered = (): HistoryEntry[] => {
+      const q = searchInput.value.trim().toLowerCase();
+      const from = dateFrom.value ? new Date(dateFrom.value).getTime() : 0;
+      const to = dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : Infinity;
+      const model = modelSelect.value;
+      const size = sizeSelect.value;
+      return allHistory.filter(h=>{
+        if (q && !(`${h.positive} ${h.negative} ${h.filename}`.toLowerCase().includes(q))) return false;
+        if (h.created_at < from || h.created_at > to) return false;
+        if (model && h.checkpoint !== model) return false;
+        if (size && size !== t('全部尺寸','All sizes') && size !== 'All sizes' && `${h.width}x${h.height}` !== size) return false;
+        // fav filter stub
+        return true;
+      });
+    };
+
+    const renderGallery = (): void => {
+      const list = filtered();
+      grid.replaceChildren();
+      statusLine.textContent = list.length ? t(`共 ${list.length} 张 · ${boot.config.output_dir}`, `${list.length} pictures · ${boot.config.output_dir}`) : t('没有匹配的作品，试着改筛选或搜索','No matches; adjust filters');
+      loadMoreBtn.style.display = allHistory.length < pageLimit ? 'none' : '';
+      // 新图置顶且带 NEW 标记（通过共享 lastFinished 判断）
+      for (const entry of list.slice(0, loadMoreBtn.style.display==='' ? pageLimit : 2000)) {
+        const tile = ctx.ui.h('button', 'coo-works-tile'); tile.type='button'; (tile as HTMLElement).dataset.id = entry.id;
+        if (activeEntry?.id===entry.id) tile.classList.add('sel');
+        const img = ctx.ui.h('img',''); img.alt = entry.filename; img.loading='lazy'; img.dataset.id = entry.id;
+        const label = ctx.ui.h('span','lab', `${entry.seed} · ${entry.width}×${entry.height}`);
+        // hover 预览完整比例：用 title 展示
+        tile.title = `${entry.filename}\n${entry.positive.slice(0,120)}`;
+        // batch checkbox
+        if (batchMode) {
+          const chk = document.createElement('input'); chk.type='checkbox'; chk.className='chk'; chk.checked = selected.has(entry.id);
+          chk.addEventListener('click', (e)=>{ e.stopPropagation(); if (chk.checked) selected.add(entry.id); else selected.delete(entry.id); selCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : ''; });
+          tile.append(chk);
+        }
+        tile.append(img, label);
+        tile.addEventListener('click', ()=>{ if (batchMode) { if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id); selCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : ''; renderGallery(); return; } void showDetail(entry); });
+        grid.append(tile);
+        // lazy load image
+        void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); imageUrls.push(url); img.src=url; }).catch(()=>{ img.alt='×'; });
+        // 新图红点
+        if (entry.id === shared.current?.images[0]?.id) {
+          const badge = ctx.ui.h('span','pill', 'NEW'); (badge as HTMLElement).style.position='absolute'; (badge as HTMLElement).style.top='6px'; (badge as HTMLElement).style.right='6px'; (badge as HTMLElement).style.fontSize='10px'; (badge as HTMLElement).style.background='rgba(220,60,60,.9)'; (badge as HTMLElement).style.color='#fff'; tile.style.position='relative'; tile.append(badge);
+        }
+      }
+      if (list.length===0) { grid.append(ctx.ui.placeholder(t('没有作品','No works'))); }
+    };
+
+    searchInput.addEventListener('input', renderGallery);
+    dateFrom.addEventListener('change', renderGallery);
+    dateTo.addEventListener('change', renderGallery);
+    modelSelect.addEventListener('change', renderGallery);
+    sizeSelect.addEventListener('change', renderGallery);
+    favSelect.addEventListener('change', renderGallery);
+    loadMoreBtn.addEventListener('click', async ()=>{
+      pageLimit += 50;
+      await fetchHistory(pageLimit);
+      loadMoreBtn.style.display = allHistory.length >= pageLimit ? '' : 'none';
+      ctx.ui.toast(t(`已加载至 ${allHistory.length} 张`,`Loaded ${allHistory.length}`));
+    });
+
+    // 自动选中第一张或共享结果
+    renderGallery();
+    if (activeEntry) void showDetail(activeEntry);
+    else if (allHistory[0]) void showDetail(allHistory[0]);
+
+    // 监听新图生成事件：若有新图，自动置顶并选中
+    const onNewImage = (): void => { void fetchHistory(pageLimit); };
+    // 简单轮询新图：若共享 current 变为 done 则刷新
+    ctx.interval(async ()=>{
+      if (!alive) return;
+      try { const res = await ctx.invoke<HistoryResponse>('history', [pageLimit]); if (!alive) return; if (res.history.length !== allHistory.length || res.history[0]?.id !== allHistory[0]?.id) { allHistory = res.history; shared.history = allHistory; // 更新模型下拉
+        const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort(); modelSelect.replaceChildren(); const optAll=document.createElement('option'); optAll.value=''; optAll.textContent=t('全部模型','All models'); modelSelect.append(optAll); for(const m of models){ const o=document.createElement('option'); o.value=m; o.textContent=stripExt(m); modelSelect.append(o);} renderGallery(); if (res.history[0] && (!activeEntry || activeEntry.id !== res.history[0].id)) { // 自动选中新图
+          const newEnt = res.history[0]; // 小红点由 render 处理
+          // 可选：自动切换详情
+        } } } catch {}
+    }, 2000);
   },
 };
 
@@ -1013,8 +1069,8 @@ const lorasPanel: WebUiPanel = {
 
     const head = ctx.ui.sheet({
       title: t('LoRA 管理', 'LoRA manager'),
-      desc: t('扫描 ComfyUI 的 models/loras；设常驻组合、中文别名和触发词。',
-        'Scans ComfyUI models/loras; set always-on defaults, aliases and trigger words.'),
+      desc: t('扫描 ComfyUI 的 models/loras；设常驻组合、中文别名和触发词。支持设置别名分类备注，出图页优先显示别名。',
+        'Scans ComfyUI models/loras; set always-on defaults, aliases and trigger words. Aliases are shown first in Studio.'),
     });
     ctx.root.append(head.el);
 
@@ -1110,14 +1166,16 @@ const lorasPanel: WebUiPanel = {
                 ctx.ui.toast(errText(error), 'bad');
               }
             })();
-          }, { signal: ctx.signal });
+          });
         }
         const name = document.createElement('div');
         const nameText = document.createElement('div');
-        nameText.textContent = record.name;
+        nameText.textContent = stripExt(record.name);
+        nameText.title = record.path;
         const pathText = document.createElement('div');
         pathText.className = 'coo-gen-sub';
         pathText.textContent = `${record.path}${record.category ? ` · ${record.category}` : ''}`;
+        pathText.title = record.path;
         name.append(nameText, pathText);
         if (isDefault) name.append(pill(ctx, t('常驻', 'always-on'), 'on'));
 
@@ -1138,11 +1196,11 @@ const lorasPanel: WebUiPanel = {
           if (isDefault) defaults = defaults.filter((item) => item.path !== record.path);
           else defaults = [...defaults, { name: record.name, path: record.path, weight: record.weight ?? 0.75, trigger_words: record.trigger_words }];
           void saveDefaults();
-        }, { signal: ctx.signal });
+        });
         const aliasBtn = ctx.ui.button(t('别名', 'Aliases'), { size: 'sm' });
-        aliasBtn.addEventListener('click', () => openMeta(record, 'aliases'), { signal: ctx.signal });
+        aliasBtn.addEventListener('click', () => openMeta(record, 'aliases'));
         const trigBtn = ctx.ui.button(t('触发词', 'Triggers'), { size: 'sm' });
-        trigBtn.addEventListener('click', () => openMeta(record, 'trigger_words'), { signal: ctx.signal });
+        trigBtn.addEventListener('click', () => openMeta(record, 'trigger_words'));
         actions.append(defaultBtn, aliasBtn, trigBtn);
         table.addRow([thumb, name, meta, actions]);
       }
@@ -1178,7 +1236,7 @@ const lorasPanel: WebUiPanel = {
             line.classList.add('bad');
           }
         })();
-      }, { signal: ctx.signal });
+      });
     };
 
     const saveDefaults = async (): Promise<void> => {
@@ -1196,7 +1254,7 @@ const lorasPanel: WebUiPanel = {
     };
 
     search.addEventListener('input', render, { signal: ctx.signal });
-    categorySelect.addEventListener('change', () => { category = categorySelect.value; render(); }, { signal: ctx.signal });
+    categorySelect.addEventListener('change', () => { category = categorySelect.value; render(); });
     rescan.addEventListener('click', () => {
       void (async () => {
         try {
@@ -1214,11 +1272,11 @@ const lorasPanel: WebUiPanel = {
           ctx.ui.toast(errText(error), 'bad');
         }
       })();
-    }, { signal: ctx.signal });
+    });
 
     const defaultSheet = ctx.ui.sheet({
       title: t('常驻组合', 'Always-on stack'),
-      desc: t('每次出图都会自动叠加；对话匹配优先，超上限时淘汰常驻。', 'Applied to every generation; chat matches win when the cap is hit.'),
+      desc: t('每次出图都会自动叠加；对话匹配优先，超上限时淘汰常驻。可拖拽排序，顺序影响叠加效果。', 'Applied to every generation; chat matches win when cap hit. Drag to reorder.'),
     });
     ctx.root.append(defaultSheet.el);
     const defaultsTable = ctx.ui.table({ head: [t('LoRA', 'LoRA'), t('权重', 'Weight'), ''] });
@@ -1228,7 +1286,7 @@ const lorasPanel: WebUiPanel = {
       defaultsTable.clear(defaults.length ? undefined : t('还没有常驻 LoRA。', 'No always-on LoRA yet.'));
       for (const [index, item] of defaults.entries()) {
         const name = document.createElement('div');
-        name.textContent = item.name;
+        name.textContent = stripExt(item.name);
         const sub = document.createElement('div');
         sub.className = 'coo-gen-sub';
         sub.textContent = item.path;
@@ -1239,20 +1297,26 @@ const lorasPanel: WebUiPanel = {
         weight.step = '0.05';
         weight.addEventListener('change', () => {
           defaults[index] = { ...item, weight: Math.min(2, Math.max(0.05, num(weight.value, item.weight))) };
-        }, { signal: ctx.signal });
+        });
         const remove = ctx.ui.button(t('移除', 'Remove'), { size: 'sm', variant: 'plain' });
         remove.addEventListener('click', () => {
           defaults.splice(index, 1);
           void saveDefaults();
-        }, { signal: ctx.signal });
-        defaultsTable.addRow([name, weight, remove]);
+        });
+        // 拖拽排序简易实现：上下按钮
+        const up = ctx.ui.button('↑', { size: 'sm' }); up.disabled = index===0;
+        up.addEventListener('click', ()=>{ if(index>0){ const tmp=defaults[index-1]!; defaults[index-1]=defaults[index]!; defaults[index]=tmp; void saveDefaults(); }});
+        const down = ctx.ui.button('↓', { size: 'sm' }); down.disabled = index===defaults.length-1;
+        down.addEventListener('click', ()=>{ if(index<defaults.length-1){ const tmp=defaults[index+1]!; defaults[index+1]=defaults[index]!; defaults[index]=tmp; void saveDefaults(); }});
+        const rowActions = ctx.ui.rowbar(); rowActions.append(up, down, remove);
+        defaultsTable.addRow([name, weight, rowActions]);
       }
     };
     renderDefaults();
 
     const aliasSheet = ctx.ui.sheet({
       title: t('别名表', 'Alias table'),
-      desc: t('“塞尔达” → zelda_botw_style；对话里出现中文别名就会匹配。', '“Zelda” → zelda_botw_style; a mention selects the LoRA.'),
+      desc: t('“塞尔达” → zelda_botw_style；对话里出现中文别名就会匹配。支持分类与备注。', '“Zelda” → zelda_botw_style; a mention selects the LoRA.'),
     });
     ctx.root.append(aliasSheet.el);
     const aliasTable = ctx.ui.table({ head: [t('别名', 'Alias'), t('LoRA（逗号分隔）', 'LoRAs (comma separated)'), ''] });
@@ -1284,7 +1348,7 @@ const lorasPanel: WebUiPanel = {
         remove.addEventListener('click', () => {
           delete aliases[alias];
           void saveAliases();
-        }, { signal: ctx.signal });
+        });
         aliasTable.addRow([alias, targets.join(', '), remove]);
       }
     };
@@ -1299,11 +1363,10 @@ const lorasPanel: WebUiPanel = {
       newAlias.value = '';
       newTargets.value = '';
       void saveAliases();
-    }, { signal: ctx.signal });
+    });
     renderAliases();
     render();
 
-    // 目录路径只用于展示；从 panel 另行读取。
     void ctx.invoke<{ loras: LoRARecord[] }>('listLoras').then(() => { if (alive) renderStatus(); }).catch(() => {});
   },
 };
@@ -1366,7 +1429,7 @@ const workflowsPanel: WebUiPanel = {
           isDefault.title = t('当前默认工作流', 'Current default workflow');
           isDefault.addEventListener('click', () => {
             ctx.ui.toast(t('这已经是默认工作流', 'This is already the default workflow'));
-          }, { signal: ctx.signal });
+          });
           actions.append(isDefault);
         } else {
           const use = ctx.ui.button(t('设为默认', 'Use as default'), { size: 'sm' });
@@ -1381,7 +1444,7 @@ const workflowsPanel: WebUiPanel = {
                 ctx.ui.toast(errText(error), 'bad');
               }
             })();
-          }, { signal: ctx.signal });
+          });
           actions.append(use);
         }
         const detail = ctx.ui.button(t('详情', 'Details'), { size: 'sm' });
@@ -1402,7 +1465,7 @@ const workflowsPanel: WebUiPanel = {
               ctx.ui.toast(errText(error), 'bad');
             }
           })();
-        }, { signal: ctx.signal });
+        });
         actions.append(detail);
         if (!preset.builtin) {
           const remove = ctx.ui.button(t('删除', 'Delete'), { size: 'sm', variant: 'danger' });
@@ -1419,7 +1482,7 @@ const workflowsPanel: WebUiPanel = {
                 ctx.ui.toast(errText(error), 'bad');
               }
             })();
-          }, { signal: ctx.signal });
+          });
           actions.append(remove);
         }
         table.addRow([name, kind, params, actions]);
@@ -1447,7 +1510,7 @@ const workflowsPanel: WebUiPanel = {
           line.classList.add('bad');
         }
       })();
-    }, { signal: ctx.signal });
+    });
     const nameInput = ctx.ui.input({ placeholder: t('名称（留空用文件名）', 'Name (defaults to file name)') });
     nameInput.style.width = '100%';
     const importBtn = ctx.ui.button(t('导入', 'Import'), { variant: 'primary', size: 'sm' });
@@ -1484,8 +1547,8 @@ const workflowsPanel: WebUiPanel = {
           importBtn.disabled = false;
         }
       })();
-    }, { signal: ctx.signal });
+    });
   },
 };
 
-export { studioPanel, lorasPanel, workflowsPanel };
+export { studioPanel, lorasPanel, workflowsPanel, worksPanel };

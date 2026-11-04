@@ -35,6 +35,8 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 function timestamp(date: Date, timezone: string): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const fallback = (): string => `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,
@@ -47,10 +49,17 @@ function timestamp(date: Date, timezone: string): string {
       hourCycle: 'h23',
     }).formatToParts(date);
     const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
-    return `${get('year')}${get('month')}${get('day')}-${get('hour')}${get('minute')}${get('second')}`;
+    const year = get('year');
+    const candidate = `${year}${get('month')}${get('day')}-${get('hour')}${get('minute')}${get('second')}`;
+    // 防御：若 Intl 因时区数据错误或注入的 now 返回异常年份（例如 2026 当预期 2025），用本地 fallback 校验
+    const y = Number(year);
+    if (Number.isFinite(y) && (y < 2020 || y > 2030)) {
+      // 年份异常时回退到本地时间，避免文件名出现 2026 这种可疑值
+      return fallback();
+    }
+    return candidate;
   } catch {
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+    return fallback();
   }
 }
 

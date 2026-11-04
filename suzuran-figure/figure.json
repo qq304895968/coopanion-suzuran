@@ -11,8 +11,8 @@
     "ko": "스즈란"
   },
   "about": {
-    "zh": "明日方舟干员铃兰：戴尖顶帽、留紫色双马尾的狐耳少女，撑一把长柄伞。原型是游戏里的 Spine 战斗模型，呼吸、头发、尾巴和伞面都是原始骨骼动画，会眨眼、会张嘴说话、会晕头转向；括号里选的是皮肤：默认、春之颂（和服）、雪霁（红围巾）、弃土花开（野营）。她还能挥伞、施法、转伞、躺倒，都是游戏里的原版动作。",
-    "en": "Arknights operator Suzuran: a fox-eared girl in a pointed hat with purple twintails, carrying a long umbrella. This is her in-game Spine battle model, so breathing, hair, tail and umbrella are the original skeletal animation: she blinks, talks with her mouth, gets dizzy, and fidgets. The bracket picks a skin: default, Spring (kimono), Snow Clearing (red scarf), or Wild Blooms (camping). She also swings the umbrella, casts, twirls it and flops down, using the game's own animations."
+    "zh": "明日方舟干员铃兰（本名丽萨）：浅金长发、绿瞳、狐耳大尾巴的少女，随身带一把长柄和伞。模型取自游戏客户端的 Spine 战斗模型，呼吸、头发、尾巴、伞面都是原始骨骼动画，会眨眼、会张嘴说话、会晕头转向。括号里是皮肤：默认（白蓝制服）、春之颂（罗小黑联动的绿裙）、雪霁（红色和服）、弃土花开（护目镜野营装）。她还能挥伞、施法、转伞、躺倒，都是游戏里的原版动作。",
+    "en": "Arknights operator Suzuran (real name Lisa): a fox-eared girl with pale blonde hair, green eyes and a big fluffy tail, carrying a long paper parasol. She is the game's own Spine battle model, so breathing, hair, tail and umbrella are the original skeletal animation; she blinks, talks with an open mouth, gets dizzy and fidgets. The bracket picks a skin: Default (white and blue uniform), Spring (green dress from the Luo Xiaohei crossover), Snow Clearing (red kimono) or Wild Blooms (goggles and camping gear). She also swings the umbrella, casts with it, twirls it open and flops down, all with the game's own animations."
   },
   "author": "coopanion-suzuran workspace",
   "license": "MIT (pack code); character art © Hypergryph/Yostar, extracted from game files (see README.md)",

@@ -8,8 +8,8 @@
   14 个表情 + 18 个动作的词表，`can.walk: true`。
 - `figure.js` — 入口，导出 `createSuzuranBody`：按所选皮肤绘制 1024×1024 立绘，眨眼/睡觉时切换
   闭眼版本，坐下时压扁，换皮肤时短暂交叉淡入。
-- `tex/skin-{default,e2,xueji}.png` — 三套皮肤的完整立绘（透明底，脚贴底边）。
-- `tex/skin-*-closed.png` — 对应的闭眼版本（眨眼/睡眠用）。
+- `tex/{default,e2,xueji}/open.png` — 三套皮肤的完整立绘（透明底，脚贴底边）。
+- `tex/{default,e2,xueji}/closed.png` — 对应的闭眼版本（眨眼/睡眠用）。
 - `thumbs/` — 装扮页缩略图。
 - `tools/render_spine.py` — 把 Arknights Spine JSON 渲染成 PNG 的小工具（本包未依赖它，留作素材处理记录）。
 

@@ -20,7 +20,7 @@ const SKINS = ['default', 'e2', 'xueji'];
 const FADE = 0.25;         // cross-fade between skins (~6-15 frames)
 
 export async function createSuzuranBody(base, { kit, host, loadImage, asset, scheme }) {
-  const files = SKINS.flatMap((s) => [`tex/skin-${s}.png`, `tex/skin-${s}-closed.png`]);
+  const files = SKINS.flatMap((s) => [`tex/${s}/open.png`, `tex/${s}/closed.png`]);
   const images = await Promise.all(files.map((f) => loadImage(String(asset(f)))));
   const img = (skin, closed) => images[SKINS.indexOf(skin) * 2 + (closed ? 1 : 0)];
 

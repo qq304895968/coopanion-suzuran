@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "suzuran",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "name": {
     "zh": "铃兰",
     "zh-Hant": "鈴蘭",
@@ -11,23 +11,30 @@
     "ko": "스즈란"
   },
   "about": {
-    "zh": "明日方舟干员铃兰:狐耳少女,戴尖顶帽、留紫色双马尾,手持一把长杖;括号里选的是她的立绘——默认、精英2、皮肤「雪霁」(红围巾暖室装)",
-    "en": "Arknights operator Suzuran: a fox-eared girl in a pointed hat with purple twintails holding a long staff; the bracket picks her illustration — default, E2, or the 'Snow Clearing' skin (red scarf, warm room outfit)"
+    "zh": "明日方舟干员铃兰：戴尖顶帽、留紫色双马尾的狐耳少女，撑一把长柄伞。原型是游戏里的 Spine 战斗模型，呼吸、头发、尾巴和伞面都是原始骨骼动画，会眨眼、会张嘴说话、会晕头转向；括号里选的是皮肤：默认、春之颂（和服）、雪霁（红围巾）、弃土花开（野营）。她还能挥伞、施法、转伞、躺倒，都是游戏里的原版动作。",
+    "en": "Arknights operator Suzuran: a fox-eared girl in a pointed hat with purple twintails, carrying a long umbrella. This is her in-game Spine battle model, so breathing, hair, tail and umbrella are the original skeletal animation: she blinks, talks with her mouth, gets dizzy, and fidgets. The bracket picks a skin: default, Spring (kimono), Snow Clearing (red scarf), or Wild Blooms (camping). She also swings the umbrella, casts, twirls it and flops down, using the game's own animations."
   },
   "author": "coopanion-suzuran workspace",
   "license": "MIT (pack code); character art © Hypergryph/Yostar, extracted from game files (see README.md)",
   "credits": [
     {
-      "role": "角色原设",
+      "role": "角色原设 / character",
       "name": "Hypergryph / Yostar (明日方舟干员「铃兰」)"
     },
     {
-      "role": "立绘素材来源",
-      "name": "游戏客户端文件经 fexli/ArknightsResource (GitHub) 公开"
+      "role": "模型来源 / rig data",
+      "name": "游戏客户端 Spine 战斗模型，经 fexli/ArknightsResource 公开",
+      "url": "https://github.com/fexli/ArknightsResource"
+    },
+    {
+      "role": "Spine 运行时 / runtime",
+      "name": "Esoteric Software spine-runtimes 3.8 (Spine Runtimes License)",
+      "url": "https://github.com/EsotericSoftware/spine-runtimes"
     }
   ],
   "entry": "figure.js",
   "export": "createSuzuranBody",
+  "model": "model.json",
   "thumb": "thumbs/suzuran.png",
   "axes": [
     {
@@ -43,29 +50,38 @@
         {
           "id": "default",
           "name": {
-            "zh": "默认立绘",
+            "zh": "默认",
             "en": "Default"
           },
           "thumb": "thumbs/default.png",
-          "accent": "#8d7bd8"
+          "accent": "#8f7fd0"
         },
         {
-          "id": "e2",
+          "id": "spring",
           "name": {
-            "zh": "精英2",
-            "en": "E2"
+            "zh": "春之颂",
+            "en": "Spring"
           },
-          "thumb": "thumbs/e2.png",
-          "accent": "#5aa7e8"
+          "thumb": "thumbs/spring.png",
+          "accent": "#e08fb0"
         },
         {
-          "id": "xueji",
+          "id": "snow",
           "name": {
             "zh": "雪霁",
-            "en": "Snow Clearing (nian#11)"
+            "en": "Snow Clearing"
           },
-          "thumb": "thumbs/xueji.png",
+          "thumb": "thumbs/snow.png",
           "accent": "#d8574a"
+        },
+        {
+          "id": "wild",
+          "name": {
+            "zh": "弃土花开",
+            "en": "Wild Blooms"
+          },
+          "thumb": "thumbs/wild.png",
+          "accent": "#6fa86a"
         }
       ]
     }
@@ -80,29 +96,40 @@
         "zh": "默认",
         "en": "Default"
       },
-      "accent": "#8d7bd8"
+      "accent": "#8f7fd0"
     },
     {
-      "id": "e2",
+      "id": "spring",
       "pick": {
-        "outfit": "e2"
+        "outfit": "spring"
       },
       "name": {
-        "zh": "精英2",
-        "en": "E2"
+        "zh": "春之颂",
+        "en": "Spring"
       },
-      "accent": "#5aa7e8"
+      "accent": "#e08fb0"
     },
     {
-      "id": "xueji",
+      "id": "snow",
       "pick": {
-        "outfit": "xueji"
+        "outfit": "snow"
       },
       "name": {
         "zh": "雪霁",
         "en": "Snow Clearing"
       },
       "accent": "#d8574a"
+    },
+    {
+      "id": "wild",
+      "pick": {
+        "outfit": "wild"
+      },
+      "name": {
+        "zh": "弃土花开",
+        "en": "Wild Blooms"
+      },
+      "accent": "#6fa86a"
     }
   ],
   "vocab": [
@@ -111,15 +138,17 @@
       "kind": "expression",
       "names": {
         "zh": [
-          "平静",
-          "面无表情"
+          "平静"
+        ],
+        "en": [
+          "calm"
         ]
       },
       "about": {
-        "zh": "恢复平静的表情",
-        "en": "goes back to a calm face"
+        "zh": "平常的样子，安静地站着",
+        "en": "her usual quiet look"
       },
-      "seconds": 0.9
+      "seconds": 3.2
     },
     {
       "id": "happy",
@@ -128,13 +157,17 @@
         "zh": [
           "开心",
           "高兴"
+        ],
+        "en": [
+          "glad",
+          "cheerful"
         ]
       },
       "about": {
-        "zh": "露出开心的笑容",
-        "en": "smiles happily"
+        "zh": "眯起眼睛笑，耳朵竖起来",
+        "en": "eyes curving up, ears perked"
       },
-      "seconds": 0.9
+      "seconds": 3.2
     },
     {
       "id": "wink",
@@ -142,14 +175,17 @@
       "names": {
         "zh": [
           "眨眼",
-          "调皮"
+          "抛媚眼"
+        ],
+        "en": [
+          "blink"
         ]
       },
       "about": {
-        "zh": "俏皮地眨一下眼",
-        "en": "winks"
+        "zh": "一只眼睛眨一下",
+        "en": "one eye winks"
       },
-      "seconds": 0.9
+      "seconds": 2.4
     },
     {
       "id": "love",
@@ -158,13 +194,51 @@
         "zh": [
           "喜欢",
           "心动"
+        ],
+        "en": [
+          "adore"
         ]
       },
       "about": {
-        "zh": "眼睛变成爱心",
-        "en": "eyes turn into hearts"
+        "zh": "喜欢得不行，尾巴摇得很快",
+        "en": "smitten; the tail wags fast"
       },
-      "seconds": 0.9
+      "seconds": 3.4
+    },
+    {
+      "id": "shy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害羞"
+        ],
+        "en": [
+          "bashful"
+        ]
+      },
+      "about": {
+        "zh": "低下头，两只手往内收",
+        "en": "head down, hands drawn in"
+      },
+      "seconds": 3.4
+    },
+    {
+      "id": "surprised",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "惊讶",
+          "吃惊"
+        ],
+        "en": [
+          "startled"
+        ]
+      },
+      "about": {
+        "zh": "吓一跳，耳朵唰地立起",
+        "en": "startled, ears shooting up"
+      },
+      "seconds": 2.6
     },
     {
       "id": "angry",
@@ -172,14 +246,18 @@
       "names": {
         "zh": [
           "生气",
-          "鼓脸"
+          "恼怒"
+        ],
+        "en": [
+          "mad",
+          "annoyed"
         ]
       },
       "about": {
-        "zh": "鼓起脸颊瞪人",
-        "en": "puffs her cheeks angrily"
+        "zh": "鼓起脸，尾巴僵住",
+        "en": "puffing up, tail stiff"
       },
-      "seconds": 0.9
+      "seconds": 3.2
     },
     {
       "id": "sad",
@@ -187,104 +265,18 @@
       "names": {
         "zh": [
           "难过",
-          "委屈"
+          "失落"
+        ],
+        "en": [
+          "unhappy",
+          "down"
         ]
       },
       "about": {
-        "zh": "眼神低垂,嘴角下撇",
-        "en": "droops sadly"
+        "zh": "垂下耳朵，往前低头",
+        "en": "ears drooping, head down"
       },
-      "seconds": 0.9
-    },
-    {
-      "id": "determined",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "认真",
-          "坚定"
-        ]
-      },
-      "about": {
-        "zh": "眼神压低,一脸认真",
-        "en": "a lowered gaze, a serious face"
-      },
-      "seconds": 0.9
-    },
-    {
-      "id": "flustered",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "慌张",
-          "窘"
-        ]
-      },
-      "about": {
-        "zh": "满脸通红冒汗",
-        "en": "red all over and sweating"
-      },
-      "seconds": 0.9
-    },
-    {
-      "id": "scared",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "害怕",
-          "吓到"
-        ]
-      },
-      "about": {
-        "zh": "眼睛瞪大,身体发抖",
-        "en": "eyes wide, body shaking"
-      },
-      "seconds": 0.9
-    },
-    {
-      "id": "excited",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "期待",
-          "星星眼"
-        ]
-      },
-      "about": {
-        "zh": "眼睛里闪着星星",
-        "en": "stars sparkle in the eyes"
-      },
-      "seconds": 0.9
-    },
-    {
-      "id": "cry",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "大哭",
-          "哭"
-        ]
-      },
-      "about": {
-        "zh": "闭眼大哭,眼泪直流",
-        "en": "eyes shut, wailing, tears streaming"
-      },
-      "seconds": 0.9
-    },
-    {
-      "id": "confused",
-      "kind": "expression",
-      "names": {
-        "zh": [
-          "疑惑",
-          "问号"
-        ]
-      },
-      "about": {
-        "zh": "一脸不解,头顶问号",
-        "en": "a puzzled face, a question mark overhead"
-      },
-      "seconds": 0.9
+      "seconds": 3.6
     },
     {
       "id": "sleepy",
@@ -292,44 +284,214 @@
       "names": {
         "zh": [
           "困",
-          "犯困"
+          "想睡"
+        ],
+        "en": [
+          "drowsy"
         ]
       },
       "about": {
-        "zh": "眯起眼睛打哈欠",
-        "en": "eyes half-closed, drowsy"
+        "zh": "眼皮撑不住",
+        "en": "eyes half shut"
       },
-      "seconds": 0.9
+      "seconds": 4.4
     },
     {
-      "id": "proud",
+      "id": "thinking",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "思考",
+          "想想"
+        ],
+        "en": [
+          "pondering"
+        ]
+      },
+      "about": {
+        "zh": "歪着头，耳朵转向一边",
+        "en": "head tilted, one ear turned"
+      },
+      "seconds": 3.6
+    },
+    {
+      "id": "smug",
       "kind": "expression",
       "names": {
         "zh": [
           "得意",
-          "叉腰"
+          "自豪"
+        ],
+        "en": [
+          "proud"
         ]
       },
       "about": {
-        "zh": "昂首挺胸一脸得意",
-        "en": "chest out, proud"
+        "zh": "扬起下巴",
+        "en": "chin up"
       },
-      "seconds": 0.9
+      "seconds": 3.2
+    },
+    {
+      "id": "pout",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "嘟嘴",
+          "不满"
+        ],
+        "en": [
+          "sulk"
+        ]
+      },
+      "about": {
+        "zh": "鼓着嘴别过头",
+        "en": "lips out, looking away"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "worried",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "担心"
+        ],
+        "en": [
+          "anxious"
+        ]
+      },
+      "about": {
+        "zh": "眉毛塌下来",
+        "en": "brows down, unsure"
+      },
+      "seconds": 3.4
+    },
+    {
+      "id": "determined",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "坚定",
+          "下决心"
+        ],
+        "en": [
+          "resolute"
+        ]
+      },
+      "about": {
+        "zh": "攥紧伞柄",
+        "en": "gripping the umbrella"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "flustered",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "慌张",
+          "乱了阵脚"
+        ],
+        "en": [
+          "panicky"
+        ]
+      },
+      "about": {
+        "zh": "手忙脚乱",
+        "en": "flustered, head turned away"
+      },
+      "seconds": 3.2
+    },
+    {
+      "id": "scared",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "害怕",
+          "恐惧"
+        ],
+        "en": [
+          "frightened"
+        ]
+      },
+      "about": {
+        "zh": "缩成一团，发抖",
+        "en": "shrinking, shivering"
+      },
+      "seconds": 3.4
+    },
+    {
+      "id": "excited",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "兴奋"
+        ],
+        "en": [
+          "thrilled"
+        ]
+      },
+      "about": {
+        "zh": "耳朵和尾巴一起动起来",
+        "en": "ears and tail going at once"
+      },
+      "seconds": 3.4
+    },
+    {
+      "id": "cry",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "哭",
+          "委屈"
+        ],
+        "en": [
+          "weeping",
+          "teary"
+        ]
+      },
+      "about": {
+        "zh": "眼泪汪汪",
+        "en": "teary, shoulders shaking"
+      },
+      "seconds": 3.6
+    },
+    {
+      "id": "confused",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "疑惑",
+          "不解"
+        ],
+        "en": [
+          "puzzled"
+        ]
+      },
+      "about": {
+        "zh": "歪着头看不懂",
+        "en": "head tilted, lost"
+      },
+      "seconds": 3.4
     },
     {
       "id": "stand",
       "kind": "motion",
       "names": {
         "zh": [
-          "站起",
-          "站"
+          "站好",
+          "站直"
+        ],
+        "en": [
+          "rise"
         ]
       },
       "about": {
-        "zh": "站起来(坐着、睡着时)",
+        "zh": "站起来，抖抖裙摆",
         "en": "stands up"
       },
-      "seconds": 1.2
+      "seconds": 1
     },
     {
       "id": "jump",
@@ -337,12 +499,15 @@
       "names": {
         "zh": [
           "跳",
-          "跳起来"
+          "跳起"
+        ],
+        "en": [
+          "leap"
         ]
       },
       "about": {
-        "zh": "原地起跳",
-        "en": "jumps on the spot"
+        "zh": "原地跳一下",
+        "en": "jumps"
       },
       "seconds": 1.2
     },
@@ -352,14 +517,17 @@
       "names": {
         "zh": [
           "小跳",
-          "蹦"
+          "蹦一下"
+        ],
+        "en": [
+          "bounce"
         ]
       },
       "about": {
-        "zh": "小小蹦一下",
+        "zh": "轻轻蹦一下",
         "en": "a small hop"
       },
-      "seconds": 0.9
+      "seconds": 1
     },
     {
       "id": "look",
@@ -370,14 +538,14 @@
           "看看"
         ],
         "en": [
-          "lookaround"
+          "glance"
         ]
       },
       "about": {
-        "zh": "左右张望",
-        "en": "looks left and right"
+        "zh": "东张西望",
+        "en": "looks around"
       },
-      "seconds": 2.7
+      "seconds": 2
     },
     {
       "id": "turn",
@@ -385,13 +553,16 @@
       "names": {
         "zh": [
           "转身"
+        ],
+        "en": [
+          "pivot"
         ]
       },
       "about": {
-        "zh": "转向另一边",
+        "zh": "转过身朝另一边",
         "en": "turns to face the other way"
       },
-      "seconds": 0.4
+      "seconds": 1
     },
     {
       "id": "nod",
@@ -399,13 +570,16 @@
       "names": {
         "zh": [
           "点头"
+        ],
+        "en": [
+          "agree"
         ]
       },
       "about": {
-        "zh": "低头两下",
-        "en": "dips the head twice"
+        "zh": "点头答应",
+        "en": "nods"
       },
-      "seconds": 0.8
+      "seconds": 1.2
     },
     {
       "id": "shake",
@@ -415,14 +589,14 @@
           "摇头"
         ],
         "en": [
-          "shakehead"
+          "deny"
         ]
       },
       "about": {
-        "zh": "脸左右转",
-        "en": "turns the face left and right"
+        "zh": "摇头不干",
+        "en": "shakes her head"
       },
-      "seconds": 0.8
+      "seconds": 1.2
     },
     {
       "id": "spin",
@@ -430,13 +604,16 @@
       "names": {
         "zh": [
           "转圈"
+        ],
+        "en": [
+          "pirouette"
         ]
       },
       "about": {
         "zh": "原地转一圈",
-        "en": "spins around once"
+        "en": "spins on the spot"
       },
-      "seconds": 0.8
+      "seconds": 1.2
     },
     {
       "id": "sit",
@@ -445,13 +622,16 @@
         "zh": [
           "坐下",
           "坐"
+        ],
+        "en": [
+          "seated"
         ]
       },
       "about": {
-        "zh": "坐下",
+        "zh": "坐下来，裙摆铺开",
         "en": "sits down"
       },
-      "seconds": 0.8,
+      "seconds": 1,
       "lasting": true
     },
     {
@@ -461,13 +641,17 @@
         "zh": [
           "睡觉",
           "睡"
+        ],
+        "en": [
+          "nap",
+          "doze"
         ]
       },
       "about": {
-        "zh": "坐下打盹闭眼",
-        "en": "dozes sitting down"
+        "zh": "闭上眼睛打盹",
+        "en": "curls up and sleeps"
       },
-      "seconds": 0.8,
+      "seconds": 1.5,
       "lasting": true
     },
     {
@@ -476,29 +660,35 @@
       "names": {
         "zh": [
           "晕",
-          "转晕"
+          "晕头转向"
+        ],
+        "en": [
+          "woozy"
         ]
       },
       "about": {
-        "zh": "dizzy for a few seconds",
-        "en": "dizzy for a few seconds"
+        "zh": "转晕了，眼睛里转圈圈",
+        "en": "dizzy, eyes spinning"
       },
-      "seconds": 3.2
+      "seconds": 3
     },
     {
       "id": "walk",
       "kind": "motion",
       "names": {
         "zh": [
-          "走走",
+          "走",
           "散步"
+        ],
+        "en": [
+          "stroll"
         ]
       },
       "about": {
-        "zh": "随便走一段",
-        "en": "wanders a little way"
+        "zh": "迈着小步走过去",
+        "en": "walks somewhere"
       },
-      "seconds": 12
+      "seconds": 2
     },
     {
       "id": "run",
@@ -506,43 +696,54 @@
       "names": {
         "zh": [
           "跑",
-          "跑起来"
+          "跑过去"
+        ],
+        "en": [
+          "sprint",
+          "dash"
         ]
       },
       "about": {
-        "zh": "跑到屏幕另一头",
-        "en": "runs to the other end of the screen"
+        "zh": "小跑过去",
+        "en": "runs somewhere"
       },
-      "seconds": 12
+      "seconds": 1.6
     },
     {
       "id": "wave",
       "kind": "motion",
       "names": {
         "zh": [
-          "招手",
+          "挥手",
           "打招呼"
+        ],
+        "en": [
+          "greet"
         ]
       },
       "about": {
-        "zh": "举起手挥一挥",
+        "zh": "抬手打招呼",
         "en": "waves hello"
       },
-      "seconds": 1.7
+      "seconds": 1.8
     },
     {
       "id": "bow",
       "kind": "motion",
       "names": {
         "zh": [
-          "鞠躬"
+          "鞠躬",
+          "行礼"
+        ],
+        "en": [
+          "curtsy"
         ]
       },
       "about": {
-        "zh": "闭眼,上身往前倾鞠一躬",
-        "en": "closes the eyes and bows"
+        "zh": "提着裙摆行礼",
+        "en": "bows"
       },
-      "seconds": 1.7
+      "seconds": 1.6
     },
     {
       "id": "shiver",
@@ -550,14 +751,34 @@
       "names": {
         "zh": [
           "发抖",
-          "哆嗦"
+          "打哆嗦"
+        ],
+        "en": [
+          "tremble"
         ]
       },
       "about": {
-        "zh": "缩着身子抖一会儿",
-        "en": "huddles up and shivers"
+        "zh": "冷得发抖",
+        "en": "shivers"
       },
-      "seconds": 1.9
+      "seconds": 1.8
+    },
+    {
+      "id": "flap",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "扑腾"
+        ],
+        "en": [
+          "flail"
+        ]
+      },
+      "about": {
+        "zh": "挥着手臂扑腾两下",
+        "en": "flaps her arms"
+      },
+      "seconds": 1.4
     },
     {
       "id": "dance",
@@ -565,18 +786,101 @@
       "names": {
         "zh": [
           "跳舞",
-          "摇摆"
+          "舞一段"
+        ],
+        "en": [
+          "waltz"
         ]
       },
       "about": {
-        "zh": "原地踩着节拍摇摆三秒,冒音符",
-        "en": "sways to a beat, music notes floating up"
+        "zh": "转着伞跳一段",
+        "en": "dances around the umbrella"
       },
       "seconds": 3.4
+    },
+    {
+      "id": "attack",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "挥伞",
+          "打一下"
+        ],
+        "en": [
+          "swing"
+        ]
+      },
+      "about": {
+        "zh": "抡起长伞挥一记（游戏里的攻击动作）",
+        "en": "swings the umbrella, her in-game attack"
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "cast",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "施法",
+          "放技能"
+        ],
+        "en": [
+          "spell"
+        ]
+      },
+      "about": {
+        "zh": "举起伞施一个法术（技能二）",
+        "en": "casts a spell with the umbrella (skill 2)"
+      },
+      "seconds": 1.9
+    },
+    {
+      "id": "twirl",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转伞",
+          "开伞"
+        ],
+        "en": [
+          "whirl"
+        ]
+      },
+      "about": {
+        "zh": "把伞转起来，最漂亮的那个动作（技能三）",
+        "en": "spins the umbrella open, her showiest move (skill 3)"
+      },
+      "seconds": 2.8
+    },
+    {
+      "id": "flop",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "躺倒",
+          "瘫一下"
+        ],
+        "en": [
+          "collapse"
+        ]
+      },
+      "about": {
+        "zh": "累了，躺倒在地上",
+        "en": "flops down, worn out"
+      },
+      "seconds": 1.3
     }
   ],
   "sounds": {},
   "can": {
     "walk": true
+  },
+  "moves": [],
+  "needs": [],
+  "voice": {
+    "pitch": 1.15
+  },
+  "effects": {
+    "reach": 0.3
   }
 }

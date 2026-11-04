@@ -238,7 +238,6 @@ const studioPanel: WebUiPanel = {
     });
     workflowSelect.value = state.workflow;
     workflowRow.append(ctx.ui.field(t('工作流', 'Workflow'), workflowSelect));
-    const workflowHint = ctx.ui.msgline('');
     // 参数映射 ℹ️ 图标
     const infoBtn = document.createElement('button');
     infoBtn.className='coo-info-btn';
@@ -263,7 +262,7 @@ const studioPanel: WebUiPanel = {
       } catch (e) { ctx.ui.toast(errText(e), 'bad'); }
     });
     workflowRow.append(infoBtn);
-    paramSheet.body.append(workflowRow, workflowHint);
+    paramSheet.body.append(workflowRow);
 
     const makeCounter = (ta: HTMLTextAreaElement, limit=500): HTMLElement => {
       const wrap = ctx.ui.h('div','coo-prompt-wrap');
@@ -367,7 +366,7 @@ const studioPanel: WebUiPanel = {
     const btnClear = ctx.ui.button(t('清空', 'Clear'), { size: 'sm' });
     loraToolbar.append(btnAll, btnInverse, btnClear);
     paramSheet.body.append(loraToolbar);
-    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '400px' });
+    const loraTable: WebUiTable = ctx.ui.table({ head: ['', t('LoRA', 'LoRA'), t('权重', 'Weight')], maxHeight: '360px' });
     // 使其可滚动不撑开
     (loraTable.el as HTMLElement).classList.add('coo-lora-list');
     paramSheet.body.append(loraTable.el);
@@ -396,8 +395,9 @@ const studioPanel: WebUiPanel = {
         title.textContent = record.aliases.length ? `${stripExt(record.name)}（${record.aliases.join('/')}）` : stripExt(record.name);
         title.title = record.path;
         const sub = document.createElement('div'); sub.className = 'coo-gen-sub';
-        // 隐藏扩展名，hover 显示完整路径
-        sub.textContent = [record.path, record.category || t('未分类', 'uncategorized'), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
+        // 隐藏 .safetensors 扩展名，hover 显示完整路径
+        const displayPath = stripExt(record.path);
+        sub.textContent = [displayPath, record.category || t('未分类', 'uncategorized'), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
         sub.title = record.path;
         nameCell.append(title, sub);
         // 已去掉预设标签，勾选状态即启用
@@ -483,9 +483,20 @@ const studioPanel: WebUiPanel = {
     batchInput.addEventListener('change', () => { state.batch = Math.max(1, Math.min(8, Math.round(num(batchInput.value, state.batch)))); batchInput.value = String(state.batch); });
     const seedInput = ctx.ui.input({ type: 'number', value: String(state.seed), cls: 'mono coo-gen-num' }); seedInput.min='-1'; seedInput.max='9007199254740991'; seedInput.step='1';
     seedInput.addEventListener('change', () => { const v = Math.trunc(num(seedInput.value, state.seed)); seedInput.value = String(v); state.seed = v; });
-    const randBtn = document.createElement('button'); randBtn.className='coo-info-btn'; randBtn.title = t('随机生成种子','Randomize seed'); randBtn.append(svgIcon('shuffle',14));
-    randBtn.addEventListener('click', () => { state.seed = -1; seedInput.value = '-1'; });
-    advBody.append(ctx.ui.field(t('批次', 'Batch'), batchInput), ctx.ui.field(t('种子', 'Seed'), seedInput), randBtn);
+    const seedWrap = ctx.ui.h('div', 'coo-seed-wrap');
+    seedWrap.style.display = 'inline-flex'; seedWrap.style.alignItems = 'center'; seedWrap.style.gap = '6px';
+    const randBtn = document.createElement('button'); randBtn.className='coo-seed-rand'; randBtn.type='button'; randBtn.title = t('随机生成种子','Randomize seed'); randBtn.append(svgIcon('shuffle',16));
+    randBtn.style.width='32px'; randBtn.style.height='32px'; randBtn.style.display='inline-flex'; randBtn.style.alignItems='center'; randBtn.style.justifyContent='center'; randBtn.style.border='1px solid var(--line, rgba(127,127,127,.18))'; randBtn.style.borderRadius='6px'; randBtn.style.background='rgba(127,127,127,.04)'; randBtn.style.cursor='pointer'; randBtn.style.flexShrink='0';
+    randBtn.addEventListener('mouseenter', ()=>{ randBtn.style.background='rgba(127,127,127,.08)'; }); randBtn.addEventListener('mouseleave', ()=>{ randBtn.style.background='rgba(127,127,127,.04)'; });
+    randBtn.addEventListener('click', () => {
+      const v = Math.floor(Math.random() * 2147483647);
+      state.seed = v; seedInput.value = String(v);
+      randBtn.style.transform='rotate(180deg)'; randBtn.style.transition='transform 180ms'; setTimeout(()=>{ randBtn.style.transform='rotate(0deg)'; }, 200);
+    });
+    seedWrap.append(seedInput, randBtn);
+    const batchField = ctx.ui.field(t('批次', 'Batch'), batchInput);
+    const seedField = ctx.ui.field(t('种子', 'Seed'), seedWrap);
+    advBody.append(batchField, seedField);
     advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.setAttribute('aria-expanded', hidden? 'false':'true'); advArrow.style.transform = hidden ? 'rotate(0deg)' : 'rotate(90deg)'; });
     advGroup.append(advToggle, advBody);
     paramSheet.body.append(advGroup);
@@ -517,16 +528,21 @@ const studioPanel: WebUiPanel = {
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
 
-    // 右侧悬浮操作窗（生成/取消）- 置于进度条上方，去掉打开目录
+    // 右栏操作区：生成/取消/打开目录（位于 连接卡片 与 进度卡片 之间）
     const genLine = ctx.ui.msgline(''); left.append(genLine);
     const actionFloat = ctx.ui.h('div', 'coo-action-float');
     const actionHint = ctx.ui.h('div', 'hint', ''); actionHint.style.display='none';
     const actionRow = ctx.ui.h('div', 'coo-action-row');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
+    generateBtn.style.flex = '1.6';
     const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
     cancelBtn.disabled = true;
     cancelBtn.style.border = '1px solid var(--line, rgba(127,127,127,.3))';
-    actionRow.append(generateBtn, cancelBtn);
+    cancelBtn.style.display = 'inline-flex'; cancelBtn.style.alignItems = 'center'; cancelBtn.style.justifyContent = 'center';
+    const openFolderBtn = ctx.ui.button(t('打开目录', 'Open folder'), { variant: 'plain', size: 'sm' });
+    openFolderBtn.style.display = 'inline-flex'; openFolderBtn.style.alignItems = 'center'; openFolderBtn.style.justifyContent = 'center';
+    openFolderBtn.addEventListener('click', ()=>{ void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
+    actionRow.append(generateBtn, cancelBtn, openFolderBtn);
     actionFloat.append(actionHint, actionRow);
     const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); actionHint.textContent = text; actionHint.style.display = text ? 'block' : 'none'; };
 
@@ -639,12 +655,9 @@ const studioPanel: WebUiPanel = {
     };
     workflowSelect.addEventListener('change', () => {
       state.workflow = workflowSelect.value; state.custom = {};
-      const preset = presets.find((item) => item.id === state.workflow);
-      workflowHint.textContent = preset ? t(`${preset.name}${preset.builtin ? '（内置）' : '（导入）'} · 参数映射 ${preset.mapping_count} 项${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`, `${preset.name}${preset.builtin ? ' (built-in)' : ' (imported)'} · ${preset.mapping_count} mapped${preset.warnings?.length ? ` · ${preset.warnings[0]}` : ''}`) : '';
       renderCheckpointEmpty(); renderExtra(); updateGenerateEnabled();
     });
-    const initialPreset = presets.find((item) => item.id === state.workflow);
-    if (initialPreset) workflowHint.textContent = t(`${initialPreset.name} · 参数映射 ${initialPreset.mapping_count} 项`, `${initialPreset.name} · ${initialPreset.mapping_count} mapped`);
+    void presets.find((item) => item.id === state.workflow);
     renderExtra();
 
     /* --------------------------- 右栏：连接 + 进度 --------------------------- */
@@ -785,7 +798,7 @@ const studioPanel: WebUiPanel = {
       shared.current = task;
       if (!task) {
         progressCard.classList.add('is-idle');
-        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent = t('空闲','Idle'); progressDetail.style.display=''; previewImg.style.display='none'; viewWorksBtn.style.display='none';
+        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent=''; progressDetail.style.display='none'; previewImg.style.display='none'; viewWorksBtn.style.display='none';
         generateBtn.disabled = busy; cancelBtn.disabled = true; updateGenerateEnabled(); return;
       }
       progressCard.classList.remove('is-idle');
@@ -979,14 +992,9 @@ const worksPanel: WebUiPanel = {
       { value:'size_asc', label: t('尺寸从小到大','Size ↑') },
     ] }) as HTMLSelectElement; sortSelect.value='time_desc';
     const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size:'sm', variant:'plain' }); clearBtn.style.display='none';
-    filters.append(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterBtn, sortSelect, clearBtn);
     // LoRA 下拉容器
     const loraFilterWrap = ctx.ui.h('div',''); loraFilterWrap.style.position='relative'; loraFilterWrap.append(loraFilterBtn, loraFilterPanel);
-    // 将 LoRA 按钮替换为带面板的包装
-    filters.replaceChild(loraFilterWrap, loraFilterBtn);
-    filters.append(loraFilterBtn); // fallback if replace failed? Actually we need to ensure order: search, date, model, size, loraWrap, sort, clear
-    // 重新构建顺序
-    filters.replaceChildren(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterWrap, sortSelect, clearBtn);
+    filters.append(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterWrap, sortSelect, clearBtn);
     left.append(filters);
 
     // 填充模型下拉

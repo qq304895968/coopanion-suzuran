@@ -137,32 +137,6 @@ const shared: SharedDrawState = {
   resultUrl: '',
 };
 
-// 共享内存：跨子 Tab 保持生成状态，避免切换后进度丢失
-interface SharedDrawState {
-  boot: CooGenBootstrap | null;
-  checkpoints: string[];
-  loras: LoRARecord[];
-  controlNets: string[];
-  presets: WorkflowSummary[];
-  history: HistoryEntry[];
-  current: GenerateTaskView | null;
-  lastFinished: string;
-  resultEntry: HistoryEntry | null;
-  resultUrl: string;
-}
-const shared: SharedDrawState = {
-  boot: null,
-  checkpoints: [],
-  loras: [],
-  controlNets: [],
-  presets: [],
-  history: [],
-  current: null,
-  lastFinished: '',
-  resultEntry: null,
-  resultUrl: '',
-};
-
 /* ------------------------------------------------------------------ studio */
 
 const SIZE_PRESETS: Array<{ value: string; labelZh: string; labelEn: string; w: number; h: number }> = [

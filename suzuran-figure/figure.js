@@ -464,16 +464,24 @@ function createFigure(MODEL, scene, url) {
     const legs = Array.isArray(frame.legs) ? frame.legs : null;
     if (frame.mode === 'walk' || frame.mode === 'run') {
       const run = frame.mode === 'run';
-      const ph = (frame.t || 0) * (run ? 13 : 8);
+      const ph = (frame.t || 0) * (run ? 12.5 : 8);
       const root = skel.bones[0];
       if (root) {
-        const hop = Math.abs(Math.sin(ph));
-        root.y += hop * (run ? 7 : 4) + Math.sin(ph * 2) * (run ? 1.2 : .6);
-        root.rotation += Math.sin(ph * 2) * (run ? 1.6 : .9) + (run ? 2.2 : .8);
+        const hop = Math.abs(Math.sin(ph));          // 0=落地 1=腾空
+        const land = Math.max(0, 1 - hop * 3);        // 落地瞬间那一下
+        root.y += hop * (run ? 8 : 4.5) - land * (run ? 2.6 : 1.4);
+        // 侧倾：每一步换一次重心
+        root.rotation += Math.sin(ph * 2) * (run ? 1.8 : .9) + (run ? 3.4 : 1.2);
+        // 压扁/拉长：落地压一点，腾空拉一点
+        const sq = (run ? 1 : .7) * (hop - .5);
+        root.scaleY *= 1 + sq * .035;
+        root.scaleX *= 1 - sq * .028;
       }
-      add(bones.hips, Math.sin(ph * 2) * (run ? -2.4 : -1.2));
-      add(bones.chest, Math.sin(ph * 2 + .5) * (run ? 1.8 : 1));
-      add(bones.head, -Math.sin(ph * 2 + .5) * (run ? 1.6 : .8));
+      add(bones.hips, Math.sin(ph * 2) * (run ? -3 : -1.5));
+      add(bones.chest, Math.sin(ph * 2 + .6) * (run ? 2.2 : 1.2));
+      add(bones.head, -Math.sin(ph * 2 + .9) * (run ? 2 : 1));     // 头比身子慢半拍
+      add(bones.armL, Math.sin(ph * 2) * (run ? 4 : 2));
+      add(bones.armR, -Math.sin(ph * 2) * (run ? 4 : 2));
     } else if (frame.mode === 'sit' && legs && legs.length >= 2 && legRest) {
       skel.updateWorldTransform();
       const k = outfit.scale;

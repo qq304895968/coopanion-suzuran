@@ -534,6 +534,9 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       const controller = new AbortController();
       const boot = makeBootstrap(checkpoints);
 
+      const generatedPayloads: Array<Record<string, any>> = [];
+      let savedLastParams: Record<string, any> | undefined;
+
       const makeCtx = (panelId: string) => {
         const root = doc.createElement('div');
         doc.body.append(root);
@@ -557,11 +560,32 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
           setConfig: async () => '已保存',
           stream: () => ({ close() {} }),
           invokeBinary: async () => new Blob([new Uint8Array([137, 80, 78, 71])]),
-          invoke: async (method: string) => {
+          invoke: async (method: string, args?: unknown[]) => {
             if (method === 'info') {
               return { path: 'D:\\draw', fallback: false, total: 2, counts: { favorite: 1, unrated: 1 } };
             }
-            if (method.endsWith('bootstrap')) return boot;
+            if (method.endsWith('bootstrap')) return { ...boot, ...(savedLastParams ? { last_params: savedLastParams } : {}) };
+            if (method.endsWith('saveLastParams')) {
+              savedLastParams = (args?.[0] ?? undefined) as Record<string, any> | undefined;
+              return { ok: true, last_params: savedLastParams };
+            }
+            if (method.endsWith('generate')) {
+              const payload = (args?.[0] ?? {}) as Record<string, any>;
+              generatedPayloads.push(payload);
+              return {
+                ok: true,
+                task: {
+                  id: `task-${generatedPayloads.length}`,
+                  prompt_id: `p-${generatedPayloads.length}`,
+                  status: 'running',
+                  progress: { current: 1, total: payload.steps ?? 20 },
+                  params: payload,
+                  loras: [],
+                  images: [],
+                  created_at: Date.now(),
+                },
+              };
+            }
             if (method.endsWith('presets')) return { presets: boot.presets, default_workflow: boot.workflow };
             if (method.endsWith('presetDetail')) return { ok: true, preset: { name: '快速文生图', mapping: [], warnings: [] } };
             if (method.endsWith('listLoras')) return { loras: boot.loras, defaults: boot.defaults, aliases: boot.aliases, lora_root: boot.lora_root };
@@ -675,8 +699,45 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       expect(latestCard!.style.display).toBe('flex');
       const latestThumb = latestCard!.querySelector('.coo-latest-thumb')!;
       latestThumb.click();
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 25));
       expect(localCtx.root.querySelector('.coo-works')).not.toBeNull();
+
+      // 验证作品页 LoRA 标签权重完整渲染，且操作区不含「使用全部参数」与「复制种子」
+      const opsPanel = localCtx.root.querySelector('.operations-panel')!;
+      expect(opsPanel.textContent).not.toContain('使用全部参数');
+      expect(opsPanel.textContent).not.toContain('复制种子');
+      const loraChip = localCtx.root.querySelector('.coo-lora-chip')!;
+      expect(loraChip.querySelector('.lora-name')?.textContent).toBe('suzuran');
+      expect(loraChip.querySelectorAll('.weight').map((el) => el.textContent).join('')).toBe('·0.8');
+
+      // 验证「微调」按钮：跳转出图页、回填全部参数与原种子（42），且不自动触发生成
+      const tweakBtn = opsPanel.querySelectorAll('.btn-action').find((b) => b.textContent.includes('微调'))!;
+      tweakBtn.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(localCtx.root.querySelector('.coo-draw-left')).not.toBeNull();
+      expect(generatedPayloads).toHaveLength(0);
+      const textareasAfterTweak = localCtx.root.querySelectorAll('textarea');
+      expect(textareasAfterTweak[0]!.value).toBe('suzuran');
+      expect(textareasAfterTweak[1]!.value).toBe('lowres');
+      expect(localCtx.root.querySelector('.seed-input-group')!.querySelector('input')!.value).toBe('42');
+
+      // 验证「重画」按钮：当存在可用 Checkpoint 时，以完整参数 + 随机种子跳转出图页并自动发起生成
+      if (checkpoints.length > 0) {
+        const segBtns = localCtx.root.querySelectorAll('.seg-btn');
+        segBtns.find((b) => b.dataset.value === 'works')!.click();
+        await new Promise((r) => setTimeout(r, 25));
+        const opsPanel2 = localCtx.root.querySelector('.operations-panel')!;
+        const redrawBtn = opsPanel2.querySelectorAll('.btn-action').find((b) => b.textContent.includes('重画'))!;
+        redrawBtn.click();
+        await new Promise((r) => setTimeout(r, 35));
+        expect(localCtx.root.querySelector('.coo-draw-left')).not.toBeNull();
+        expect(generatedPayloads).toHaveLength(1);
+        expect(generatedPayloads[0]!.positive).toBe('suzuran');
+        expect(generatedPayloads[0]!.negative).toBe('lowres');
+        expect(generatedPayloads[0]!.steps).toBe(28);
+        expect(generatedPayloads[0]!.loras).toEqual([{ path: '角色/suzuran.safetensors', weight: 0.8 }]);
+        expect(generatedPayloads[0]!.seed).not.toBe(42);
+      }
 
       // 4. 依次切换到「LoRA 管理」「工作流」「作品」再切回「出图」，全程零报错
       const segButtons = localCtx.root.querySelectorAll('.seg-btn');

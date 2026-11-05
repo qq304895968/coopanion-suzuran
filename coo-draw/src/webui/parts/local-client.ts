@@ -251,6 +251,11 @@ const studioPanel: WebUiPanel = {
         );
         return { path: found ? found.path : item.path, weight: item.weight };
       });
+      let nextSeed = entry.seed;
+      if (randomizeSeed) {
+        nextSeed = Math.floor(Math.random() * 2147483647);
+        if (nextSeed === entry.seed) nextSeed = (nextSeed + 1) % 2147483647;
+      }
       return {
         workflow: matchedPreset ? matchedPreset.id : state.workflow,
         positive: entry.positive ?? '',
@@ -264,7 +269,7 @@ const studioPanel: WebUiPanel = {
         width: entry.width || state.width,
         height: entry.height || state.height,
         batch: entry.batch || 1,
-        seed: randomizeSeed ? -1 : entry.seed,
+        seed: nextSeed,
         ...(entry.inputImage ? { inputImage: entry.inputImage } : {}),
         ...(entry.controlImage ? { controlImage: entry.controlImage } : {}),
         ...(entry.controlNet ? { controlNet: entry.controlNet } : {}),
@@ -1372,6 +1377,8 @@ const studioPanel: WebUiPanel = {
     renderLatestImage(history[0] ?? null);
     if (pendingAction?.mode === 'tweak') {
       persistStudioParams();
+    } else if (pendingAction?.mode === 'repaint') {
+      void generate();
     }
     if (current && isActive(current)) void poll();
   },
@@ -1925,9 +1932,12 @@ const worksPanel: WebUiPanel = {
       if (!entry) { opsPanel.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
 
       const redraw = opButton(t('重画','Repaint'), 'primary', 'refresh');
-      redraw.addEventListener('click', ()=>{
-        (window as any).__coo_draw_repaint = { entry, mode: 'sameSeed' };
-        ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true })); const m = ctx as unknown as { switchTab?: (v:string)=>void }; if (m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，将用相同参数重画','Switched to Studio; repaint with same seed'));
+      redraw.addEventListener('click', () => {
+        shared.pendingStudioAction = { entry, mode: 'repaint' };
+        const m = ctx as unknown as { switchTab?: (v: string) => void };
+        if (m.switchTab) m.switchTab('studio');
+        else ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true }));
+        ctx.ui.toast(t('已按原画参数与随机种子发起重画', 'Repainting with original params and random seed'));
       });
       const tweak = opButton(t('微调','Tweak'), 'default', 'sliders');
       tweak.addEventListener('click', () => {
@@ -2001,32 +2011,43 @@ const worksPanel: WebUiPanel = {
       activeEntry = entry;
       markViewed(entry.id);
       if (compareMode && compareA && entry.id!==compareA.id) { await showCompare(compareA, entry); for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id || (el as HTMLElement).dataset.id===compareA.id); } return; }
+      renderMeta(entry);
+      buildOps(entry);
+      for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) {
+        (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id === entry.id);
+      }
       // 切换预览：旧图保留，新图加载后150ms淡入
       previewWrap.style.display='block'; empty.style.display='none';
       previewWrap.classList.add('is-loading');
       try {
         const blob = await ctx.invokeBinary('image', [entry.id]);
-        if (!alive) return;
+        if (!alive || activeEntry?.id !== entry.id) return;
         const url = URL.createObjectURL(blob);
         const oldUrl = activePreviewUrl;
         activePreviewUrl = url;
         // 预加载
         previewNext.src = url; previewNext.style.display='block'; previewNext.style.opacity='0';
-        await new Promise<void>((res, rej)=>{ previewNext.onload=()=>res(); previewNext.onerror=()=>rej(new Error('load failed')); setTimeout(()=>res(), 2000); });
-        if (!alive) return;
+        await new Promise<void>((res, rej)=>{
+          const timer = setTimeout(()=>res(), 300);
+          (timer as unknown as { unref?: () => void })?.unref?.();
+          previewNext.onload=()=>{ clearTimeout(timer); res(); };
+          previewNext.onerror=()=>{ clearTimeout(timer); rej(new Error('load failed')); };
+        });
+        if (!alive || activeEntry?.id !== entry.id) return;
         preview.src = url;
         previewNext.style.display='none';
         preview.style.opacity='1';
         previewWrap.classList.remove('is-loading');
-        if (oldUrl) setTimeout(()=> URL.revokeObjectURL(oldUrl), 500);
+        if (oldUrl) {
+          const revokeTimer = setTimeout(()=> URL.revokeObjectURL(oldUrl), 500);
+          (revokeTimer as unknown as { unref?: () => void })?.unref?.();
+        }
       } catch(e){
         previewWrap.classList.remove('is-loading');
         const failed = ctx.ui.h('div','', t('图片加载失败','Image load failed')); failed.style.padding='12px'; failed.style.textAlign='center';
         const retry = ctx.ui.button(t('重试','Retry'), { size:'sm' }); retry.addEventListener('click', ()=> void showDetail(entry));
         failed.append(retry); empty.replaceChildren(failed); empty.style.display=''; previewWrap.style.display='none';
       }
-      renderMeta(entry); buildOps(entry);
-      for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id); }
     };
 
     const filtered = (): HistoryEntry[] => {

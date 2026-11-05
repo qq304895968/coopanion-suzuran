@@ -230,6 +230,8 @@ const studioPanel: WebUiPanel = {
 
     // 工作流
     const workflowRow = ctx.ui.rowbar();
+    workflowRow.style.alignItems = 'center';
+    workflowRow.style.gap = '8px';
     const workflowSelect = ctx.ui.select({
       options: presets.map((item) => ({
         value: item.id,
@@ -238,12 +240,14 @@ const studioPanel: WebUiPanel = {
     });
     workflowSelect.value = state.workflow;
     workflowRow.append(ctx.ui.field(t('工作流', 'Workflow'), workflowSelect));
-    // 参数映射 ℹ️ 图标
+    // 参数映射 ℹ️ 图标 - 紧跟下拉右侧 8px，垂直居中
     const infoBtn = document.createElement('button');
     infoBtn.className='coo-info-btn';
     infoBtn.title = t('查看参数映射', 'View param mapping');
     infoBtn.append(svgIcon('info', 16));
     infoBtn.style.display='inline-flex'; infoBtn.style.alignItems='center'; infoBtn.style.justifyContent='center';
+    infoBtn.style.marginLeft = '8px';
+    infoBtn.style.verticalAlign = 'middle';
     infoBtn.addEventListener('click', async () => {
       try {
         const res = await ctx.invoke<PresetDetail>('presetDetail', [state.workflow]);
@@ -441,10 +445,10 @@ const studioPanel: WebUiPanel = {
     renderLoraTable();
 
     // 采样参数分组
-    // 基本采样
+    // 基本采样 - Grid 4列 12px间距（P0 6.1）
     const basicGroup = ctx.ui.h('div', 'coo-group');
     const basicTitle = ctx.ui.h('div', 'coo-group-title', t('基本采样', 'Sampler'));
-    const basicGrid = ctx.ui.h('div', 'coo-group-grid');
+    const basicGrid = ctx.ui.h('div', 'coo-sampler-grid');
     const samplerSelect = ctx.ui.select({ options: [] }); setOptions(samplerSelect as unknown as HTMLSelectElement, boot.samplers, state.sampler);
     samplerSelect.addEventListener('change', () => { state.sampler = samplerSelect.value; });
     const schedulerSelect = ctx.ui.select({ options: [] }); setOptions(schedulerSelect as unknown as HTMLSelectElement, boot.schedulers, state.scheduler);
@@ -534,13 +538,15 @@ const studioPanel: WebUiPanel = {
     const actionHint = ctx.ui.h('div', 'hint', ''); actionHint.style.display='none';
     const actionRow = ctx.ui.h('div', 'coo-action-row');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
-    generateBtn.style.flex = '1.6';
+    generateBtn.className += ' btn-generate';
+    generateBtn.style.flex = '1';
     const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
+    cancelBtn.className += ' btn-cancel-idle';
     cancelBtn.disabled = true;
-    cancelBtn.style.border = '1px solid var(--line, rgba(127,127,127,.3))';
-    cancelBtn.style.display = 'inline-flex'; cancelBtn.style.alignItems = 'center'; cancelBtn.style.justifyContent = 'center';
+    cancelBtn.style.flex = '1';
     const openFolderBtn = ctx.ui.button(t('打开目录', 'Open folder'), { variant: 'plain', size: 'sm' });
-    openFolderBtn.style.display = 'inline-flex'; openFolderBtn.style.alignItems = 'center'; openFolderBtn.style.justifyContent = 'center';
+    openFolderBtn.className += ' btn-open';
+    openFolderBtn.style.flex = '1';
     openFolderBtn.addEventListener('click', ()=>{ void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
     actionRow.append(generateBtn, cancelBtn, openFolderBtn);
     actionFloat.append(actionHint, actionRow);
@@ -966,35 +972,49 @@ const worksPanel: WebUiPanel = {
     root.append(left, right);
     ctx.root.append(root);
 
-    // ===== 筛选区（单行横向）=====
+    // ===== 筛选区（两行重构）=====
     const filters = ctx.ui.h('div', 'coo-works-filters');
+    const row1 = ctx.ui.h('div', 'coo-works-filters-row coo-works-filters-row1');
+    const row2 = ctx.ui.h('div', 'coo-works-filters-row coo-works-filters-row2');
+    filters.append(row1, row2);
     const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词 / 种子 / 文件名','Search prompt / seed / filename') }) as HTMLInputElement;
     searchInput.classList.add('coo-filter-search');
-    // 日期范围合并为单个控件
+    // 日期范围合并控件 - 单边框
     const dateWrap = ctx.ui.h('div', 'coo-filter-date');
     const dateFrom = ctx.ui.input({ type: 'date' }) as HTMLInputElement; dateFrom.title = t('开始日期','From');
     const dateTo = ctx.ui.input({ type: 'date' }) as HTMLInputElement; dateTo.title = t('结束日期','To');
     const dateSep = ctx.ui.h('span','', '—');
     dateWrap.append(dateFrom, dateSep, dateTo);
-    // 模型、尺寸
+    row1.append(searchInput, dateWrap);
+    // 第二行：模型 / LoRA / 排序
     const modelSelect = ctx.ui.select({ options: [{ value:'', label: t('全部模型','All models') }] }) as HTMLSelectElement;
-    const sizeSelect = ctx.ui.select({ options: [{ value:'', label: t('全部尺寸','All sizes') }] }) as HTMLSelectElement;
-    // LoRA 多选下拉（自定义）
+    modelSelect.classList.add('coo-filter-model');
+    // LoRA 下拉 - 统一样式
     const loraFilterBtn = ctx.ui.button(t('全部 LoRA','All LoRAs'), { size:'sm' });
-    loraFilterBtn.style.minWidth='110px';
+    loraFilterBtn.style.height='32px'; loraFilterBtn.style.borderRadius='4px';
     let loraFilterSelected = new Set<string>();
-    const loraFilterPanel = ctx.ui.h('div','coo-field-settings'); loraFilterPanel.style.display='none'; loraFilterPanel.style.right='auto'; loraFilterPanel.style.left='0';
-    // 排序
-    const sortSelect = ctx.ui.select({ options: [
-      { value:'time_desc', label: t('时间倒序','Newest') },
-      { value:'time_asc', label: t('时间正序','Oldest') },
-      { value:'size_desc', label: t('尺寸从大到小','Size ↓') },
-      { value:'size_asc', label: t('尺寸从小到大','Size ↑') },
-    ] }) as HTMLSelectElement; sortSelect.value='time_desc';
-    const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size:'sm', variant:'plain' }); clearBtn.style.display='none';
-    // LoRA 下拉容器
-    const loraFilterWrap = ctx.ui.h('div',''); loraFilterWrap.style.position='relative'; loraFilterWrap.append(loraFilterBtn, loraFilterPanel);
-    filters.append(searchInput, dateWrap, modelSelect, sizeSelect, loraFilterWrap, sortSelect, clearBtn);
+    const loraFilterPanel = ctx.ui.h('div','coo-lora-dropdown-panel'); loraFilterPanel.style.display='none';
+    loraFilterPanel.style.position='absolute'; loraFilterPanel.style.left='0'; loraFilterPanel.style.top='36px';
+    loraFilterPanel.style.minWidth='240px'; loraFilterPanel.style.width='100%'; loraFilterPanel.style.maxHeight='320px';
+    loraFilterPanel.style.overflow='hidden'; loraFilterPanel.style.display='none'; loraFilterPanel.style.flexDirection='column';
+    loraFilterPanel.style.background='#fff'; loraFilterPanel.style.border='1px solid #d1d5db'; loraFilterPanel.style.borderRadius='6px';
+    loraFilterPanel.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'; loraFilterPanel.style.zIndex='10';
+    // 排序 - 两下拉 + label
+    const sortLabel = ctx.ui.h('span','', t('排序:','Sort:')); sortLabel.style.fontSize='12px'; sortLabel.style.color='#8a8f98'; sortLabel.style.whiteSpace='nowrap';
+    const sortElement = ctx.ui.select({ options: [
+      { value:'time', label: t('时间','Time') },
+      { value:'size', label: t('尺寸','Size') },
+      { value:'filename', label: t('文件名','Filename') },
+    ] }) as HTMLSelectElement; sortElement.value='time';
+    const sortDir = ctx.ui.select({ options: [
+      { value:'desc', label: t('降序','Desc') },
+      { value:'asc', label: t('升序','Asc') },
+    ] }) as HTMLSelectElement; sortDir.value='desc';
+    const sortWrap = ctx.ui.h('div','coo-filter-sort'); sortWrap.append(sortLabel, sortElement, sortDir);
+    const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size:'sm', variant:'plain' }); clearBtn.classList.add('coo-filter-clear'); clearBtn.style.display='none';
+    const loraFilterWrap = ctx.ui.h('div','coo-filter-lora'); loraFilterWrap.style.position='relative'; loraFilterWrap.style.flex='1'; loraFilterWrap.append(loraFilterBtn, loraFilterPanel);
+    modelSelect.style.flex='1';
+    row2.append(modelSelect, loraFilterWrap, sortWrap, clearBtn);
     left.append(filters);
 
     // 填充模型下拉
@@ -1004,16 +1024,6 @@ const worksPanel: WebUiPanel = {
       modelSelect.replaceChildren(); const optAll = document.createElement('option'); optAll.value=''; optAll.textContent=t('全部模型','All models'); modelSelect.append(optAll);
       for (const m of models) { const o=document.createElement('option'); o.value=m; o.textContent=stripExt(m); o.title=m; modelSelect.append(o); }
       if (cur) modelSelect.value = cur;
-      // 尺寸：常用 + 库中尺寸
-      const sizesFromLib = [...new Set(allHistory.map(h=> `${h.width}x${h.height}`))].sort((a,b)=>{
-        const [aw,ah]=a.split('x').map(Number); const [bw,bh]=b.split('x').map(Number); return (bw*bh)-(aw*ah);
-      });
-      const presetSizes = SIZE_PRESETS.filter(p=>p.value!=='custom').map(p=>p.value);
-      const allSizes = [...new Set([...presetSizes, ...sizesFromLib])];
-      const curSize = sizeSelect.value;
-      sizeSelect.replaceChildren(); const sAll=document.createElement('option'); sAll.value=''; sAll.textContent=t('全部尺寸','All sizes'); sizeSelect.append(sAll);
-      for (const s of allSizes) { const o=document.createElement('option'); o.value=s; o.textContent=s; sizeSelect.append(o); }
-      if (curSize) sizeSelect.value = curSize;
     };
     refreshModelOptions();
 
@@ -1027,24 +1037,47 @@ const worksPanel: WebUiPanel = {
     const refreshLoraFilterOptions = (): void => {
       const list = allLorasInLib();
       loraFilterPanel.replaceChildren();
-      if (!list.length) { loraFilterPanel.append(ctx.ui.msgline(t('暂无 LoRA','No LoRA'), false)); return; }
-      for (const item of list) {
-        const row = ctx.ui.h('div','item');
-        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = loraFilterSelected.has(item.path);
-        chk.addEventListener('change', ()=>{ if (chk.checked) loraFilterSelected.add(item.path); else loraFilterSelected.delete(item.path); updateLoraBtn(); renderGallery(); });
-        const lab = ctx.ui.h('span','', item.name); lab.title=item.path; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap';
-        row.append(chk, lab); loraFilterPanel.append(row);
-      }
-      const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.marginTop='8px';
-      const ok = ctx.ui.button(t('确定','OK'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> loraFilterPanel.style.display='none');
-      const clear = ctx.ui.button(t('清空','Clear'), { size:'sm' }); clear.addEventListener('click', ()=>{ loraFilterSelected.clear(); loraFilterPanel.querySelectorAll('input[type="checkbox"]').forEach((c:any)=> c.checked=false); updateLoraBtn(); renderGallery(); });
+      loraFilterPanel.style.display='flex';
+      // 顶部搜索
+      const searchWrap = ctx.ui.h('div',''); searchWrap.style.padding='8px'; searchWrap.style.borderBottom='1px solid #e5e7eb'; searchWrap.style.flexShrink='0';
+      const searchBox = ctx.ui.input({ type:'search', placeholder: t('搜索...','Search...') }) as HTMLInputElement; searchBox.style.width='100%'; searchBox.style.height='28px'; searchBox.style.fontSize='12px';
+      searchWrap.append(searchBox); loraFilterPanel.append(searchWrap);
+      // 列表容器
+      const listWrap = ctx.ui.h('div',''); listWrap.style.flex='1'; listWrap.style.overflowY='auto'; listWrap.style.maxHeight='220px';
+      loraFilterPanel.append(listWrap);
+      const renderList = (filterText: string): void => {
+        listWrap.replaceChildren();
+        // 第一项 全部
+        const allRow = ctx.ui.h('div','item'); allRow.style.display='flex'; allRow.style.alignItems='center'; allRow.style.padding='6px 12px'; allRow.style.cursor='pointer'; allRow.style.height='32px';
+        const allChk = document.createElement('input'); allChk.type='checkbox'; allChk.checked = !loraFilterSelected.size; allChk.style.marginRight='8px';
+        const allLab = ctx.ui.h('span','', t('全部','All')); allLab.style.flex='1';
+        allRow.append(allChk, allLab);
+        allRow.addEventListener('click', ()=>{ loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; renderGallery(); });
+        listWrap.append(allRow);
+        const q = filterText.trim().toLowerCase();
+        for (const item of list) {
+          if (q && !item.name.toLowerCase().includes(q) && !item.path.toLowerCase().includes(q)) continue;
+          const row = ctx.ui.h('div','item'); row.style.display='flex'; row.style.alignItems='center'; row.style.padding='6px 12px'; row.style.height='32px'; row.style.gap='8px';
+          const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = loraFilterSelected.has(item.path); chk.style.flexShrink='0';
+          chk.addEventListener('change', ()=>{ if (chk.checked) loraFilterSelected.add(item.path); else loraFilterSelected.delete(item.path); updateLoraBtn(); renderGallery(); });
+          const lab = ctx.ui.h('span','', item.name); lab.title=item.path; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap'; lab.style.fontSize='13px';
+          row.append(chk, lab); listWrap.append(row);
+        }
+        if (!listWrap.children.length) listWrap.append(ctx.ui.msgline(t('暂无','Empty'), false));
+      };
+      renderList('');
+      searchBox.addEventListener('input', ()=> renderList(searchBox.value));
+      // 底部操作栏
+      const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.justifyContent='flex-end'; actions.style.padding='8px'; actions.style.borderTop='1px solid #e5e7eb'; actions.style.flexShrink='0';
+      const clear = ctx.ui.button(t('清空','Clear'), { size:'sm' }); clear.addEventListener('click', ()=>{ loraFilterSelected.clear(); listWrap.querySelectorAll('input[type="checkbox"]').forEach((c:any)=> c.checked=false); updateLoraBtn(); renderGallery(); });
+      const ok = ctx.ui.button(t('确定','Confirm'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> loraFilterPanel.style.display='none');
       actions.append(clear, ok); loraFilterPanel.append(actions);
     };
     const updateLoraBtn = (): void => {
       if (!loraFilterSelected.size) loraFilterBtn.textContent = t('全部 LoRA','All LoRAs');
       else loraFilterBtn.textContent = t(`${loraFilterSelected.size} 个 LoRA`, `${loraFilterSelected.size} LoRAs`);
     };
-    loraFilterBtn.addEventListener('click', ()=>{ loraFilterPanel.style.display = loraFilterPanel.style.display==='none' ? 'block' : 'none'; if (loraFilterPanel.style.display==='block') refreshLoraFilterOptions(); });
+    loraFilterBtn.addEventListener('click', ()=>{ const hidden = loraFilterPanel.style.display==='none' || !loraFilterPanel.style.display; loraFilterPanel.style.display = hidden ? 'flex' : 'none'; if (hidden) refreshLoraFilterOptions(); });
     document.addEventListener('click', (e)=>{ if (!loraFilterWrap.contains(e.target as Node)) loraFilterPanel.style.display='none'; });
     refreshLoraFilterOptions();
 
@@ -1065,6 +1098,9 @@ const worksPanel: WebUiPanel = {
     // 批量状态
     let batchMode = false;
     const selected = new Set<string>();
+    // 缩略图缓存：id -> objectURL
+    const thumbCache = new Map<string, string>();
+    ctx.own({ dispose: ()=>{ for(const u of thumbCache.values()) URL.revokeObjectURL(u); }});
 
     // 右栏：对比提示条
     const compareBar = ctx.ui.h('div','coo-compare-bar'); compareBar.style.display='none';
@@ -1073,11 +1109,12 @@ const worksPanel: WebUiPanel = {
     compareBar.append(compareTip, cancelCompare);
     right.append(compareBar);
 
-    // 右栏预览区
+    // 右栏预览区 - 预置灰背景，切换时旧图保留
     const previewWrap = ctx.ui.h('div','coo-works-preview-wrap'); previewWrap.style.display='none';
-    const preview = document.createElement('img'); preview.alt=''; preview.style.display='block';
+    const preview = document.createElement('img'); preview.alt=''; preview.style.display='block'; preview.style.transition='opacity 150ms';
+    const previewNext = document.createElement('img'); previewNext.alt=''; previewNext.style.display='none'; previewNext.style.position='absolute'; previewNext.style.inset='0'; previewNext.style.width='100%'; previewNext.style.height='100%'; previewNext.style.objectFit='contain'; previewNext.style.transition='opacity 150ms';
     const overlay = ctx.ui.h('div','coo-preview-overlay', t('点击查看原图','Click to view original'));
-    previewWrap.append(preview, overlay);
+    previewWrap.append(preview, previewNext, overlay);
     const empty = ctx.ui.placeholder(t('点击左侧缩略图查看大图与操作','Click a thumbnail to view details'));
     // 空状态容器（无作品 / 筛选无结果）
     const emptyState = ctx.ui.h('div','coo-works-empty'); emptyState.style.display='none';
@@ -1341,16 +1378,33 @@ const worksPanel: WebUiPanel = {
     const showDetail = async (entry: HistoryEntry): Promise<void> => {
       activeEntry = entry;
       markViewed(entry.id);
-      // 对比模式下，第二选
-      if (compareMode && compareA && entry.id!==compareA.id) { await showCompare(compareA, entry); for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id || (el as HTMLElement).dataset.id===compareA.id); } renderGallery(); return; }
+      if (compareMode && compareA && entry.id!==compareA.id) { await showCompare(compareA, entry); for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id || (el as HTMLElement).dataset.id===compareA.id); } return; }
+      // 切换预览：旧图保留，新图加载后150ms淡入
+      previewWrap.style.display='block'; empty.style.display='none';
+      previewWrap.classList.add('is-loading');
       try {
         const blob = await ctx.invokeBinary('image', [entry.id]);
         if (!alive) return;
-        const url = URL.createObjectURL(blob); if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl); activePreviewUrl = url; preview.src = url; previewWrap.style.display='block'; empty.style.display='none';
-      } catch(e){ empty.textContent = errText(e); empty.style.display=''; previewWrap.style.display='none'; }
+        const url = URL.createObjectURL(blob);
+        const oldUrl = activePreviewUrl;
+        activePreviewUrl = url;
+        // 预加载
+        previewNext.src = url; previewNext.style.display='block'; previewNext.style.opacity='0';
+        await new Promise<void>((res, rej)=>{ previewNext.onload=()=>res(); previewNext.onerror=()=>rej(new Error('load failed')); setTimeout(()=>res(), 2000); });
+        if (!alive) return;
+        preview.src = url;
+        previewNext.style.display='none';
+        preview.style.opacity='1';
+        previewWrap.classList.remove('is-loading');
+        if (oldUrl) setTimeout(()=> URL.revokeObjectURL(oldUrl), 500);
+      } catch(e){
+        previewWrap.classList.remove('is-loading');
+        const failed = ctx.ui.h('div','', t('图片加载失败','Image load failed')); failed.style.padding='12px'; failed.style.textAlign='center';
+        const retry = ctx.ui.button(t('重试','Retry'), { size:'sm' }); retry.addEventListener('click', ()=> void showDetail(entry));
+        failed.append(retry); empty.replaceChildren(failed); empty.style.display=''; previewWrap.style.display='none';
+      }
       renderMeta(entry); buildOps(entry);
       for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) { (el as HTMLElement).classList.toggle('sel', (el as HTMLElement).dataset.id===entry.id); }
-      renderGallery(); // 刷新红点
     };
 
     const filtered = (): HistoryEntry[] => {
@@ -1358,27 +1412,40 @@ const worksPanel: WebUiPanel = {
       const from = dateFrom.value ? new Date(dateFrom.value).getTime() : 0;
       const to = dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : Infinity;
       const model = modelSelect.value;
-      const size = sizeSelect.value;
       let list = allHistory.filter(h=>{
         if (q && !(`${h.positive} ${h.negative} ${String(h.seed)} ${h.filename}`.toLowerCase().includes(q))) return false;
         if (h.created_at < from || h.created_at > to) return false;
         if (model && h.checkpoint !== model) return false;
-        if (size && `${h.width}x${h.height}` !== size) return false;
         if (loraFilterSelected.size) { const has = h.loras.some(l=> loraFilterSelected.has(l.path)); if (!has) return false; }
         return true;
       });
-      // 排序
-      const sort = sortSelect.value;
-      if (sort==='time_asc') list = [...list].sort((a,b)=> a.created_at - b.created_at);
-      else if (sort==='size_desc') list = [...list].sort((a,b)=> (b.width*b.height) - (a.width*a.height));
-      else if (sort==='size_asc') list = [...list].sort((a,b)=> (a.width*a.height) - (b.width*b.height));
-      else list = [...list].sort((a,b)=> b.created_at - a.created_at);
+      // 排序 - 元素 + 方向组合
+      const elem = sortElement.value;
+      const dir = sortDir.value;
+      const mul = dir==='asc' ? 1 : -1;
+      if (elem==='time') list = [...list].sort((a,b)=> (a.created_at - b.created_at)*mul);
+      else if (elem==='size') list = [...list].sort((a,b)=> ((a.width*a.height) - (b.width*b.height))*mul);
+      else if (elem==='filename') list = [...list].sort((a,b)=> a.filename.localeCompare(b.filename)*mul);
+      else list = [...list].sort((a,b)=> (a.created_at - b.created_at)*mul);
+      // 默认时间倒序（最新在前）已在 desc 时实现
       return list;
     };
 
     const renderGallery = (): void => {
       const list = filtered();
       const total = allHistory.length;
+      // 差量更新：若ID完全一致则不重排DOM（避免闪烁）
+      const curIds = list.map(e=>e.id).join(',');
+      const prevIds = (grid as any)._prevIds as string | undefined;
+      if (prevIds === curIds && total) {
+        // 仅更新选中态
+        for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) {
+          const id = (el as HTMLElement).dataset.id!;
+          (el as HTMLElement).classList.toggle('sel', id===activeEntry?.id || id===compareA?.id || id===compareB?.id);
+        }
+        return;
+      }
+      (grid as any)._prevIds = curIds;
       // 统计行
       if (!total) {
         statsText.textContent = t('共 0 张','0 pictures');
@@ -1388,7 +1455,7 @@ const worksPanel: WebUiPanel = {
         statsText.textContent = t(`筛选出 ${list.length} 张 / 共 ${total} 张`, `${list.length} / ${total} pictures`);
       }
       // 清除筛选按钮显隐
-      const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelSelect.value || !!sizeSelect.value || loraFilterSelected.size>0;
+      const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelSelect.value || loraFilterSelected.size>0;
       clearBtn.style.display = hasFilter ? '' : 'none';
 
       grid.replaceChildren();
@@ -1409,7 +1476,7 @@ const worksPanel: WebUiPanel = {
         emptyTitle.textContent = t('没有匹配的作品','No matches');
         emptySub.textContent = t('试试调整筛选条件','Try adjusting filters');
         emptyAction.replaceChildren();
-        const c = ctx.ui.button(t('清除筛选','Clear'), { size:'sm' }); c.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; sizeSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortSelect.value='time_desc'; renderGallery(); });
+        const c = ctx.ui.button(t('清除筛选','Clear'), { size:'sm' }); c.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortElement.value='time'; sortDir.value='desc'; renderGallery(); });
         emptyAction.append(c);
         dispatchUnread(); return;
       }
@@ -1421,6 +1488,9 @@ const worksPanel: WebUiPanel = {
         const tile = ctx.ui.h('button', 'coo-works-tile'); tile.type='button'; (tile as HTMLElement).dataset.id = entry.id;
         if (activeEntry?.id===entry.id || (compareA && compareA.id===entry.id) || (compareB && compareB.id===entry.id)) tile.classList.add('sel');
         const img = ctx.ui.h('img',''); img.alt = entry.filename; img.loading='lazy'; (img as any).dataset.id = entry.id;
+        // 使用稳定 key：dataset.id，已缓存则复用，不触发请求
+        const cached = thumbCache.get(entry.id);
+        if (cached) { img.src = cached; } else { img.dataset.needLoad='1'; }
         const label = ctx.ui.h('span','lab', `${entry.width}×${entry.height}`);
         tile.title = `${entry.filename}\n${t('种子','Seed')}: ${entry.seed}\n${t('尺寸','Size')}: ${entry.width}×${entry.height}\n${t('时间','Time')}: ${shortDate(entry.created_at)}`;
         if (batchMode) {
@@ -1435,10 +1505,13 @@ const worksPanel: WebUiPanel = {
         tile.append(img, label);
         tile.addEventListener('click', ()=>{
           if (batchMode) { if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id); batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张','0 selected'); renderGallery(); return; }
+          // 点击只更新选中ID，不触发列表请求（满足 1.1）
           void showDetail(entry);
         });
         grid.append(tile);
-        void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); imageUrls.push(url); img.src=url; }).catch(()=>{ img.alt='×'; });
+        if (!cached) {
+          void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); thumbCache.set(entry.id, url); img.src=url; img.removeAttribute('data-needLoad'); }).catch(()=>{ img.alt='×'; });
+        }
       }
       dispatchUnread();
     };
@@ -1448,9 +1521,9 @@ const worksPanel: WebUiPanel = {
     dateFrom.addEventListener('change', renderGallery);
     dateTo.addEventListener('change', renderGallery);
     modelSelect.addEventListener('change', renderGallery);
-    sizeSelect.addEventListener('change', renderGallery);
-    sortSelect.addEventListener('change', renderGallery);
-    clearBtn.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; sizeSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortSelect.value='time_desc'; renderGallery(); });
+    sortElement.addEventListener('change', renderGallery);
+    sortDir.addEventListener('change', renderGallery);
+    clearBtn.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelSelect.value=''; loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; sortElement.value='time'; sortDir.value='desc'; renderGallery(); });
 
     loadMoreBtn.addEventListener('click', async ()=>{
       pageLimit += 50;

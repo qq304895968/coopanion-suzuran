@@ -1,4 +1,4 @@
-import type { ConfigGroup } from 'cortico/core/types.ts';
+import type { ConfigGroup, ConfigProperty } from 'cortico/core/types.ts';
 
 /** `worlds.coo-gen` 段。简单标量放这里；LoRA 数组、别名和字典放在 settings.json。 */
 export interface CooGenConfigSection {
@@ -361,6 +361,6 @@ export const COO_GEN_CONFIG_GROUP: ConfigGroup = {
         description: '只在配置了启动脚本时生效；不会重复启动已经在运行的实例。',
         'x-hot': true,
       },
-    },
+    } as unknown as Record<string, ConfigProperty>,
   },
 };

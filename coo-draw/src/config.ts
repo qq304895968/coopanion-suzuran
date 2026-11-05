@@ -89,10 +89,10 @@ function remapGroup(
   mapKey: (short: string) => string,
   overrides: { id: string; title: string; description?: string },
 ): ConfigGroup {
-  const properties: Record<string, ConfigProperty> = {};
+  const properties: Record<string, ConfigProperty> = {} as Record<string, ConfigProperty & Record<string, unknown>>;
   for (const [path, prop] of Object.entries(group.schema.properties)) {
     const short = path.startsWith(oldPrefix) ? path.slice(oldPrefix.length) : path;
-    properties[mapKey(short)] = prop;
+    (properties as Record<string, ConfigProperty & Record<string, unknown>>)[mapKey(short)] = prop as ConfigProperty & Record<string, unknown>;
   }
   return {
     id: overrides.id,
@@ -106,7 +106,7 @@ function remapGroup(
   };
 }
 
-const ROUTE_PROPERTIES: Record<string, ConfigProperty> = {
+const ROUTE_PROPERTIES = {
   'worlds.draw.routePet': {
     type: 'string',
     title: '桌宠主动画用哪种画法',
@@ -123,7 +123,7 @@ const ROUTE_PROPERTIES: Record<string, ConfigProperty> = {
     'x-options': 'draw-route',
     'x-hot': true,
   },
-};
+} as unknown as Record<string, ConfigProperty>;
 
 const apiProperties = remapGroup(
   PET_DRAW_CONFIG_GROUP,
@@ -252,7 +252,7 @@ export const DRAW_PERSONA_CONFIG_GROUP: ConfigGroup = {
         maximum: 1,
         'x-hot': true,
       },
-    },
+    } as unknown as Record<string, ConfigProperty>,
   },
 };
 

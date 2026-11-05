@@ -264,4 +264,81 @@ describe('CooGenWorld', () => {
     expect(submittedNodes.some((n) => n.class_type === 'LoraLoader')).toBe(true);
     await world.stop();
   });
+
+  it('点击生成即使离线失败或校验拦截也会持久化保存参数，重启后 bootstrap 原样恢复', async () => {
+    const dir = tempDir();
+    dirs.push(dir);
+    const offline = new FakeComfy();
+    offline.health = async () => ({ ok: false, url: 'http://127.0.0.1:8188', error: 'offline', checked_at: Date.now() });
+
+    const world1 = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'sdxl.safetensors' }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: 'Coo',
+      secret: () => '',
+      clientFactory: () => offline,
+    });
+    const ui1 = world1.webUi('zh');
+    const failedGen = await ui1.invoke!('studio', 'generate', [{
+      workflow: 'quick-txt2img',
+      positive: '星空下的铃兰',
+      negative: 'blurry',
+      checkpoint: 'sdxl.safetensors',
+      loras: [{ path: '角色/suzuran.safetensors', weight: 0.75 }],
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      steps: 28,
+      cfg: 6.5,
+      width: 832,
+      height: 1216,
+      batch: 2,
+      seed: 123456,
+    }]) as { ok: boolean };
+    expect(failedGen.ok).toBe(false);
+    await world1.stop();
+
+    // 模拟重启：新建 World 实例后 bootstrap 应完整恢复上次点击生成时的参数
+    const world2 = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'sdxl.safetensors' }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: 'Coo',
+      secret: () => '',
+      clientFactory: () => offline,
+    });
+    const boot2 = await world2.webUi('zh').invoke!('studio', 'bootstrap', []) as {
+      last_params?: {
+        positive?: string;
+        negative?: string;
+        checkpoint?: string;
+        sampler?: string;
+        scheduler?: string;
+        steps?: number;
+        cfg?: number;
+        width?: number;
+        height?: number;
+        batch?: number;
+        seed?: number;
+        loras?: Array<{ path: string; weight: number }>;
+      };
+    };
+    expect(boot2.last_params).toMatchObject({
+      positive: '星空下的铃兰',
+      negative: 'blurry',
+      checkpoint: 'sdxl.safetensors',
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      steps: 28,
+      cfg: 6.5,
+      width: 832,
+      height: 1216,
+      batch: 2,
+      seed: 123456,
+      loras: [{ path: '角色/suzuran.safetensors', weight: 0.75 }],
+    });
+    await world2.stop();
+  });
 });

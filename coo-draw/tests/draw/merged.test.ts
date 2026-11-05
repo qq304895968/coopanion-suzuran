@@ -273,6 +273,72 @@ describe('local sub-panels', () => {
     expect(Array.isArray(loras.loras)).toBe(true);
     expect(ui.panels?.filter((panel) => !(panel as { slot?: string }).slot).map((panel) => panel.id)).toEqual(['api', 'local']);
     expect(ui.badges).toBeUndefined();
+    await made.world.stop();
+  });
+
+  it('streams real-time pet_draw progress and records pet drawings into studio history', async () => {
+    const dataDir = root();
+    let watchHandler: ((event: import('../../src/local/comfy.ts').ComfyEvent) => void) | undefined;
+    let ready = false;
+    const comfy = fakeComfy();
+    comfy.watch = (handlers) => {
+      watchHandler = handlers.event;
+      return { connected: true, dispose: () => { watchHandler = undefined; } };
+    };
+    comfy.submit = async (workflow) => {
+      comfy.submitted.push(workflow);
+      setTimeout(() => {
+        watchHandler?.({ type: 'progress', prompt_id: 'p1', data: { value: 4, max: 8, node: '3' } });
+        setTimeout(() => { ready = true; }, 40);
+      }, 20);
+      return { prompt_id: 'p1' };
+    };
+    comfy.history = async () => (ready
+      ? {
+          outputs: { '9': { images: [{ filename: 'draw-persona_0001.png', type: 'output' }] } },
+          status: { status_str: 'success', completed: true },
+        }
+      : null);
+
+    const cfg: DrawConfigSection = {
+      ...DRAW_DEFAULTS,
+      enabled: true,
+      routePet: 'local',
+      cooldownSeconds: 0,
+      popupEnabled: false,
+    };
+    const world = new DrawWorld({
+      cfg,
+      timezone: 'Asia/Shanghai',
+      dataDir,
+      botDir: dataDir,
+      botName: '铃兰',
+      secret: () => 'sk-test',
+      popup: { showData: async () => true },
+      clientFactory: () => comfy,
+      now: () => new Date('2026-11-03T12:00:00+08:00'),
+    });
+    await world.start(fakeHost([]));
+
+    const frames: Array<{ type?: string; task?: { status?: string; source?: string; progress?: { current?: number; total?: number } } | null }> = [];
+    const ui = world.webUi('zh');
+    ui.stream!('local', {
+      open: true,
+      send: (text) => { frames.push(JSON.parse(text)); },
+      close: () => undefined,
+      onMessage: () => undefined,
+      onClose: () => undefined,
+    });
+
+    const out = await call(world, 'pet_draw', { subject: '一只戴草帽的小柴犬' });
+    expect(out.text).toContain('画好了');
+    expect(frames.some((f) => f.task?.source === 'pet' && f.task?.progress?.current === 4 && f.task?.progress?.total === 8)).toBe(true);
+    expect(frames.some((f) => f.task?.source === 'pet' && f.task?.status === 'done')).toBe(true);
+
+    const hist = await ui.invoke!('local', 'studio.history', [10]) as { history: Array<{ source?: string; note?: string; positive: string }> };
+    expect(hist.history.length).toBeGreaterThanOrEqual(1);
+    expect(hist.history[0]!.source).toBe('pet');
+    await world.stop();
   });
 });
 

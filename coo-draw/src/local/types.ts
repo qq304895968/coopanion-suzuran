@@ -91,6 +91,8 @@ export interface WorkflowPreset {
   warnings?: string[];
 }
 
+export type TaskSource = 'user' | 'pet';
+
 export interface GenerateParams {
   positive: string;
   negative?: string;
@@ -116,6 +118,8 @@ export interface GenerateParams {
   note?: string;
   /** 导入工作流的自定义参数（param -> 值）。 */
   custom?: Record<string, string | number>;
+  /** 任务来源：用户在面板发起 或 桌宠发起。 */
+  source?: TaskSource;
 }
 
 export type TaskStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
@@ -140,6 +144,7 @@ export interface GenerateTaskView {
   id: string;
   prompt_id: string;
   status: TaskStatus;
+  source?: TaskSource;
   progress: TaskProgress;
   params: GenerateParams;
   loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
@@ -171,6 +176,8 @@ export interface HistoryEntry {
   workflow: string;
   prompt_id: string;
   task_id: string;
+  note?: string;
+  source?: TaskSource;
 }
 
 export interface WorkflowSummary {
@@ -215,6 +222,28 @@ export interface ModelFileView {
   file: string;
 }
 
+export interface SavedStudioParams {
+  workflow?: string;
+  positive?: string;
+  negative?: string;
+  checkpoint?: string;
+  loras?: Array<{ path: string; weight: number }>;
+  sampler?: string;
+  scheduler?: string;
+  steps?: number;
+  cfg?: number;
+  width?: number;
+  height?: number;
+  batch?: number;
+  seed?: number;
+  inputImage?: string;
+  controlImage?: string;
+  controlNet?: string;
+  denoise?: number;
+  controlStrength?: number;
+  custom?: Record<string, string | number>;
+}
+
 export interface CooGenBootstrap {
   health: ComfyHealth;
   launch: LaunchState;
@@ -251,6 +280,7 @@ export interface CooGenBootstrap {
   lora_root: string;
   defaults: DefaultLoRA[];
   aliases: Record<string, string[]>;
+  last_params?: SavedStudioParams;
   history: HistoryEntry[];
   presets: WorkflowSummary[];
   workflow: string;
@@ -268,6 +298,7 @@ export interface GenerateResponse {
 export interface StatusResponse {
   task: GenerateTaskView | null;
   health: ComfyHealth;
+  launch?: LaunchState;
   warnings: string[];
 }
 

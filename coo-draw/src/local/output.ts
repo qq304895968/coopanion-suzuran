@@ -160,6 +160,7 @@ export class OutputStore {
         batch: input.params.batch ?? 1,
         seed: input.seed,
         workflow: input.workflow,
+        ...(input.params.source ? { source: input.params.source } : {}),
         created_at: this.now().toISOString(),
       }),
       parameters: a1111(input.params, input.loras, input.seed),
@@ -202,6 +203,8 @@ export class OutputStore {
       workflow: input.workflow,
       prompt_id: input.promptId,
       task_id: input.taskId,
+      ...(input.params.note ? { note: input.params.note } : {}),
+      ...(input.params.source ? { source: input.params.source } : {}),
     };
     this.entries.unshift(entry);
     this.trim();

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { ensureDir, readJson, writeJsonAtomic } from './fs-util.ts';
-import type { DefaultLoRA } from './types.ts';
+import type { DefaultLoRA, SavedStudioParams } from './types.ts';
 
 /** 内置翻译词典：精确命中优先生效；用户可在 settings.json 的 dictionary 里覆盖。 */
 export const BUILTIN_DICTIONARY: Readonly<Record<string, string>> = {
@@ -54,6 +54,8 @@ export interface SettingsFile {
   lora_meta: Record<string, LoRAMeta>;
   /** 用户自定义翻译，覆盖内置词典。 */
   dictionary: Record<string, string>;
+  /** 出图页最后一次点击「生成」时保存的参数快照。 */
+  last_params?: SavedStudioParams;
 }
 
 export const EMPTY_SETTINGS: SettingsFile = {
@@ -142,7 +144,78 @@ export function normalizeSettings(raw: unknown): SettingsFile {
       if (name && text) dictionary[name] = text;
     }
   }
-  return { version: 1, default_loras: defaults, lora_aliases: aliases, lora_meta: meta, dictionary };
+  const lastParams = normalizeLastParams(obj.last_params);
+  return {
+    version: 1,
+    default_loras: defaults,
+    lora_aliases: aliases,
+    lora_meta: meta,
+    dictionary,
+    ...(lastParams ? { last_params: lastParams } : {}),
+  };
+}
+
+function normalizeLastParams(raw: unknown): SavedStudioParams | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const src = raw as Record<string, unknown>;
+  const out: SavedStudioParams = {};
+  if (typeof src.workflow === 'string') out.workflow = src.workflow.trim().slice(0, 120);
+  if (typeof src.positive === 'string') out.positive = src.positive.slice(0, 4000);
+  if (typeof src.negative === 'string') out.negative = src.negative.slice(0, 4000);
+  if (typeof src.checkpoint === 'string') out.checkpoint = src.checkpoint.trim().slice(0, 260);
+  if (typeof src.sampler === 'string') out.sampler = src.sampler.trim().slice(0, 80);
+  if (typeof src.scheduler === 'string') out.scheduler = src.scheduler.trim().slice(0, 80);
+  if (Number.isFinite(Number(src.steps)) && src.steps !== '' && src.steps !== null && src.steps !== undefined) {
+    out.steps = Math.max(1, Math.min(100, Math.round(Number(src.steps))));
+  }
+  if (Number.isFinite(Number(src.cfg)) && src.cfg !== '' && src.cfg !== null && src.cfg !== undefined) {
+    out.cfg = Math.max(1, Math.min(30, Math.round(Number(src.cfg) * 100) / 100));
+  }
+  if (Number.isFinite(Number(src.width)) && src.width !== '' && src.width !== null && src.width !== undefined) {
+    out.width = Math.max(64, Math.min(4096, Math.round(Number(src.width))));
+  }
+  if (Number.isFinite(Number(src.height)) && src.height !== '' && src.height !== null && src.height !== undefined) {
+    out.height = Math.max(64, Math.min(4096, Math.round(Number(src.height))));
+  }
+  if (Number.isFinite(Number(src.batch)) && src.batch !== '' && src.batch !== null && src.batch !== undefined) {
+    out.batch = Math.max(1, Math.min(8, Math.round(Number(src.batch))));
+  }
+  if (Number.isFinite(Number(src.seed)) && src.seed !== '' && src.seed !== null && src.seed !== undefined) {
+    out.seed = Math.trunc(Number(src.seed));
+  }
+  if (Array.isArray(src.loras)) {
+    out.loras = src.loras
+      .slice(0, 50)
+      .flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const rec = item as Record<string, unknown>;
+        const path = typeof rec.path === 'string' ? rec.path.trim().replace(/\\/g, '/').slice(0, 260) : '';
+        if (!path) return [];
+        const w = Number(rec.weight);
+        const weight = Number.isFinite(w) ? Math.round(Math.min(2, Math.max(-2, w)) * 100) / 100 : 0.75;
+        return [{ path, weight }];
+      });
+  }
+  if (typeof src.inputImage === 'string') out.inputImage = src.inputImage.trim().slice(0, 500);
+  if (typeof src.controlImage === 'string') out.controlImage = src.controlImage.trim().slice(0, 500);
+  if (typeof src.controlNet === 'string') out.controlNet = src.controlNet.trim().slice(0, 260);
+  if (Number.isFinite(Number(src.denoise)) && src.denoise !== undefined && src.denoise !== null && src.denoise !== '') {
+    out.denoise = Math.max(0.05, Math.min(1, Math.round(Number(src.denoise) * 100) / 100));
+  }
+  if (Number.isFinite(Number(src.controlStrength)) && src.controlStrength !== undefined && src.controlStrength !== null && src.controlStrength !== '') {
+    out.controlStrength = Math.max(0, Math.min(2, Math.round(Number(src.controlStrength) * 100) / 100));
+  }
+  if (src.custom && typeof src.custom === 'object' && !Array.isArray(src.custom)) {
+    const custom: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(src.custom as Record<string, unknown>).slice(0, 80)) {
+      const key = k.trim().slice(0, 80);
+      if (!key) continue;
+      if (typeof v === 'number' && Number.isFinite(v)) custom[key] = v;
+      else if (typeof v === 'string') custom[key] = v.slice(0, 500);
+    }
+    if (Object.keys(custom).length) out.custom = custom;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** settings.json 的读写与内存缓存；写失败时抛错，由面板显示。 */
@@ -183,6 +256,12 @@ export class SettingsStore {
     this.data = normalizeSettings({ ...this.data, lora_aliases: aliases });
     writeJsonAtomic(this.file, this.data);
     return this.data.lora_aliases;
+  }
+
+  setLastParams(params: SavedStudioParams): SavedStudioParams | undefined {
+    this.data = normalizeSettings({ ...this.data, last_params: params });
+    writeJsonAtomic(this.file, this.data);
+    return this.data.last_params;
   }
 
   setMeta(path: string, patch: LoRAMeta): SettingsFile {

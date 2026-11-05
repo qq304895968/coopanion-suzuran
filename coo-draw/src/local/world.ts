@@ -10,10 +10,11 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nowIso } from 'cortico/core/util.ts';
 import type {
-  BlobInput, ToolCallContext, ToolDef, ToolOutcome, World, WorldHost, WorldWebUiDecl,
+  BlobInput, ToolCallContext, ToolDef, ToolOutcome, World, WorldHost, WorldStreamSocket, WorldWebUiDecl,
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
 import type { DeepPartial } from 'cortico/world.ts';
+import type { PetDrawLifecycleEvent } from '../api/world.ts';
 import { COO_GEN_DEFAULTS, COO_GEN_CONFIG_GROUP, SAMPLERS, SCHEDULERS, type CooGenConfigSection } from './config.ts';
 import { ComfyClient, normalizeBaseUrl, type ComfyApi, type ComfyEvent, type WebSocketLike } from './comfy.ts';
 import { safeFilenamePart, safeMessage } from './fs-util.ts';
@@ -31,7 +32,7 @@ import { COO_GEN_TOOL_DECLS, COO_GEN_TOOL_SUMMARIES } from './tools.ts';
 import { composePrompt, selectLorasWithLlm, translatePrompt } from './translate.ts';
 import type {
   ComfyHealth as HealthType, DefaultLoRA, GenerateParams, GenerateResponse, GenerateTaskView,
-  HistoryEntry, LoRARecord, StatusResponse, WorkflowSummary,
+  HistoryEntry, LoRARecord, SavedStudioParams, StatusResponse, WorkflowSummary,
 } from './types.ts';
 import {
   applyCustomParams, buildForPreset, convertUiWorkflow, detectParamMapping, injectLoRAs, looksLikeUiWorkflow, validateApiWorkflow,
@@ -167,6 +168,8 @@ export class CooGenWorld implements World {
   private controlNetsCache: { at: number; items: string[] } | null = null;
   private loraCache: { at: number; root: string; items: LoRARecord[]; warnings: string[] } | null = null;
   private stopped = false;
+  private externalTask: GenerateTaskView | null = null;
+  private readonly sockets = new Set<WorldStreamSocket>();
   private warn: (message: string, data?: unknown) => void;
   private info: (message: string, data?: unknown) => void;
 
@@ -186,6 +189,13 @@ export class CooGenWorld implements World {
       }),
       health: (force) => this.refreshHealth(force ?? false),
       log: (message, data) => this.info(message, data),
+      onStateChange: (state) => {
+        if (state.ok) {
+          this.loraCache = null;
+          this.checkpointsCache = null;
+          void this.getLoRAs(true).catch(() => {});
+        }
+      },
       ...(opts.spawnImpl ? { spawnImpl: opts.spawnImpl } : {}),
     });
   }
@@ -271,6 +281,7 @@ export class CooGenWorld implements World {
         },
       ],
       invoke: async (panel, method, args) => this.invokePanel(panel, method, args),
+      stream: (_panel, socket) => this.openStream(socket),
       lamps: [
         {
           label: 'ComfyUI',
@@ -359,6 +370,11 @@ export class CooGenWorld implements World {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    this.launch.dispose();
+    for (const socket of this.sockets) {
+      try { socket.close('world stopped'); } catch { /* ignore */ }
+    }
+    this.sockets.clear();
     this.tasks?.dispose();
     this.tasks = undefined;
     this.watch?.dispose();
@@ -443,6 +459,7 @@ export class CooGenWorld implements World {
     }
 
     const comfy = this.comfy();
+    this.ensureTasks();
     try {
       await this.prepareInputImages(effective, params);
       const built = buildForPreset(effective, params, []);
@@ -454,8 +471,33 @@ export class CooGenWorld implements World {
       const save = Object.values(injected.workflow).find((node) => node.class_type === 'SaveImage');
       if (save) save.inputs.filename_prefix = 'draw-persona';
 
+      const totalSteps = params.steps ?? 8;
+      this.externalTask = {
+        id: this.externalTask?.id ?? `pet-${Date.now().toString(36)}`,
+        prompt_id: '',
+        status: 'queued',
+        source: 'pet',
+        progress: { current: 0, total: totalSteps, message: '桌宠已提交本地生图' },
+        params: { ...params, source: 'pet' },
+        loras: loras.map((item) => ({
+          path: item.path,
+          name: item.path.split('/').pop() ?? item.path,
+          weight: item.weight,
+          source: 'auto',
+        })),
+        images: [],
+        created_at: this.externalTask?.created_at ?? Date.now(),
+      };
+      this.broadcastTask();
+
       const submitted = await comfy.submit(injected.workflow as unknown as Record<string, unknown>);
       const promptId = submitted.prompt_id;
+      if (this.externalTask) {
+        this.externalTask.prompt_id = promptId;
+        this.externalTask.status = 'running';
+        this.externalTask.progress = { current: 0, total: totalSteps, message: '桌宠正在绘制…' };
+        this.broadcastTask();
+      }
       const timeoutSeconds = Math.max(10, Math.min(300, Math.floor(this.opts.cfg.timeoutSeconds) || 180));
       const deadline = Date.now() + timeoutSeconds * 1000;
       let entry = await comfy.history(promptId);
@@ -532,6 +574,7 @@ export class CooGenWorld implements World {
       pollMs: Math.max(1, this.opts.cfg.pollSeconds) * 1000,
       onDone: (task, entries) => this.onTaskDone(task, entries),
       onFailed: (task) => this.onTaskFailed(task),
+      onProgress: (task) => this.broadcastTask(task),
       onConnection: (connected) => {
         if (connected) this.info('ComfyUI WebSocket 已连接');
         else this.warn('ComfyUI WebSocket 断开，5 秒后重连');
@@ -551,8 +594,196 @@ export class CooGenWorld implements World {
   private onComfyEvent(event: ComfyEvent): void {
     try {
       this.tasks?.onEvent(event);
+      this.updateExternalTaskFromComfy(event);
     } catch (error) {
       this.warn('处理 ComfyUI 事件失败', { error: safeMessage(error), type: event.type });
+    }
+  }
+
+  openStream(socket: WorldStreamSocket): void {
+    this.sockets.add(socket);
+    socket.onClose(() => {
+      this.sockets.delete(socket);
+    });
+    try {
+      socket.send(JSON.stringify({ type: 'task', task: this.currentTask() }));
+    } catch { /* ignore */ }
+  }
+
+  private broadcastTask(task: GenerateTaskView | null = this.currentTask()): void {
+    if (!this.sockets.size) return;
+    const payload = JSON.stringify({ type: 'task', task });
+    for (const socket of this.sockets) {
+      if (!socket.open) continue;
+      try {
+        socket.send(payload);
+      } catch { /* ignore */ }
+    }
+  }
+
+  private currentTask(): GenerateTaskView | null {
+    const active = this.ensureTasks().active();
+    if (active) return active;
+    if (this.externalTask && (this.externalTask.status === 'queued' || this.externalTask.status === 'running')) {
+      return {
+        ...this.externalTask,
+        progress: { ...this.externalTask.progress },
+        params: { ...this.externalTask.params },
+        loras: this.externalTask.loras.map((item) => ({ ...item })),
+        images: this.externalTask.images.map((item) => ({ ...item })),
+      };
+    }
+    const latest = this.ensureTasks().latest();
+    if (!this.externalTask) return latest;
+    if (!latest) return { ...this.externalTask };
+    return this.externalTask.created_at >= latest.created_at ? { ...this.externalTask } : latest;
+  }
+
+  private updateExternalTaskFromComfy(event: ComfyEvent): void {
+    const ext = this.externalTask;
+    if (!ext || (ext.status !== 'queued' && ext.status !== 'running')) return;
+    if (event.prompt_id && ext.prompt_id && event.prompt_id !== ext.prompt_id) return;
+    const data = event.data;
+    switch (event.type) {
+      case 'execution_start':
+        ext.status = 'running';
+        ext.progress.message = '桌宠开始采样';
+        this.broadcastTask();
+        break;
+      case 'progress': {
+        const current = Number(data.value);
+        const total = Number(data.max);
+        if (Number.isFinite(current)) ext.progress.current = Math.max(0, current);
+        if (Number.isFinite(total) && total > 0) ext.progress.total = total;
+        if (typeof data.node === 'string' || typeof data.node === 'number') ext.progress.node = String(data.node);
+        ext.status = 'running';
+        ext.progress.message = `桌宠采样 ${ext.progress.current}/${ext.progress.total}`;
+        this.broadcastTask();
+        break;
+      }
+      case 'executing':
+        if (data.node === null) {
+          ext.progress.current = ext.progress.total;
+          ext.progress.message = '桌宠已画好，正在保存…';
+          this.broadcastTask();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  handlePetDrawLifecycle(event: PetDrawLifecycleEvent): void {
+    if (event.phase === 'start') {
+      const steps = event.route === 'local'
+        ? Math.max(1, Math.min(100, Math.floor(this.opts.personaConfig?.().steps ?? 8) || 8))
+        : 1;
+      this.externalTask = {
+        id: event.taskId,
+        prompt_id: '',
+        status: event.route === 'api' ? 'running' : 'queued',
+        source: 'pet',
+        progress: {
+          current: 0,
+          total: steps,
+          message: event.route === 'api' ? '桌宠正在云端绘制…' : '桌宠正在准备画笔…',
+        },
+        params: {
+          positive: event.subject,
+          negative: event.negativePrompt,
+          width: 512,
+          height: 512,
+          batch: event.count,
+          seed: -1,
+          source: 'pet',
+        },
+        loras: [],
+        images: [],
+        created_at: Date.now(),
+      };
+      this.broadcastTask();
+      return;
+    }
+
+    if (event.phase === 'done') {
+      const createdAt = this.externalTask?.created_at ?? Date.now();
+      const total = this.externalTask?.progress.total ?? 1;
+      const workflowLabel = event.route === 'local' ? '桌宠人设笔触' : `桌宠绘画（${event.styleLabel}）`;
+      const savedEntries: HistoryEntry[] = [];
+      for (let index = 0; index < event.images.length; index++) {
+        const img = event.images[index]!;
+        try {
+          const entry = this.outputStore().save({
+            bytes: img.bytes,
+            mime: img.mime,
+            params: {
+              positive: event.prompt || event.subject,
+              negative: event.negativePrompt,
+              checkpoint: '',
+              sampler: this.opts.personaConfig?.().sampler ?? 'euler',
+              scheduler: this.opts.personaConfig?.().scheduler ?? 'simple',
+              steps: total,
+              cfg: this.opts.personaConfig?.().cfg ?? 1,
+              width: img.width || 512,
+              height: img.height || 512,
+              batch: event.images.length,
+              seed: randomSeed(),
+              note: event.subject,
+              source: 'pet',
+            },
+            loras: this.externalTask?.loras ?? [],
+            promptId: this.externalTask?.prompt_id ?? event.taskId,
+            taskId: event.taskId,
+            workflow: workflowLabel,
+            index,
+            batch: event.images.length,
+            seed: randomSeed(),
+          });
+          savedEntries.push(entry);
+        } catch (error) {
+          this.warn('同步桌宠画作到作品历史失败', safeMessage(error));
+        }
+      }
+      this.externalTask = {
+        id: event.taskId,
+        prompt_id: this.externalTask?.prompt_id ?? '',
+        status: 'done',
+        source: 'pet',
+        progress: { current: total, total, message: '桌宠画好了' },
+        params: {
+          positive: event.prompt || event.subject,
+          negative: event.negativePrompt,
+          width: 512,
+          height: 512,
+          batch: event.images.length,
+          seed: savedEntries[0]?.seed ?? -1,
+          source: 'pet',
+        },
+        loras: this.externalTask?.loras ?? [],
+        images: savedEntries.map((entry) => ({
+          id: entry.id,
+          filename: entry.filename,
+          width: entry.width,
+          height: entry.height,
+        })),
+        created_at: createdAt,
+        finished_at: Date.now(),
+        elapsed_ms: Math.max(0, Date.now() - createdAt),
+      };
+      this.broadcastTask();
+      return;
+    }
+
+    if (this.externalTask) {
+      const createdAt = this.externalTask.created_at;
+      this.externalTask = {
+        ...this.externalTask,
+        status: event.phase === 'cancelled' ? 'cancelled' : 'error',
+        ...(event.error ? { error: event.error } : {}),
+        finished_at: Date.now(),
+        elapsed_ms: Math.max(0, Date.now() - createdAt),
+      };
+      this.broadcastTask();
     }
   }
 
@@ -839,47 +1070,85 @@ export class CooGenWorld implements World {
     const extraTags = strings(args.extra_tags);
     const providedPrompt = str(args, 'prompt');
     const warnings: string[] = [];
-    let positive = providedPrompt ?? '';
-    if (!positive) {
-      const translated = await translatePrompt(subject, styleHint, extraTags, this.translateOptions());
-      positive = translated.prompt;
-      warnings.push(...translated.warnings);
-    } else if (styleHint || extraTags.length) {
-      positive = composePrompt(positive, [styleHint ?? '', ...extraTags].join(', '), '');
+    const prepTaskId = `pet-prep-${Date.now().toString(36)}`;
+    this.externalTask = {
+      id: prepTaskId,
+      prompt_id: '',
+      status: 'queued',
+      source: 'pet',
+      progress: {
+        current: 0,
+        total: Math.max(1, int(args, 'steps') ?? this.opts.cfg.steps ?? 20),
+        message: '桌宠正在准备提示词与 LoRA…',
+      },
+      params: {
+        positive: providedPrompt ?? subject,
+        negative: str(args, 'negative') ?? this.opts.cfg.negativePrompt,
+        source: 'pet',
+      },
+      loras: [],
+      images: [],
+      created_at: Date.now(),
+    };
+    this.broadcastTask();
+
+    try {
+      let positive = providedPrompt ?? '';
+      if (!positive) {
+        const translated = await translatePrompt(subject, styleHint, extraTags, this.translateOptions());
+        positive = translated.prompt;
+        warnings.push(...translated.warnings);
+      } else if (styleHint || extraTags.length) {
+        positive = composePrompt(positive, [styleHint ?? '', ...extraTags].join(', '), '');
+      }
+      if (!positive.trim()) positive = subject;
+
+      const loras = await this.resolveLoras({
+        subject: [subject, styleHint ?? '', ...extraTags].join(' '),
+        styleHint,
+        extraTags,
+        explicit: this.parseExplicitLoras(args.loras),
+      });
+      warnings.push(...loras.warnings);
+
+      const params = this.normalizeParams({
+        positive,
+        negative: str(args, 'negative') ?? this.opts.cfg.negativePrompt,
+        checkpoint: str(args, 'checkpoint') ?? this.opts.cfg.defaultCheckpoint,
+        loras: loras.loras.map((lora) => ({ path: lora.path, weight: lora.weight, source: lora.source })),
+        sampler: str(args, 'sampler') ?? this.opts.cfg.sampler,
+        scheduler: str(args, 'scheduler') ?? this.opts.cfg.scheduler,
+        steps: int(args, 'steps') ?? this.opts.cfg.steps,
+        cfg: num(args, 'cfg') ?? this.opts.cfg.cfg,
+        width: int(args, 'width') ?? this.opts.cfg.width,
+        height: int(args, 'height') ?? this.opts.cfg.height,
+        batch: int(args, 'batch') ?? this.opts.cfg.batch,
+        seed: int(args, 'seed') ?? -1,
+        workflow: str(args, 'workflow') ?? this.opts.cfg.defaultWorkflow,
+        inputImage: str(args, 'input_image'),
+        controlImage: str(args, 'control_image'),
+        controlNet: str(args, 'control_net'),
+        denoise: num(args, 'denoise'),
+        controlStrength: num(args, 'control_strength'),
+        note: str(args, 'note'),
+        source: 'pet',
+      });
+      if (this.externalTask?.id === prepTaskId) this.externalTask = null;
+      const submitted = await this.submit(params, loras.loras, warnings);
+      this.broadcastTask(submitted);
+      return { ok: true, task: submitted, warnings };
+    } catch (error) {
+      if (this.externalTask?.id === prepTaskId) {
+        this.externalTask = {
+          ...this.externalTask,
+          status: 'error',
+          error: safeMessage(error),
+          finished_at: Date.now(),
+        };
+        this.broadcastTask();
+      }
+      throw error;
     }
-    if (!positive.trim()) positive = subject;
-
-    const loras = await this.resolveLoras({
-      subject: [subject, styleHint ?? '', ...extraTags].join(' '),
-      styleHint,
-      extraTags,
-      explicit: this.parseExplicitLoras(args.loras),
-    });
-    warnings.push(...loras.warnings);
-
-    const params = this.normalizeParams({
-      positive,
-      negative: str(args, 'negative') ?? this.opts.cfg.negativePrompt,
-      checkpoint: str(args, 'checkpoint') ?? this.opts.cfg.defaultCheckpoint,
-      loras: loras.loras.map((lora) => ({ path: lora.path, weight: lora.weight, source: lora.source })),
-      sampler: str(args, 'sampler') ?? this.opts.cfg.sampler,
-      scheduler: str(args, 'scheduler') ?? this.opts.cfg.scheduler,
-      steps: int(args, 'steps') ?? this.opts.cfg.steps,
-      cfg: num(args, 'cfg') ?? this.opts.cfg.cfg,
-      width: int(args, 'width') ?? this.opts.cfg.width,
-      height: int(args, 'height') ?? this.opts.cfg.height,
-      batch: int(args, 'batch') ?? this.opts.cfg.batch,
-      seed: int(args, 'seed') ?? -1,
-      workflow: str(args, 'workflow') ?? this.opts.cfg.defaultWorkflow,
-      inputImage: str(args, 'input_image'),
-      controlImage: str(args, 'control_image'),
-      controlNet: str(args, 'control_net'),
-      denoise: num(args, 'denoise'),
-      controlStrength: num(args, 'control_strength'),
-      note: str(args, 'note'),
-    });
-    const submitted = await this.submit(params, loras.loras, warnings);
-    return { ok: true, task: submitted, warnings };
   }
 
   private parseExplicitLoras(value: unknown): Array<{ name: string; weight?: number }> {
@@ -1157,6 +1426,7 @@ export class CooGenWorld implements World {
   private async cancelTool(args: Record<string, unknown>): Promise<ToolOutcome> {
     const id = str(args, 'task_id');
     const ok = await this.ensureTasks().cancel(id);
+    if (ok) this.broadcastTask();
     return ok ? { text: '已取消当前出图任务。' } : { text: '现在没有正在跑的出图任务。' };
   }
 
@@ -1195,7 +1465,7 @@ export class CooGenWorld implements World {
     const records = await this.getLoRAs();
     const checkpoints = await this.checkpoints();
     const diffusionModels = this.diffusionModels();
-    const task = this.ensureTasks().latest();
+    const task = this.currentTask();
     const lines = [
       health.ok ? `ComfyUI 在线：${health.system ?? health.url}` : `ComfyUI 离线：${health.error ?? health.url}`,
       `地址：${health.url}`,
@@ -1222,6 +1492,7 @@ export class CooGenWorld implements World {
   /* --------------------------------------------------------------- 完成后 */
 
   private async onTaskDone(task: GenerateTaskView, entries: HistoryEntry[]): Promise<void> {
+    this.broadcastTask(task);
     this.info('出图完成', { task: task.id, seeds: task.params.seed, files: entries.map((entry) => entry.filename) });
     const first = entries[0];
     if (first && this.opts.cfg.popupEnabled) {
@@ -1259,6 +1530,7 @@ export class CooGenWorld implements World {
   }
 
   private async onTaskFailed(task: GenerateTaskView): Promise<void> {
+    this.broadcastTask(task);
     this.warn('出图失败', { task: task.id, error: task.error ?? 'unknown' });
     if (!this.host) return;
     try {
@@ -1350,6 +1622,7 @@ export class CooGenWorld implements World {
       case 'setDefaults': return this.panelSetDefaults(args[0]);
       case 'setAliases': return this.panelSetAliases(args[0]);
       case 'setLoraMeta': return this.panelSetLoraMeta(args[0], args[1]);
+      case 'saveLastParams': return this.panelSaveLastParams(args[0]);
       case 'presets': return { presets: this.presets.summaries(), default_workflow: this.opts.cfg.defaultWorkflow };
       case 'presetDetail': return this.panelPresetDetail(args[0]);
       case 'importWorkflow': return this.panelImportWorkflow(args[0], args[1]);
@@ -1384,6 +1657,18 @@ export class CooGenWorld implements World {
     };
   }
 
+  private launchState() {
+    return {
+      configured: this.launch.configured(),
+      stop_configured: this.launch.stopConfigured(),
+      auto_launch: this.opts.cfg.autoLaunch,
+      command: [this.opts.cfg.launchScript, this.opts.cfg.launchArgs].filter(Boolean).join(' '),
+      stop_command: this.opts.cfg.stopScript,
+      running: this.launch.running(),
+      ...(this.launch.lastErrorText() ? { last_error: this.launch.lastErrorText() } : {}),
+    };
+  }
+
   private async bootstrap(): Promise<Record<string, unknown>> {
     const health = await this.refreshHealth(false);
     const [checkpoints, samplers, schedulers, controlNets, loras] = await Promise.all([
@@ -1407,15 +1692,7 @@ export class CooGenWorld implements World {
     const workflow = this.presets.get(this.opts.cfg.defaultWorkflow) ?? this.presets.list()[0];
     return {
       health,
-      launch: {
-        configured: this.launch.configured(),
-        stop_configured: this.launch.stopConfigured(),
-        auto_launch: this.opts.cfg.autoLaunch,
-        command: [this.opts.cfg.launchScript, this.opts.cfg.launchArgs].filter(Boolean).join(' '),
-        stop_command: this.opts.cfg.stopScript,
-        running: this.launch.running(),
-        ...(this.launch.lastErrorText() ? { last_error: this.launch.lastErrorText() } : {}),
-      },
+      launch: this.launchState(),
       config: this.configSnapshot(),
       checkpoints,
       diffusion_models: diffusionModels,
@@ -1428,10 +1705,11 @@ export class CooGenWorld implements World {
       lora_root: this.loraRoot(),
       defaults: settings.default_loras,
       aliases: settings.lora_aliases,
+      ...(settings.last_params ? { last_params: settings.last_params } : {}),
       history: this.outputStore().list(this.opts.cfg.historyLimit),
       presets: this.presets.summaries(),
       workflow: workflow?.id ?? 'quick-txt2img',
-      task: this.ensureTasks().latest(),
+      task: this.currentTask(),
       warnings,
     };
   }
@@ -1440,11 +1718,26 @@ export class CooGenWorld implements World {
     const health = await this.refreshHealth(false);
     const warnings: string[] = [];
     if (!health.ok) warnings.push(health.error ?? 'ComfyUI 离线');
-    return { task: this.ensureTasks().latest(), health, warnings };
+    return { task: this.currentTask(), health, launch: this.launchState(), warnings };
+  }
+
+  private panelSaveLastParams(raw: unknown): { ok: boolean; last_params?: SavedStudioParams; error?: string } {
+    try {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return { ok: false, error: '参数必须是对象' };
+      }
+      const saved = this.settings.setLastParams(raw as SavedStudioParams);
+      return { ok: true, ...(saved ? { last_params: saved } : {}) };
+    } catch (error) {
+      return { ok: false, error: safeMessage(error) };
+    }
   }
 
   private async panelGenerate(raw: unknown): Promise<GenerateResponse> {
     try {
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        try { this.settings.setLastParams(raw as SavedStudioParams); } catch { /* 持久化失败不阻断后续提示 */ }
+      }
       const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
       const lorasProvided = Array.isArray(input.loras);
       const params = this.normalizeParams({
@@ -1492,7 +1785,9 @@ export class CooGenWorld implements World {
         }
       }
       const warnings: string[] = [];
+      params.source = params.source ?? 'user';
       const task = await this.submit(params, chosen, warnings);
+      this.broadcastTask(task);
       return { ok: true, task, warnings };
     } catch (error) {
       return { ok: false, error: safeMessage(error) };
@@ -1501,21 +1796,28 @@ export class CooGenWorld implements World {
 
   private panelHistory(limit: unknown): { task: GenerateTaskView | null; history: HistoryEntry[]; total: number } {
     const n = clamp(Number(limit) || this.opts.cfg.historyLimit, 1, this.opts.cfg.historyLimit);
-    return { task: this.ensureTasks().latest(), history: this.outputStore().list(n), total: this.outputStore().list(200).length };
+    return { task: this.currentTask(), history: this.outputStore().list(n), total: this.outputStore().list(200).length };
   }
 
   private async panelCancel(id: unknown): Promise<{ ok: boolean }> {
-    return { ok: await this.ensureTasks().cancel(typeof id === 'string' ? id : undefined) };
+    const ok = await this.ensureTasks().cancel(typeof id === 'string' ? id : undefined);
+    if (ok) this.broadcastTask();
+    return { ok };
   }
 
-  private async panelLaunch(): Promise<{ ok: boolean; message: string }> {
-    const result = await this.launch.launch();
-    void this.refreshHealth(true);
-    if (result.ok) {
+  private async panelLaunch(): Promise<{ ok: boolean; starting?: boolean; already?: boolean; message: string; launch: ReturnType<CooGenWorld['launchState']> }> {
+    const result = await this.launch.startBackground();
+    if (result.ok && result.already) {
       this.loraCache = null;
       void this.getLoRAs(true).catch(() => {});
     }
-    return { ok: result.ok, message: result.message };
+    return {
+      ok: result.ok,
+      starting: Boolean(result.starting),
+      already: Boolean(result.already),
+      message: result.message,
+      launch: this.launchState(),
+    };
   }
 
   private async panelStop(): Promise<{ ok: boolean; message: string }> {

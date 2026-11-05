@@ -83,6 +83,7 @@ export class DrawWorld implements World {
       ...(opts.now ? { now: opts.now } : {}),
       routeFor: (purpose) => this.routeFor(purpose),
       renderLocal: (request) => this.renderLocal(request),
+      onDrawLifecycle: (event) => this.local.handlePetDrawLifecycle(event),
     });
     this.local = new CooGenWorld({
       cfg: localCfgView(opts.cfg),
@@ -249,6 +250,13 @@ export class DrawWorld implements World {
           return localUi.invoke!('studio', method, args);
         }
         return localUi.invoke!(panel, method, args);
+      },
+      stream: (panel, socket) => {
+        if (panel === 'api') {
+          apiUi.stream?.(panel, socket);
+          return;
+        }
+        localUi.stream?.(panel, socket);
       },
       lamps: [
         ...(apiUi.lamps ?? []),

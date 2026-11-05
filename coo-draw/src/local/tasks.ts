@@ -70,6 +70,7 @@ export class TaskManager {
       id: task.id,
       prompt_id: task.prompt_id,
       status: task.status,
+      ...(task.params.source ? { source: task.params.source } : {}),
       progress: { ...task.progress },
       params: { ...task.params },
       loras: task.loras.map((item) => ({ ...item })),

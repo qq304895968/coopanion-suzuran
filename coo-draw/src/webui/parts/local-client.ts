@@ -50,21 +50,21 @@ function num(value: unknown, fallback: number): number {
 function splitList(text: string): string[] {
   return text.split(/[,，;；\n]/).map((item) => item.trim()).filter(Boolean);
 }
-type DropdownElement = HTMLDivElement & { value: string; setChoices: (options: Array<{ value: string; label: string }>) => void; destroy: () => void };
-function makeSelect(ctx: WebUiPanelContext, options: Array<{ value: string; label: string }> = []): DropdownElement {
-  const dd = createDropdown({ options, onChange: () => dd.el.dispatchEvent(new Event('change')) });
-  const el = dd.el as DropdownElement;
-  Object.defineProperty(el, 'value', { get: () => dd.getValue(), set: (value: string) => dd.setValue(value) });
-  el.setChoices = (choices) => dd.setOptions(choices);
-  el.destroy = () => dd.destroy();
-  ctx.own({ dispose: el.destroy });
-  return el;
-}
-function setOptions(select: DropdownElement, values: readonly string[], selected: string): void {
-  const choices = [...values];
-  if (selected && !choices.includes(selected)) choices.push(selected);
-  select.setChoices(choices.map(value => ({ value, label: value })));
-  select.value = selected;
+function setOptions(select: HTMLSelectElement, values: readonly string[], selected: string): void {
+  select.replaceChildren();
+  for (const value of values) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  if (selected && !values.includes(selected)) {
+    const option = document.createElement('option');
+    option.value = selected;
+    option.textContent = selected;
+    select.append(option);
+  }
+  if (selected) select.value = selected;
 }
 function objectUrl(ctx: WebUiPanelContext, blob: Blob): string {
   const url = URL.createObjectURL(blob);
@@ -249,10 +249,12 @@ const studioPanel: WebUiPanel = {
     const workflowRow = ctx.ui.rowbar();
     workflowRow.style.alignItems = 'center';
     workflowRow.style.gap = '8px';
-    const workflowSelect = makeSelect(ctx, presets.map((item) => ({
+    const workflowSelect = ctx.ui.select({
+      options: presets.map((item) => ({
         value: item.id,
         label: `${item.name}${item.builtin ? '' : t('（导入）', ' (imported)')}`,
-      })));
+      })),
+    });
     workflowSelect.value = state.workflow;
     workflowRow.append(ctx.ui.field(t('工作流', 'Workflow'), workflowSelect));
     // 参数映射 ℹ️ 图标 - 紧跟下拉右侧 8px，垂直居中
@@ -310,7 +312,8 @@ const studioPanel: WebUiPanel = {
     const checkpointWrap = ctx.ui.h('div', '');
     const checkpointLabel = ctx.ui.h('div', 'coo-group-title', t('模型 Checkpoint', 'Checkpoint'));
     checkpointWrap.append(checkpointLabel);
-    const checkpointSelect = makeSelect(ctx);
+    const checkpointSelect = document.createElement('select') as HTMLSelectElement;
+    checkpointSelect.className = 'select';
     checkpointSelect.style.width = '100%';
     const checkpointEmpty = ctx.ui.h('div', 'coo-empty-card');
     checkpointEmpty.style.display = 'none';
@@ -363,6 +366,7 @@ const studioPanel: WebUiPanel = {
         if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
         checkpointSelect.value = state.checkpoint;
       }
+      updateGenerateEnabled();
     };
     checkpointSelect.addEventListener('change', () => { state.checkpoint = checkpointSelect.value; updateGenerateEnabled(); });
     renderCheckpointEmpty();
@@ -462,9 +466,9 @@ const studioPanel: WebUiPanel = {
     const basicGroup = ctx.ui.h('div', 'coo-group');
     const basicTitle = ctx.ui.h('div', 'coo-group-title', t('基本采样', 'Sampler'));
     const basicGrid = ctx.ui.h('div', 'coo-sampler-grid');
-    const samplerSelect = makeSelect(ctx); setOptions(samplerSelect, boot.samplers, state.sampler);
+    const samplerSelect = ctx.ui.select({ options: [] }); setOptions(samplerSelect as unknown as HTMLSelectElement, boot.samplers, state.sampler);
     samplerSelect.addEventListener('change', () => { state.sampler = samplerSelect.value; });
-    const schedulerSelect = makeSelect(ctx); setOptions(schedulerSelect, boot.schedulers, state.scheduler);
+    const schedulerSelect = ctx.ui.select({ options: [] }); setOptions(schedulerSelect as unknown as HTMLSelectElement, boot.schedulers, state.scheduler);
     schedulerSelect.addEventListener('change', () => { state.scheduler = schedulerSelect.value; });
     const stepsInput = ctx.ui.input({ type: 'number', value: String(state.steps), cls: 'mono' }); stepsInput.min='1'; stepsInput.max='100'; stepsInput.step='1';
     stepsInput.addEventListener('change', () => { state.steps = Math.max(1, Math.min(100, Math.round(num(stepsInput.value, state.steps)))); stepsInput.value = String(state.steps); updateProgressMax(); });
@@ -478,7 +482,9 @@ const studioPanel: WebUiPanel = {
     const sizeGroup = ctx.ui.h('div', 'coo-group');
     const sizeTitle = ctx.ui.h('div', 'coo-group-title', t('尺寸设置', 'Size'));
     const sizeRow = ctx.ui.h('div', 'coo-size-row');
-    const sizeSelect = makeSelect(ctx, SIZE_PRESETS.map(p => ({ value: p.value, label: zh ? p.labelZh : p.labelEn })));  sizeSelect.value = state.sizePreset;
+    const sizeSelect = ctx.ui.select({
+      options: SIZE_PRESETS.map(p => ({ value: p.value, label: zh ? p.labelZh : p.labelEn })),
+    }); sizeSelect.value = state.sizePreset;
     const widthInput = ctx.ui.input({ type: 'number', value: String(state.width), cls: 'mono coo-gen-num' }); widthInput.min='64'; widthInput.max='4096'; widthInput.step='8';
     const heightInput = ctx.ui.input({ type: 'number', value: String(state.height), cls: 'mono coo-gen-num' }); heightInput.min='64'; heightInput.max='4096'; heightInput.step='8';
     const swapBtn = document.createElement('button'); swapBtn.className='btn plain sm coo-swap-btn'; swapBtn.title = t('交换宽高', 'Swap width/height'); swapBtn.append(svgIcon('swap',16), document.createTextNode(t(' 交换',' Swap'))); (swapBtn as HTMLButtonElement).type='button';
@@ -606,9 +612,7 @@ const studioPanel: WebUiPanel = {
         extraBox.append(box);
       } catch {}
     }
-    let controlNetDropdown: DropdownElement | null = null;
     const renderExtra = (): void => {
-      controlNetDropdown?.destroy(); controlNetDropdown = null;
       extraBox.replaceChildren(); void loadCustomFields();
       const preset = presets.find((item) => item.id === state.workflow);
       const kind = preset?.kind;
@@ -633,7 +637,7 @@ const studioPanel: WebUiPanel = {
         });
         controlPath.addEventListener('change', () => { state.controlImage = controlPath.value.trim(); });
         controlRow.append(ctx.ui.field(t('控制图', 'Control image'), controlPath), chooseControl);
-        const controlNetSelect = makeSelect(ctx); controlNetDropdown = controlNetSelect; setOptions(controlNetSelect, controlNets, state.controlNet);
+        const controlNetSelect = ctx.ui.select({ options: controlNets }); setOptions(controlNetSelect as unknown as HTMLSelectElement, controlNets, state.controlNet);
         controlNetSelect.addEventListener('change', () => { state.controlNet = controlNetSelect.value; });
         controlRow.append(ctx.ui.field(t('ControlNet 模型', 'ControlNet model'), controlNetSelect));
         extraBox.append(controlRow);
@@ -720,9 +724,9 @@ const studioPanel: WebUiPanel = {
       setOptions(checkpointSelect, checkpoints, state.checkpoint);
       if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
       if (checkpoints.length) checkpointSelect.value = state.checkpoint;
-      setOptions(samplerSelect, res.samplers, state.sampler);
-      setOptions(schedulerSelect, res.schedulers, state.scheduler);
-      renderHealth(res.health); renderLoraTable(); renderCheckpointEmpty(); updateGenerateEnabled();
+      setOptions(samplerSelect as unknown as HTMLSelectElement, res.samplers, state.sampler);
+      setOptions(schedulerSelect as unknown as HTMLSelectElement, res.schedulers, state.scheduler);
+      renderHealth(res.health); renderLoraTable(); renderCheckpointEmpty();
     };
     const doRefreshModels = async (): Promise<void> => {
       try {
@@ -834,8 +838,7 @@ const studioPanel: WebUiPanel = {
         if (!alive) return;
         if (!res.ok || !res.task) { say(res.error ?? t('提交失败','Submit failed'), true); return; }
         current=res.task; shared.current=current; lastFinished=''; shared.lastFinished=''; renderTask(current); persistLora();
-        const warnings = (res.warnings ?? []).filter(warning => !warning.includes('CheckpointLoader'));
-        if (warnings.length) say(warnings.join('；')); else say(t('已提交，等待 ComfyUI…','Submitted; waiting for ComfyUI…'));
+        if (res.warnings?.length) say(res.warnings.join('；'), false); else say(t('已提交，等待 ComfyUI…','Submitted; waiting for ComfyUI…'));
         void refreshHistory();
       } catch(e){ say(errText(e), true); } finally { busy=false; generateBtn.disabled=isActive(current); updateGenerateEnabled(); }
     }
@@ -1717,7 +1720,7 @@ const lorasPanel: WebUiPanel = {
     const search = ctx.ui.input({ type: 'search', placeholder: t('搜索名称/路径/别名/触发词', 'Search name/path/alias/trigger') });
     search.style.flex = '1';
     search.style.minWidth = '200px';
-    const categorySelect = makeSelect(ctx, [{ value: '', label: t('全部分类', 'All categories') }]);
+    const categorySelect = ctx.ui.select({ options: [t('全部分类', 'All categories')] });
     const rescan = ctx.ui.button(t('重新扫描', 'Rescan'), { size: 'sm' });
     const filterRow = ctx.ui.rowbar();
     filterRow.append(search, categorySelect, rescan);
@@ -1733,7 +1736,17 @@ const lorasPanel: WebUiPanel = {
     renderStatus();
 
     const categories = [...new Set(loras.map((item) => item.category).filter(Boolean))].sort();
-    categorySelect.setChoices([{ value: '', label: t('全部分类', 'All categories') }, ...categories.map(value => ({ value, label: value }))]);
+    categorySelect.replaceChildren();
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = t('全部分类', 'All categories');
+    categorySelect.append(allOption);
+    for (const item of categories) {
+      const option = document.createElement('option');
+      option.value = item;
+      option.textContent = item;
+      categorySelect.append(option);
+    }
 
     const table = ctx.ui.table({
       head: ['', t('LoRA', 'LoRA'), t('别名 / 触发词', 'Aliases / triggers'), t('操作', 'Actions')],

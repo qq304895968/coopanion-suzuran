@@ -35,6 +35,8 @@ export interface DateRangePickerOptions {
   t: (zh: string, en: string) => string;
   onChange?: (range: DateRangeValue) => void;
   className?: string;
+  /** 日历区同时显示的月份数：1=单月（默认），2=双月并排。 */
+  months?: 1 | 2;
 }
 
 export interface DateRangePickerHandle {
@@ -78,6 +80,7 @@ const WEEKDAYS_EN = 'Su,Mo,Tu,We,Th,Fr,Sa';
 
 export function createDateRangePicker(init: DateRangePickerOptions): DateRangePickerHandle {
   const { t } = init;
+  const monthCount = init.months === 2 ? 2 : 1;
 
   const root = document.createElement('div');
   root.className = 'date-range';
@@ -143,20 +146,11 @@ export function createDateRangePicker(init: DateRangePickerOptions): DateRangePi
   nextBtn.textContent = '›';
   head.append(prevBtn, titleEl, nextBtn);
 
-  const weekdays = document.createElement('div');
-  weekdays.className = 'date-range-weekdays';
   const weekLabels = t(WEEKDAYS_ZH, WEEKDAYS_EN).split(',');
-  for (const label of weekLabels) {
-    const cell = document.createElement('span');
-    cell.textContent = label;
-    weekdays.append(cell);
-  }
-
-  const daysGrid = document.createElement('div');
-  daysGrid.className = 'date-range-days';
-  daysGrid.setAttribute('role', 'grid');
-
-  calendar.append(head, weekdays, daysGrid);
+  // 单月：一个网格；双月：并排两个网格（各自带星期表头）
+  const monthsWrap = document.createElement('div');
+  monthsWrap.className = 'date-range-months';
+  calendar.append(head, monthsWrap);
   body.append(sidebar, calendar);
 
   const footer = document.createElement('div');
@@ -239,40 +233,77 @@ export function createDateRangePicker(init: DateRangePickerOptions): DateRangePi
     }
   };
 
+  const monthTitle = (date: Date): string => t(
+    `${date.getFullYear()} 年 ${date.getMonth() + 1} 月`,
+    `${date.toLocaleString('en-US', { month: 'long' })} ${date.getFullYear()}`,
+  );
+
   const renderDays = (): void => {
-    titleEl.textContent = t(
-      `${viewMonth.getFullYear()} 年 ${viewMonth.getMonth() + 1} 月`,
-      `${viewMonth.toLocaleString('en-US', { month: 'long' })} ${viewMonth.getFullYear()}`,
-    );
-    daysGrid.replaceChildren();
+    const months: Date[] = [];
+    for (let offset = 0; offset < monthCount; offset += 1) {
+      months.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + offset, 1));
+    }
+    if (months.length === 1) {
+      titleEl.textContent = monthTitle(months[0]!);
+    } else {
+      const first = months[0]!;
+      const last = months[months.length - 1]!;
+      titleEl.textContent = t(
+        `${first.getFullYear()} 年 ${first.getMonth() + 1} 月 – ${last.getMonth() + 1} 月`,
+        `${first.toLocaleString('en-US', { month: 'short' })} – ${last.toLocaleString('en-US', { month: 'short' })} ${last.getFullYear()}`,
+      );
+    }
+
+    monthsWrap.replaceChildren();
     dayEls = [];
-    for (const cell of monthCells(viewMonth.getFullYear(), viewMonth.getMonth())) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'date-range-day';
-      button.textContent = String(cell.date.getDate());
-      button.dataset.date = formatDate(cell.date);
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        draft = clickRangeDay(draft, cell.date);
-        hover = null;
-        // 点到补位的跨月日期时，顺带把月历切到那个月
-        if (cell.outside) {
-          viewMonth = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
-          renderDays();
-        } else {
-          paint();
-        }
-        syncFooter();
-      });
-      button.addEventListener('mouseenter', () => {
-        if (draft.start && !draft.end) {
-          hover = cell.date;
-          paint();
-        }
-      });
-      daysGrid.append(button);
-      dayEls.push({ el: button, date: cell.date, outside: cell.outside });
+    for (const monthDate of months) {
+      const block = document.createElement('div');
+      block.className = 'date-range-month';
+
+      const weekRow = document.createElement('div');
+      weekRow.className = 'date-range-weekdays';
+      for (const label of weekLabels) {
+        const cell = document.createElement('span');
+        cell.textContent = label;
+        weekRow.append(cell);
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'date-range-days';
+      grid.setAttribute('role', 'grid');
+      grid.setAttribute('aria-label', monthTitle(monthDate));
+
+      for (const cell of monthCells(monthDate.getFullYear(), monthDate.getMonth())) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'date-range-day';
+        button.textContent = String(cell.date.getDate());
+        button.dataset.date = formatDate(cell.date);
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          draft = clickRangeDay(draft, cell.date);
+          hover = null;
+          // 点到补位的跨月日期时，顺带把月历切到那个月
+          if (cell.outside) {
+            viewMonth = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
+            renderDays();
+          } else {
+            paint();
+          }
+          syncFooter();
+        });
+        button.addEventListener('mouseenter', () => {
+          if (draft.start && !draft.end) {
+            hover = cell.date;
+            paint();
+          }
+        });
+        grid.append(button);
+        dayEls.push({ el: button, date: cell.date, outside: cell.outside });
+      }
+
+      block.append(weekRow, grid);
+      monthsWrap.append(block);
     }
     paint();
   };
@@ -381,7 +412,7 @@ export function createDateRangePicker(init: DateRangePickerOptions): DateRangePi
     renderDays();
   });
 
-  daysGrid.addEventListener('mouseleave', () => {
+  monthsWrap.addEventListener('mouseleave', () => {
     if (hover) {
       hover = null;
       paint();

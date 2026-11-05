@@ -992,3 +992,7 @@
 .coo-progress-bar-fill { height: 100%; background: var(--coo-accent); border-radius: 3px; transition: width .3s ease; }
 .coo-progress-info { margin-top: 8px; font-size: 12px; color: var(--coo-muted); }
 .coo-progress-info.is-cancelled { color: var(--coo-danger); }
+
+/* 出图参数和 LoRA 分类下拉与作品筛选共用非原生组件 */
+.coo-draw-left .coo-dd { width: 100%; min-width: 0; }
+.coo-draw-left .coo-dd-trigger { width: 100%; }

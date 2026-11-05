@@ -402,7 +402,7 @@
 
 /* ===== 自定义下拉（ul/li，无原生 select） ===== */
 .coo-dd { position: relative; min-width: 0; }
-.coo-works .coo-dd-trigger {
+.coo-dd-trigger {
   display: inline-flex; align-items: center; gap: 6px;
   width: 100%; height: var(--coo-control-h);
   padding: 0 10px;
@@ -411,13 +411,13 @@
   font-size: 13px; text-align: left; cursor: pointer;
   box-sizing: border-box;
 }
-.coo-works .coo-dd-trigger:hover { border-color: rgba(127,127,127,.38); background: var(--coo-hover-bg); }
+.coo-dd-trigger:hover { border-color: rgba(127,127,127,.38); background: var(--coo-hover-bg); }
 .coo-works .coo-dd.is-open .coo-dd-trigger { border-color: var(--coo-accent); box-shadow: 0 0 0 1px var(--coo-accent); }
 .coo-dd-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coo-dd-value.is-placeholder { color: #9CA3AF; }
 .coo-dd-caret { width: 14px; height: 14px; flex-shrink: 0; opacity: .55; }
 
-.coo-works .coo-dd-list {
+.coo-dd-list {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
   min-width: 100%; max-height: 280px; overflow: auto;
   margin: 0; padding: 4px; list-style: none;
@@ -426,22 +426,22 @@
   box-shadow: 0 8px 24px rgba(0,0,0,.12);
   box-sizing: border-box;
 }
-.coo-works .coo-dd-list[hidden] { display: none; }
-.coo-works .coo-dd-option {
+.coo-dd-list[hidden] { display: none; }
+.coo-dd-option {
   display: flex; align-items: center; gap: 8px;
   height: 30px; padding: 0 8px;
   border-radius: 4px;
   font-size: 13px; color: #374151;
   list-style: none; cursor: pointer; user-select: none;
 }
-.coo-works .coo-dd-option:hover,
-.coo-works .coo-dd-option:focus-visible { background: var(--coo-hover-bg); outline: none; }
-.coo-works .coo-dd-option.is-selected { background: var(--coo-accent-soft); color: var(--coo-accent); font-weight: 500; }
-.coo-works .coo-dd-option.is-selected:hover { background: var(--coo-accent-soft); }
+.coo-dd-option:hover,
+.coo-dd-option:focus-visible { background: var(--coo-hover-bg); outline: none; }
+.coo-dd-option.is-selected { background: var(--coo-accent-soft); color: var(--coo-accent); font-weight: 500; }
+.coo-dd-option.is-selected:hover { background: var(--coo-accent-soft); }
 .coo-dd-check { width: 14px; height: 14px; flex-shrink: 0; opacity: 0; color: var(--coo-accent); }
-.coo-works .coo-dd-option.is-selected .coo-dd-check { opacity: 1; }
+.coo-dd-option.is-selected .coo-dd-check { opacity: 1; }
 .coo-dd-option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.coo-works .coo-dd-option input[type="checkbox"] { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--coo-accent); }
+.coo-dd-option input[type="checkbox"] { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--coo-accent); }
 
 /* 排序：两个定宽下拉 */
 .coo-filter-sort-field { flex: 0 0 110px; width: 110px; }
@@ -992,3 +992,72 @@
 .coo-progress-bar-fill { height: 100%; background: var(--coo-accent); border-radius: 3px; transition: width .3s ease; }
 .coo-progress-info { margin-top: 8px; font-size: 12px; color: var(--coo-muted); }
 .coo-progress-info.is-cancelled { color: var(--coo-danger); }
+
+/* 出图页 LoRA 列表：自定义复选框（div），16×16，无系统蓝，行居中对齐 */
+.coo-lora-row {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #F3F4F6;
+}
+.coo-lora-row .checkbox-cell {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.coo-lora-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #D1D5DB;
+  background: #FFFFFF;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-sizing: border-box;
+}
+.coo-lora-checkbox:hover { border-color: var(--coo-accent); }
+.coo-lora-checkbox.is-checked {
+  background: var(--coo-accent);
+  border-color: var(--coo-accent);
+}
+.coo-lora-checkbox.is-checked::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M6.5 11.5L3 8l1-1 2.5 2.5L12 4l1 1z'/></svg>") center/contain no-repeat;
+}
+.coo-lora-row .name-cell { flex: 1; min-width: 0; padding: 0 12px; }
+.coo-lora-row .name-cell .primary {
+  font-size: 13px;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coo-lora-row .name-cell .secondary {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-top: 2px;
+}
+.coo-lora-row .weight-cell { width: 180px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+
+/* 下拉弹层搜索框（采样器用） */
+.coo-dd-search-wrap { padding: 2px 6px; border-bottom: 1px solid #F3F4F6; }
+.coo-dd-search {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  background: #FFFFFF;
+  font-size: 13px;
+  color: #374151;
+  box-sizing: border-box;
+}
+.coo-dd-search:focus { outline: none; border-color: var(--coo-accent); }

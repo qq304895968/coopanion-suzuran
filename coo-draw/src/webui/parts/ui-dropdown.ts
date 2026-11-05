@@ -17,6 +17,9 @@ export interface DropdownOptions {
   options?: readonly DropdownOption[];
   value?: string;
   ariaLabel?: string;
+  searchPlaceholder?: string;
+  /** 弹层顶部加搜索框，用于过滤长选项（如采样器）。默认不开启，不影响现有调用。 */
+  searchable?: boolean;
   onChange?: (value: string, option: DropdownOption | undefined) => void;
 }
 
@@ -97,14 +100,36 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
   root.append(trigger, list);
 
   let options: DropdownOption[] = [...(init.options ?? [])];
+  let displayOptions = options;
   let value = init.value ?? '';
   let open = false;
+  const searchable = !!init.searchable;
+  let searchInput: HTMLInputElement | null = null;
+  if (searchable) {
+    searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = init.searchPlaceholder ?? '';
+    searchInput.className = 'coo-dd-search';
+    searchInput.addEventListener('input', () => {
+      const q = searchInput!.value.toLowerCase();
+      displayOptions = options.filter(
+        (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+      );
+      renderList();
+    });
+  }
 
   const optionEls = (): HTMLLIElement[] => Array.from(list.querySelectorAll<HTMLLIElement>('li.coo-dd-option'));
 
   const renderList = (): void => {
     list.replaceChildren();
-    for (const option of options) {
+    if (searchable && searchInput) {
+      const wrap = document.createElement('li');
+      wrap.className = 'coo-dd-search-wrap';
+      wrap.append(searchInput!);
+      list.append(wrap);
+    }
+    for (const option of displayOptions) {
       const li = document.createElement('li');
       li.className = 'coo-dd-option';
       li.setAttribute('role', 'option');
@@ -166,6 +191,7 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
 
   function openList(focusSelected = true): void {
     if (!options.length) return;
+    displayOptions = options;
     if (open) return;
     open = true;
     openPopover(close);
@@ -178,6 +204,9 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
       const target = optionEls().find((item) => item.dataset.value === value) ?? optionEls()[0];
       target?.focus();
       target?.scrollIntoView({ block: 'nearest' });
+    }
+    if (searchable) {
+      searchInput?.focus();
     }
   }
 

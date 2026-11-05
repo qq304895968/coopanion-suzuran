@@ -415,21 +415,35 @@ const studioPanel: WebUiPanel = {
       if(!filtered.length){ loraTable.clear(t('没有匹配的 LoRA，试试别的关键词','No matching LoRA, try another keyword')); return; } else loraTable.clear(undefined);
       for (const record of filtered.slice(0, 300)) {
         const checked = state.loras.has(record.path);
-        const box = ctx.ui.checkbox('', {
-          checked,
-          onChange: (v) => {
-            if (v) { state.loras.set(record.path, record.weight ?? 0.75); }
-            else { state.loras.delete(record.path); }
-            renderLoraTable(); // 重绘以刷新权重框禁用态
-            renderLoraCount();
-          },
-        });
-        box.el.setAttribute('aria-label', record.name);
+        // 自定义复选框（div），杜绝原生 checkbox 的系统蓝；16×16，与行中线对齐
+        const cbCell = document.createElement('div');
+        cbCell.className = 'checkbox-cell';
+        const cb = document.createElement('div');
+        cb.className = 'coo-lora-checkbox' + (checked ? ' is-checked' : '');
+        cb.setAttribute('role', 'checkbox');
+        cb.setAttribute('aria-checked', String(checked));
+        cb.tabIndex = 0;
+        cb.title = record.name;
+        const toggleCb = (): void => {
+          const next = !checked;
+          cb.classList.toggle('is-checked', next);
+          cb.setAttribute('aria-checked', String(next));
+          if (next) { state.loras.set(record.path, record.weight ?? 0.75); }
+          else { state.loras.delete(record.path); }
+          renderLoraTable(); // 重绘以刷新权重框禁用态
+          renderLoraCount();
+        };
+        cb.addEventListener('click', toggleCb);
+        cb.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCb(); } });
+        cbCell.append(cb);
         const nameCell = document.createElement('div');
+        nameCell.className = 'name-cell';
         const title = document.createElement('div');
+        title.className = 'primary';
         title.textContent = record.aliases.length ? `${stripExt(record.name)}（${record.aliases.join('/')}）` : stripExt(record.name);
         title.title = record.path;
-        const sub = document.createElement('div'); sub.className = 'coo-gen-sub';
+        const sub = document.createElement('div');
+        sub.className = 'secondary';
         // 隐藏 .safetensors 扩展名，hover 显示完整路径
         const displayPath = stripExt(record.path);
         sub.textContent = [displayPath, ...(record.category ? [record.category] : []), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
@@ -454,8 +468,11 @@ const studioPanel: WebUiPanel = {
         const inc = document.createElement('button'); inc.textContent='+'; inc.style.cssText='width:22px;height:22px;border:1px solid var(--line,rgba(127,127,127,.2));border-radius:4px;cursor:pointer;background:rgba(127,127,127,.06)';
         dec.addEventListener('click', ()=>{ const v=Math.max(-2, num(weightInput.value,0.75)-0.05); weightInput.value=v.toFixed(2); if(state.loras.has(record.path)) state.loras.set(record.path, v); persistLora(); });
         inc.addEventListener('click', ()=>{ const v=Math.min(2, num(weightInput.value,0.75)+0.05); weightInput.value=v.toFixed(2); if(state.loras.has(record.path)) state.loras.set(record.path, v); persistLora(); });
+        weightWrap.classList.add('weight-cell');
         weightWrap.append(dec, weightInput, inc);
-        loraTable.addRow([box.el, nameCell, weightWrap]);
+        loraTable.addRow([cbCell, nameCell, weightWrap]);
+        const rowEl = (loraTable.el as HTMLTableElement).querySelector('tbody > tr:last-child');
+        if (rowEl) rowEl.classList.add('coo-lora-row');
       }
       renderLoraCount();
     };
@@ -482,6 +499,8 @@ const studioPanel: WebUiPanel = {
     const basicGrid = ctx.ui.h('div', 'coo-sampler-grid');
     const samplerDD = createDropdown({
       ariaLabel: t('采样器','Sampler'),
+      searchable: true,
+      searchPlaceholder: t('搜索采样器','Search samplers'),
       options: boot.samplers.map(v => ({ value: v, label: v })),
       value: state.sampler,
       onChange: (v) => { state.sampler = v; },

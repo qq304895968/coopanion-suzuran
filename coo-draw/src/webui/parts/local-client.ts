@@ -137,6 +137,7 @@ interface SharedDrawState {
   resultEntry: HistoryEntry | null;
   resultUrl: string;
   savedParams: SavedStudioParams | null;
+  pendingStudioAction: { entry: HistoryEntry; mode: 'tweak' | 'repaint' } | null;
 }
 const shared: SharedDrawState = {
   boot: null,
@@ -150,6 +151,7 @@ const shared: SharedDrawState = {
   resultEntry: null,
   resultUrl: '',
   savedParams: null,
+  pendingStudioAction: null,
 };
 
 const LAST_PARAMS_KEY = 'coo-draw-last-params';
@@ -235,7 +237,48 @@ const studioPanel: WebUiPanel = {
     }
     for (const lora of boot.defaults) state.loras.set(lora.path, lora.weight);
 
-    const initialSaved = readStoredStudioParams() ?? boot.last_params ?? null;
+    const pendingAction = shared.pendingStudioAction;
+    shared.pendingStudioAction = null;
+
+    const paramsFromHistoryEntry = (entry: HistoryEntry, randomizeSeed: boolean): SavedStudioParams => {
+      const matchedPreset = boot.presets.find(
+        (p) => p.id === entry.workflow_id || p.id === entry.workflow || p.name === entry.workflow,
+      );
+      const resolvedLoras = (entry.loras ?? []).map((item) => {
+        const norm = item.path.replace(/\\/g, '/').toLowerCase();
+        const found = boot.loras.find(
+          (rec) => rec.path.replace(/\\/g, '/').toLowerCase() === norm || rec.name.toLowerCase() === item.name.toLowerCase(),
+        );
+        return { path: found ? found.path : item.path, weight: item.weight };
+      });
+      return {
+        workflow: matchedPreset ? matchedPreset.id : state.workflow,
+        positive: entry.positive ?? '',
+        negative: entry.negative ?? '',
+        checkpoint: entry.checkpoint ?? '',
+        loras: resolvedLoras,
+        sampler: entry.sampler || state.sampler,
+        scheduler: entry.scheduler || state.scheduler,
+        steps: entry.steps || state.steps,
+        cfg: entry.cfg || state.cfg,
+        width: entry.width || state.width,
+        height: entry.height || state.height,
+        batch: entry.batch || 1,
+        seed: randomizeSeed ? -1 : entry.seed,
+        ...(entry.inputImage ? { inputImage: entry.inputImage } : {}),
+        ...(entry.controlImage ? { controlImage: entry.controlImage } : {}),
+        ...(entry.controlNet ? { controlNet: entry.controlNet } : {}),
+        ...(entry.denoise !== undefined ? { denoise: entry.denoise } : {}),
+        ...(entry.controlStrength !== undefined ? { controlStrength: entry.controlStrength } : {}),
+        ...(entry.custom ? { custom: { ...entry.custom } } : {}),
+      };
+    };
+
+    const actionParams = pendingAction
+      ? paramsFromHistoryEntry(pendingAction.entry, pendingAction.mode === 'repaint')
+      : null;
+
+    const initialSaved = actionParams ?? readStoredStudioParams() ?? boot.last_params ?? null;
     const hasSavedLoras = Boolean(initialSaved && Array.isArray(initialSaved.loras));
     if (initialSaved) {
       shared.savedParams = initialSaved;
@@ -1327,6 +1370,9 @@ const studioPanel: WebUiPanel = {
     });
     renderTask(current);
     renderLatestImage(history[0] ?? null);
+    if (pendingAction?.mode === 'tweak') {
+      persistStudioParams();
+    }
     if (current && isActive(current)) void poll();
   },
 };
@@ -1884,8 +1930,12 @@ const worksPanel: WebUiPanel = {
         ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true })); const m = ctx as unknown as { switchTab?: (v:string)=>void }; if (m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，将用相同参数重画','Switched to Studio; repaint with same seed'));
       });
       const tweak = opButton(t('微调','Tweak'), 'default', 'sliders');
-      tweak.addEventListener('click', ()=>{
-        (window as any).__coo_draw_repaint = { entry, mode: 'randomSeed' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，种子将随机','Switched to Studio; seed randomized'));
+      tweak.addEventListener('click', () => {
+        shared.pendingStudioAction = { entry, mode: 'tweak' };
+        const m = ctx as unknown as { switchTab?: (v: string) => void };
+        if (m.switchTab) m.switchTab('studio');
+        else ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true }));
+        ctx.ui.toast(t('参数已填充到出图页，可继续调整', 'Parameters loaded into Studio for tweaking'));
       });
 
       const toPet = opButton(t('发送到桌宠','Send to pet'), 'default', 'send');

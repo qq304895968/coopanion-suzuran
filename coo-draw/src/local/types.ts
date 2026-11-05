@@ -174,10 +174,17 @@ export interface HistoryEntry {
   batch: number;
   created_at: number;
   workflow: string;
+  workflow_id?: string;
   prompt_id: string;
   task_id: string;
   note?: string;
   source?: TaskSource;
+  inputImage?: string;
+  controlImage?: string;
+  controlNet?: string;
+  denoise?: number;
+  controlStrength?: number;
+  custom?: Record<string, string | number>;
 }
 
 export interface WorkflowSummary {

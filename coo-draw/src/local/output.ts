@@ -201,10 +201,17 @@ export class OutputStore {
       batch: input.batch,
       created_at: this.now().getTime(),
       workflow: input.workflow,
+      ...(input.params.workflow ? { workflow_id: input.params.workflow } : {}),
       prompt_id: input.promptId,
       task_id: input.taskId,
       ...(input.params.note ? { note: input.params.note } : {}),
       ...(input.params.source ? { source: input.params.source } : {}),
+      ...(input.params.inputImage ? { inputImage: input.params.inputImage } : {}),
+      ...(input.params.controlImage ? { controlImage: input.params.controlImage } : {}),
+      ...(input.params.controlNet ? { controlNet: input.params.controlNet } : {}),
+      ...(input.params.denoise !== undefined ? { denoise: input.params.denoise } : {}),
+      ...(input.params.controlStrength !== undefined ? { controlStrength: input.params.controlStrength } : {}),
+      ...(input.params.custom ? { custom: { ...input.params.custom } } : {}),
     };
     this.entries.unshift(entry);
     this.trim();

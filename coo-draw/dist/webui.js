@@ -1,14 +1,12 @@
 // src/webui/config-enhance.ts
 function enhanceOnce(root) {
-  try {
-    if (root.dataset.cooEnhanced === "1") return;
-    if (!root.querySelector(".tsection")) return;
-    root.dataset.cooEnhanced = "1";
-    const doc = root.ownerDocument;
-    if (!doc.getElementById("coo-configview-runtime-css")) {
-      const st = doc.createElement("style");
-      st.id = "coo-configview-runtime-css";
-      st.textContent = `
+  if (root.dataset.cooEnhanced === "1") return;
+  root.dataset.cooEnhanced = "1";
+  const doc = root.ownerDocument;
+  if (!doc.getElementById("coo-configview-runtime-css")) {
+    const st = doc.createElement("style");
+    st.id = "coo-configview-runtime-css";
+    st.textContent = `
 .configview-layout{ display:flex; gap:24px; align-items:flex-start; }
 .configview-nav{ position:sticky; top:16px; width:200px; flex-shrink:0; border:1px solid #e5e7eb; border-radius:8px; padding:12px 8px; background:#fafafa; max-height:calc(100vh - 32px); overflow:auto; }
 .configview-nav a{ display:block; padding:6px 8px; border-radius:6px; color:#374151; text-decoration:none; font-size:13px; }
@@ -19,76 +17,97 @@ function enhanceOnce(root) {
 .configview-main{ flex:1; min-width:0; }
 .configview-h3{ font-size:14px; font-weight:600; color:#1f2937; margin:16px 0 8px 0; padding:6px 0 6px 8px; border-left:3px solid #6366f1; background:#f8fafc; }
 `;
-      doc.head.appendChild(st);
+    doc.head.appendChild(st);
+  }
+  if (root.querySelector(".configview-layout")) return;
+  const body = root.querySelector(".configview > div, .configview > .configview-main, .configview");
+  const inner = root.firstElementChild;
+  if (!inner) return;
+  const sections = [];
+  let cur = null;
+  for (const child of Array.from(inner.children)) {
+    if (child.classList.contains("tsection")) {
+      if (cur) sections.push(cur);
+      cur = { titleEl: child, rows: [] };
+    } else if (child.classList.contains("tsecdesc")) {
+      if (cur) cur.desc = child;
+      else {
+      }
+    } else if (child.classList.contains("trow")) {
+      if (!cur) {
+        cur = { titleEl: doc.createElement("div"), rows: [] };
+        cur.titleEl.textContent = "\u672A\u5206\u7EC4";
+        cur.titleEl.className = "tsection";
+      }
+      cur.rows.push(child);
     }
-    if (root.querySelector(".configview-layout")) return;
-    const body = root.querySelector(".configview > div, .configview > .configview-main, .configview");
-    const inner = root.firstElementChild;
-    if (!inner) return;
-    const sections = [];
-    let cur = null;
-    for (const child of Array.from(inner.children)) {
-      if (child.classList.contains("tsection")) {
-        if (cur) sections.push(cur);
-        cur = { titleEl: child, rows: [] };
-      } else if (child.classList.contains("tsecdesc")) {
-        if (cur) cur.desc = child;
-      } else if (child.classList.contains("trow")) {
-        if (!cur) {
-          cur = { titleEl: doc.createElement("div"), rows: [] };
-          cur.titleEl.textContent = "\u672A\u5206\u7EC4";
-          cur.titleEl.className = "tsection";
-        }
-        cur.rows.push(child);
+  }
+  if (cur) sections.push(cur);
+  let xSectionMap = /* @__PURE__ */ new Map();
+  void fetch("/api/config").then((r) => r.json()).then((j) => {
+    const groups = j?.groups || [];
+    for (const g of groups) {
+      const props = g.group?.schema?.properties || {};
+      for (const [path, prop] of Object.entries(props)) {
+        if (prop["x-section"]) xSectionMap.set(path, prop["x-section"]);
       }
     }
-    if (cur) sections.push(cur);
-    if (!sections.length) {
-      root.dataset.cooEnhanced = "";
-      return;
-    }
-    const layout = doc.createElement("div");
-    layout.className = "configview-layout";
-    const nav = doc.createElement("nav");
-    nav.className = "configview-nav";
-    const main = doc.createElement("div");
-    main.className = "configview-main";
-    const bar = root.querySelector(".actions");
-    const allChildren = Array.from(inner.children);
-    sections.forEach((sec, idx) => {
-      const gid = `coo-cfg-${idx}`;
-      sec.titleEl.id = gid;
-      const a = doc.createElement("a");
-      a.className = "nav-group";
-      a.href = `#${gid}`;
-      a.textContent = sec.titleEl.textContent?.trim() || `\u5206\u7EC4 ${idx + 1}`;
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        sec.titleEl.scrollIntoView({ behavior: "smooth" });
-      });
-      nav.appendChild(a);
-      main.appendChild(sec.titleEl);
-      if (sec.desc) main.appendChild(sec.desc);
-      sec.rows.forEach((r) => main.appendChild(r));
-    });
-    layout.append(nav, main);
-    root.replaceChildren(layout);
-    if (bar) root.appendChild(bar);
-    try {
-      const obs = new IntersectionObserver((entries) => {
-        for (const en of entries) if (en.isIntersecting) {
-          const id = en.target.id;
-          nav.querySelectorAll("a").forEach((a) => a.classList.remove("active"));
-          const hit = nav.querySelector(`a[href="#${id}"]`);
-          if (hit) hit.classList.add("active");
+    if (xSectionMap.size && root.dataset.cooGrouped !== "1") {
+      root.dataset.cooGrouped = "1";
+      for (const sec of sections) {
+        const bySec = /* @__PURE__ */ new Map();
+        const noSec = [];
+        for (const row of sec.rows) {
+          const label = row.querySelector(".tlabel")?.textContent?.trim() || "";
+          let s;
+          for (const [path, secName] of xSectionMap) {
+          }
+          void s;
         }
-      }, { rootMargin: "-40% 0px -50% 0px", threshold: 0 });
-      main.querySelectorAll(".tsection").forEach((el) => obs.observe(el));
-    } catch {
+        void bySec;
+        void noSec;
+      }
     }
-  } catch (e) {
-    console.error("coo config enhance failed", e);
-    root.dataset.cooEnhanced = "";
+  }).catch(() => {
+  });
+  const layout = doc.createElement("div");
+  layout.className = "configview-layout";
+  const nav = doc.createElement("nav");
+  nav.className = "configview-nav";
+  const main = doc.createElement("div");
+  main.className = "configview-main";
+  const bar = root.querySelector(".actions");
+  const allChildren = Array.from(inner.children);
+  sections.forEach((sec, idx) => {
+    const gid = `coo-cfg-${idx}`;
+    sec.titleEl.id = gid;
+    const a = doc.createElement("a");
+    a.className = "nav-group";
+    a.href = `#${gid}`;
+    a.textContent = sec.titleEl.textContent?.trim() || `\u5206\u7EC4 ${idx + 1}`;
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      sec.titleEl.scrollIntoView({ behavior: "smooth" });
+    });
+    nav.appendChild(a);
+    main.appendChild(sec.titleEl);
+    if (sec.desc) main.appendChild(sec.desc);
+    sec.rows.forEach((r) => main.appendChild(r));
+  });
+  layout.append(nav, main);
+  root.replaceChildren(layout);
+  if (bar) root.appendChild(bar);
+  try {
+    const obs = new IntersectionObserver((entries) => {
+      for (const en of entries) if (en.isIntersecting) {
+        const id = en.target.id;
+        nav.querySelectorAll("a").forEach((a) => a.classList.remove("active"));
+        const hit = nav.querySelector(`a[href="#${id}"]`);
+        if (hit) hit.classList.add("active");
+      }
+    }, { rootMargin: "-40% 0px -50% 0px", threshold: 0 });
+    main.querySelectorAll(".tsection").forEach((el) => obs.observe(el));
+  } catch {
   }
 }
 function start() {

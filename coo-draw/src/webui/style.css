@@ -984,3 +984,11 @@
 .coo-action-bar .btn-cancel { background: var(--coo-surface); color: var(--coo-muted); border: 1px solid var(--coo-line); cursor: not-allowed; }
 .coo-action-bar .btn-cancel.is-active { background: var(--coo-danger-soft); color: var(--coo-danger); border-color: var(--coo-danger); cursor: pointer; }
 .coo-action-bar .btn-cancel.is-active:hover { filter: brightness(.95); }
+
+.coo-progress-card { background: var(--coo-surface); border: 1px solid var(--coo-line); border-radius: 8px; padding: 16px; }
+.coo-progress-title { font-size: 13px; font-weight: 500; color: var(--coo-text); margin-bottom: 12px; }
+.coo-progress-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--coo-muted); }
+.coo-progress-bar { flex: 1; min-width: 0; height: 6px; background: var(--coo-hover-bg); border-radius: 3px; overflow: hidden; }
+.coo-progress-bar-fill { height: 100%; background: var(--coo-accent); border-radius: 3px; transition: width .3s ease; }
+.coo-progress-info { margin-top: 8px; font-size: 12px; color: var(--coo-muted); }
+.coo-progress-info.is-cancelled { color: var(--coo-danger); }

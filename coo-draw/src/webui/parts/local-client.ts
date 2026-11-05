@@ -4,7 +4,7 @@
  * - 作品：缩略图画廊 + 详情操作，已与出图共享历史与进度状态
  */
 import type {
-  WebUiPanel, WebUiPanelContext, WebUiProgress, WebUiTable,
+  WebUiPanel, WebUiPanelContext, WebUiTable,
 } from 'cortico/web/shared/client-panel.ts';
 import type {
   CooGenBootstrap, DefaultLoRA, GenerateResponse, GenerateTaskView, HistoryEntry, LoRARecord,
@@ -767,56 +767,33 @@ const studioPanel: WebUiPanel = {
       })();
     });
 
-    // 进度模块（右栏下方）
-    const progressCard = ctx.ui.h('div', 'coo-progress-card is-idle');
-    const progressTitle = ctx.ui.h('div', 'coo-group-title', t('生成进度','Progress'));
-    const progress: WebUiProgress = ctx.ui.progress({ max: Math.max(1, state.steps), value: 0, label: t('等待开始','Idle'), format: (v,m)=> `${Math.round((v/Math.max(1,m))*100)}%` });
-    const stageLine = ctx.ui.msgline(''); stageLine.style.fontSize='12px';
-    const progressDetail = ctx.ui.h('div', 'coo-progress-detail', '');
-    const previewWrap = ctx.ui.h('div', '');
-    const previewImg = ctx.ui.h('img', 'coo-preview-thumb'); previewImg.style.display='none'; previewWrap.append(previewImg);
-    const viewWorksBtn = ctx.ui.button(t('查看作品','View works'), { variant: 'primary', size: 'sm' }); viewWorksBtn.prepend(svgIcon('arrowRight',14)); viewWorksBtn.style.display='none';
-    viewWorksBtn.addEventListener('click', () => {
-      const host = ctx.root.closest('.coo-draw-studio')?.parentElement ?? ctx.root;
-      // 通过自定义事件让父容器切换 Tab
-      host.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'works', bubbles: true }));
-      // 兼容器：若父提供 switchTab
-      const maybe = ctx as unknown as { switchTab?: (v:string)=>void };
-      if (maybe.switchTab) maybe.switchTab('works');
-    });
-    progressCard.append(progressTitle, progress.el, stageLine, progressDetail, previewWrap, viewWorksBtn);
+    // 进度卡片仅展示百分比和一行状态。
+    const progressCard = ctx.ui.h('div', 'coo-progress-card');
+    const progressTitle = ctx.ui.h('div', 'coo-progress-title', t('生成进度','Progress'));
+    const progressMeta = ctx.ui.h('div', 'coo-progress-meta');
+    const progressBar = ctx.ui.h('div', 'coo-progress-bar');
+    progressBar.setAttribute('role', 'progressbar'); progressBar.setAttribute('aria-valuemin', '0'); progressBar.setAttribute('aria-valuemax', '100');
+    const progressFill = ctx.ui.h('div', 'coo-progress-bar-fill'); progressBar.append(progressFill);
+    const progressPercent = ctx.ui.h('span', 'coo-progress-percent', '0%');
+    progressMeta.append(progressBar, progressPercent); progressCard.append(progressTitle, progressMeta);
     right.append(progressCard);
 
-    let startTime: number | null = null;
     const renderTask = (task: GenerateTaskView | null): void => {
       shared.current = task;
-      if (!task) {
-        progressCard.classList.add('is-idle');
-        progress.setValue(0,1); progress.setLabel(t('空闲','Idle')); stageLine.textContent=t('空闲','Idle'); stageLine.style.display=''; progressDetail.textContent=''; progressDetail.style.display='none'; previewImg.style.display='none'; viewWorksBtn.style.display='none';
-        generateBtn.disabled = busy; cancelBtn.disabled = true; updateGenerateEnabled(); return;
+      const total = Math.max(1, task?.progress.total || task?.params.steps || 1);
+      const cur = task?.status === 'done' ? total : task && isActive(task) ? Math.max(0, Math.min(total, task.progress.current || 0)) : 0;
+      const percent = Math.round(cur / total * 100);
+      progressFill.style.width = `${percent}%`; progressPercent.textContent = `${percent}%`; progressBar.setAttribute('aria-valuenow', String(percent));
+      progressCard.querySelector('.coo-progress-info')?.remove();
+      if (task) {
+        const elapsed = Math.max(0, Math.round(((task.finished_at || Date.now()) - task.created_at) / 1000));
+        let text = '';
+        if (isActive(task)) text = t(`步数 ${cur}/${total} · 已用 ${elapsed}s`, `Steps ${cur}/${total} · ${elapsed}s elapsed`);
+        else if (task.status === 'done') text = t(`已完成 · 用时 ${elapsed}s`, `Completed · ${elapsed}s`);
+        else if (task.status === 'cancelled') text = t('已取消', 'Cancelled');
+        else if (task.status === 'error') text = task.error || t('生成失败', 'Generation failed');
+        if (text) { const info = ctx.ui.h('div', 'coo-progress-info', text); info.classList.toggle('is-cancelled', task.status === 'cancelled' || task.status === 'error'); progressCard.append(info); }
       }
-      progressCard.classList.remove('is-idle');
-      stageLine.style.display=''; progressDetail.style.display='';
-
-      const total = Math.max(1, task.progress.total || task.params.steps || 1);
-      const cur = task.status === 'done' ? total : Math.min(total, task.progress.current || 0);
-      progress.setValue(cur, total); progress.setLabel(task.status==='done'? t('完成','done') : task.status==='error'? t('失败','failed') : task.status==='cancelled'? t('已取消','cancelled') : t('生成中','running'));
-      const elapsed = task.finished_at ? Math.round((task.finished_at - task.created_at)/1000) : startTime ? Math.round((Date.now() - startTime)/1000) : Math.round((Date.now() - task.created_at)/1000);
-      const estimate = cur>0 && cur<total ? Math.round((elapsed/cur)*(total-cur)) : 0;
-      stageLine.textContent = [task.status, task.progress.message ?? '', `${cur}/${total}`, `${elapsed}s`, estimate? t(`预计剩余 ${estimate}s`,`~${estimate}s left`) : '', task.error ?? ''].filter(Boolean).join(' · ');
-      stageLine.classList.toggle('bad', task.status==='error');
-      progressDetail.textContent = task.status==='running' ? t(`步数：${cur} / ${total}  · 已用：${elapsed}s${estimate ? ` · 预计剩余：${estimate}s` : ''}`, `Step ${cur}/${total} · ${elapsed}s${estimate? ` · ~${estimate}s left` : ''}`) : stageLine.textContent;
-      generateBtn.disabled = busy || isActive(task); cancelBtn.disabled = !isActive(task);
-      if (task.status==='done') { viewWorksBtn.style.display=''; // 显示跳转
-        // 尝试加载预览缩略图（最近一张）
-        if (task.images[0]) {
-          void ctx.invokeBinary('image', [task.images[0].id]).then(blob=>{
-            if (!alive) return; const url = URL.createObjectURL(blob); previewImg.src = url; previewImg.style.display='block';
-            previewImg.addEventListener('load', ()=> {}, { once:true });
-          }).catch(()=>{});
-        }
-      } else if (task.status==='running') { viewWorksBtn.style.display='none'; if (!startTime) startTime = Date.now(); }
-      else { viewWorksBtn.style.display='none'; }
       updateGenerateEnabled();
     };
     const updateProgressMax = (): void => { if (!current || isActive(current)) {} }; // reserved
@@ -856,7 +833,7 @@ const studioPanel: WebUiPanel = {
         const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
         if (needs) { say(t('未检测到 Checkpoint，无法生成。请先放入模型并刷新。','No checkpoint detected; put model files and refresh.'), true); return; }
       }
-      busy=true; generateBtn.disabled=true; say(t('正在提交…','Submitting…')); startTime=Date.now();
+      busy=true; generateBtn.disabled=true; say(t('正在提交…','Submitting…'));
       try {
         const res = await ctx.invoke<GenerateResponse>('generate', [collect()]);
         if (!alive) return;

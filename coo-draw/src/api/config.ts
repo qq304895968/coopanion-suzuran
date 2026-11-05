@@ -1,4 +1,4 @@
-import type { ConfigGroup, ConfigProperty } from 'cortico/core/types.ts';
+import type { ConfigGroup } from 'cortico/core/types.ts';
 
 /** 画风 id，与 `style` 配置的枚举值一致。 */
 export type StyleId = 'crayon' | 'pencil' | 'marker' | 'ink' | 'charcoal' | 'pen' | 'pixel';
@@ -144,6 +144,6 @@ export const PET_DRAW_CONFIG_GROUP: ConfigGroup = {
         maximum: 3600,
         'x-hot': true,
       },
-    } as unknown as Record<string, ConfigProperty>,
+    },
   },
 };

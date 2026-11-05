@@ -1328,6 +1328,14 @@ export class CooGenWorld implements World {
         openInFileManager(this.outputDir());
         return { ok: true, path: this.outputDir() };
       }
+      case 'openModelFolder': {
+        const root = this.modelsRoot();
+        if (!root) throw new Error('尚未配置 ComfyUI 目录或模型根目录');
+        const checkpointsDir = join(root, 'checkpoints');
+        const target = existsSync(checkpointsDir) ? checkpointsDir : root;
+        openInFileManager(target);
+        return { ok: true, path: target };
+      }
       case 'revealImage': return this.panelReveal(args[0]);
       case 'sendToPet': return this.panelSendToPet(args[0]);
       case 'clearHistory': return { ok: true, message: this.outputStore().clear() };

@@ -685,53 +685,42 @@ const studioPanel: WebUiPanel = {
     const dot = ctx.ui.h('span','coo-conn-dot '+(boot.health.ok?'on':'off')); connBadge.append(dot, document.createTextNode(boot.health.ok ? t('在线','Online') : t('离线','Offline')));
     connBadge.style.background = boot.health.ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
     connHead.append(connTitle, connBadge);
-    const connMeta = ctx.ui.h('div', 'coo-conn-kv');
-    const kvRow = (k:string, v: string|HTMLElement, action?: HTMLElement): HTMLElement => {
-      const kk = ctx.ui.h('div','k', k);
-      const vv = ctx.ui.h('div','v');
-      if(typeof v==='string'){ const span=ctx.ui.h('span','truncate', v); span.title=v; vv.append(span); } else vv.append(v);
-      if(action) vv.append(action);
-      const wrap = ctx.ui.h('div',''); wrap.style.display='contents'; wrap.append(kk, vv);
-      return wrap;
+    const connMeta = ctx.ui.h('div', 'coo-conn-fields');
+    let editingUrl = false;
+    let savingUrl = false;
+    const urlInput = ctx.ui.input({ value: boot.config.url, cls: 'addr-input' });
+    const inlineAction = (label: string, handler: () => void): HTMLButtonElement => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'inline-action'; button.textContent = label; button.addEventListener('click', handler); return button;
     };
+    const checkBtn = inlineAction(t('检测','Check'), () => { void checkHealth(); });
     const renderConnMeta = (): void => {
       connMeta.replaceChildren();
-      const versionVal = `${boot.health.version? 'v'+boot.health.version : ''} ${boot.health.system ?? ''}`.trim() || '—';
-      const deviceRaw = boot.health.devices?.[0] ?? '—';
-      const deviceEl = ctx.ui.h('span','truncate', deviceRaw); deviceEl.title = deviceRaw;
-      const addrText = ctx.ui.h('span','truncate', boot.config.url); addrText.title = boot.config.url;
-      const editBtn = ctx.ui.button(t('编辑','Edit'), { size: 'sm' }); editBtn.addEventListener('click', () => { urlRow.style.display = urlRow.style.display === 'none' ? 'flex' : 'none'; });
-      const openOut = ctx.ui.button(t('打开','Open'), { size: 'sm' }); openOut.addEventListener('click', () => { void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开','Opening'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
-      const outText = ctx.ui.h('span','truncate', boot.config.output_dir); outText.title = boot.config.output_dir;
-      connMeta.append(
-        kvRow(t('状态','Status'), boot.health.ok ? t('在线','Online') : t('离线','Offline')),
-        kvRow(t('版本','Version'), versionVal),
-        kvRow(t('设备','Device'), deviceEl),
-        kvRow(t('地址','URL'), addrText, editBtn),
-        kvRow(t('模型','Model'), `Checkpoint ${checkpoints.length} · LoRA ${loras.length}`),
-        kvRow(t('输出','Output'), outText, openOut),
-      );
+      const row = (label: string, value: string | HTMLElement, actions: HTMLElement[] = []): HTMLElement => {
+        const el = ctx.ui.h('div', 'coo-conn-row');
+        const key = ctx.ui.h('span', 'label', label);
+        const val = typeof value === 'string' ? ctx.ui.h('span', 'value', value) : value;
+        if (typeof value === 'string') val.title = value;
+        el.append(key, val, ...actions); return el;
+      };
+      const edit = inlineAction(t('编辑','Edit'), () => { editingUrl = true; urlInput.value = boot.config.url; renderConnMeta(); urlInput.focus(); });
+      const save = inlineAction(t('保存','Save'), () => { void saveAddress(); }); save.disabled = savingUrl;
+      const cancel = inlineAction(t('取消','Cancel'), () => { editingUrl = false; renderConnMeta(); }); cancel.disabled = savingUrl;
+      const open = inlineAction(t('打开','Open'), () => { void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开','Opening'))).catch(e => ctx.ui.toast(errText(e),'bad')); });
+      const version = [boot.health.version ? 'v' + boot.health.version : '', boot.health.system ?? ''].filter(Boolean).join(' · ') || '—';
+      connMeta.append(row(t('状态','Status'), boot.health.ok ? t('在线','Online') : t('离线','Offline')),
+        row(t('版本','Version'), version), row(t('设备','Device'), boot.health.devices?.[0] ?? '—'),
+        row(t('地址','URL'), editingUrl ? urlInput : boot.config.url, editingUrl ? [save, cancel] : [edit, checkBtn]),
+        row(t('模型','Model'), `Checkpoint ${checkpoints.length} · LoRA ${loras.length}`), row(t('输出','Output'), boot.config.output_dir, [open]));
     };
-    renderConnMeta();
-    const urlRow = ctx.ui.h('div', 'coo-conn-url-row'); urlRow.style.display = 'none';
-    const urlInput = ctx.ui.input({ value: boot.config.url, cls: 'mono' });
-    const saveUrl = ctx.ui.button(t('保存地址','Save URL'), { size: 'sm' });
-    const checkBtn = ctx.ui.button(t('检测','Check'), { size: 'sm' });
-    urlRow.append(urlInput, saveUrl, checkBtn);
     const connActions = ctx.ui.h('div', 'coo-conn-actions');
     const launchBtn = ctx.ui.button(t('一键启动','Launch'), { size: 'sm', variant: 'primary' }); launchBtn.disabled = !boot.launch.configured;
     const stopBtn = ctx.ui.button(t('关闭 ComfyUI','Stop ComfyUI'), { size: 'sm', variant: 'plain' }); stopBtn.disabled = !boot.launch.stop_configured;
     stopBtn.style.color = 'var(--danger, #c44)';
     const refreshBtn = ctx.ui.button(t('刷新','Refresh'), { size: 'sm' }); refreshBtn.prepend(svgIcon('refresh',14));
     connActions.append(launchBtn, refreshBtn, stopBtn);
-    if (!boot.launch.configured || !boot.launch.stop_configured) {
-      const warn = ctx.ui.msgline(t(!boot.launch.configured ? '没有配置启动脚本。到 World 设置里填「ComfyUI 启动脚本」后可一键启动。' : '没有配置关闭脚本。到 World 设置里填「ComfyUI 关闭脚本」后可一键关闭。', !boot.launch.configured ? 'No launch script. Set it in World settings.' : 'No stop script. Set it in World settings.'), true);
-      connCard.append(connHead, connMeta, urlRow, connActions, warn);
-    } else {
-      connCard.append(connHead, connMeta, urlRow, connActions);
-    }
-    if (boot.warnings.length) connCard.append(ctx.ui.msgline(boot.warnings.join(' · '), true));
-    const healthLine = ctx.ui.msgline(''); healthLine.style.fontSize = '12px'; connCard.append(healthLine);
+    connCard.append(connHead, connMeta, connActions);
+    const healthLine = ctx.ui.msgline(''); // errors are surfaced as toasts rather than extra card rows
+    renderConnMeta();
     right.append(connCard);
     right.append(actionFloat);
 
@@ -758,19 +747,24 @@ const studioPanel: WebUiPanel = {
       try {
         const res = await ctx.invoke<{ checkpoints: string[]; diffusion_models?: string[]; model_root?: string; samplers: string[]; schedulers: string[]; control_nets: string[]; loras: LoRARecord[]; health: CooGenBootstrap['health']; }>('refreshModels');
         if (!alive) return; applyModelRefresh(res);
-      } catch (e) { healthLine.classList.add('bad'); healthLine.textContent = t('刷新失败：','Refresh failed: ') + errText(e); }
+      } catch (e) { ctx.ui.toast(t('刷新失败：','Refresh failed: ') + errText(e), 'bad'); }
     };
-    saveUrl.addEventListener('click', () => {
+    const saveAddress = async (): Promise<void> => {
       const value = urlInput.value.trim();
-      if (!/^https?:\/\//i.test(value)) { healthLine.classList.add('bad'); healthLine.textContent = t('地址要以 http:// 或 https:// 开头','URL must start with http:// or https://'); return; }
-      void (async () => {
-        try { await ctx.setConfig('world:draw-local', { 'worlds.draw.localUrl': value }); boot.config.url = value; ctx.ui.toast(t('地址已保存，正在检测…','URL saved; checking…')); const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); boot.health = res.health; renderHealth(res.health); await doRefreshModels(); } catch(e){ healthLine.classList.add('bad'); healthLine.textContent = errText(e); }
-      })();
-    });
+      if (!/^https?:\/\//i.test(value)) { ctx.ui.toast(t('地址要以 http:// 或 https:// 开头','URL must start with http:// or https://'), 'bad'); return; }
+      savingUrl = true; renderConnMeta();
+      try {
+        await ctx.setConfig('world:draw-local', { 'worlds.draw.localUrl': value });
+        boot.config.url = value; editingUrl = false; ctx.ui.toast(t('地址已保存','URL saved')); renderConnMeta();
+        await checkHealth();
+      } catch (e) { ctx.ui.toast(errText(e), 'bad'); }
+      finally { savingUrl = false; if (alive) renderConnMeta(); }
+    };
+    const checkHealth = async (): Promise<void> => {
+      try { const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); if (!alive) return; boot.health = res.health; renderHealth(res.health); if (res.health.ok) await doRefreshModels(); }
+      catch (e) { ctx.ui.toast(errText(e), 'bad'); }
+    };
     refreshBtn.addEventListener('click', () => { void doRefreshModels(); });
-    checkBtn.addEventListener('click', () => {
-      void (async () => { try { const res = await ctx.invoke<{ health: CooGenBootstrap['health'] }>('health'); if (!alive) return; boot.health = res.health; renderHealth(res.health); if (res.health.ok) await doRefreshModels(); } catch(e){ healthLine.classList.add('bad'); healthLine.textContent = errText(e); } })();
-    });
     launchBtn.addEventListener('click', () => {
       void (async () => {
         const busyHandle = ctx.ui.busy(t('启动 ComfyUI','Launching ComfyUI'), t('等待 /system_stats 就绪…','Waiting for /system_stats…'));

@@ -962,3 +962,16 @@
 .coo-gen-default-btn { cursor: default; opacity: 1; }
 .coo-gen td { vertical-align: middle; }
 .coo-gen .rowbar { flex-wrap: wrap; gap: 6px; }
+
+/* 出图页连接卡片 */
+.coo-conn-card { padding: 0; overflow: hidden; border-radius: 8px; background: var(--coo-surface); border: 1px solid var(--coo-line); }
+.coo-conn-head { padding: 12px 16px; margin: 0; border-bottom: 1px solid var(--coo-line); }
+.coo-conn-fields { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; }
+.coo-conn-row { display: flex; align-items: center; min-height: 24px; font-size: 13px; min-width: 0; }
+.coo-conn-row .label { width: 48px; flex-shrink: 0; color: var(--coo-muted); }
+.coo-conn-row .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--coo-text); }
+.coo-conn-row .inline-action { flex-shrink: 0; margin-left: 8px; padding: 0; border: 0; background: transparent; color: var(--coo-accent); font-size: 12px; cursor: pointer; }
+.coo-conn-row .inline-action:hover { text-decoration: underline; }
+.coo-conn-row .inline-action:disabled { opacity: .5; cursor: not-allowed; }
+.coo-conn-row .addr-input { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--coo-accent); border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+.coo-conn-actions { gap: 12px; padding: 12px 16px; margin: 0; border-top: 1px solid var(--coo-line); }

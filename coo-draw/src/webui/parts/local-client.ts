@@ -993,9 +993,11 @@ const worksPanel: WebUiPanel = {
     searchWrap.append(searchInput);
 
     // 日期范围：自定义月历弹层（不使用原生 date input）
+    // 第八轮确认：默认单月（双月并排仍可用 months: 2，但作品页不启用）
     const datePicker: DateRangePickerHandle = createDateRangePicker({
       t,
       className: 'coo-filter-date',
+      months: 1,
       onChange: () => renderGallery(),
     });
     row1.append(searchWrap, datePicker.el);

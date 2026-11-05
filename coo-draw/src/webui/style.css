@@ -986,7 +986,7 @@
   flex-shrink: 0;
   margin-left: auto;
 }
-/* LoRA chip */
+/* LoRA chip：长名称在 .lora-name 内省略，末尾权重 .weight 永不压缩裁切 */
 .coo-lora-chip {
   display: inline-flex;
   align-items: center;
@@ -995,15 +995,29 @@
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
-  line-height: 1;
-  max-width: 240px;
+  line-height: 1.2;
+  max-width: 100%;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   border: 1px solid rgba(127,127,127,.08);
+  box-sizing: border-box;
 }
-.coo-lora-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.coo-lora-chip .weight { opacity: .6; }
+.coo-lora-chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.coo-lora-chip .lora-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.coo-lora-chip .weight {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  opacity: .68;
+}
 
 /* 右侧操作面板：flex 换行网格，所有操作都是标准按钮 */
 .operations-panel {

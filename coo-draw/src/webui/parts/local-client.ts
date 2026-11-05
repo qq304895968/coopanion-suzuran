@@ -1787,11 +1787,18 @@ const worksPanel: WebUiPanel = {
           else {
             const chips = ctx.ui.h('div','coo-lora-chips');
             for (const l of entry.loras) {
-              const chip = ctx.ui.h('div','coo-lora-chip');
+              const chip = ctx.ui.h('div', 'coo-lora-chip');
               const name = stripExt(l.name);
-              const txt = document.createElement('span'); txt.textContent = name; txt.title = l.path;
-              const dot = document.createElement('span'); dot.textContent='·'; dot.className='weight';
-              const w = document.createElement('span'); w.textContent = String(l.weight); w.className='weight';
+              const txt = document.createElement('span');
+              txt.className = 'lora-name';
+              txt.textContent = name;
+              txt.title = l.path;
+              const dot = document.createElement('span');
+              dot.textContent = '·';
+              dot.className = 'weight';
+              const w = document.createElement('span');
+              w.textContent = String(l.weight);
+              w.className = 'weight';
               chip.append(txt, dot, w);
               chip.title = `${l.path} · ${l.weight}`;
               chips.append(chip);

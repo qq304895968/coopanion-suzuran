@@ -95,6 +95,12 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(cssContent).toMatch(/\.coo-form-item\.item-seed\s*\{\s*width:\s*140px;\s*\}/);
   });
 
+  it('作品页 LoRA 标签名称与权重分离：长名称在 .lora-name 省略，.weight 禁止收缩裁切', () => {
+    expect(localClient).toContain("txt.className = 'lora-name'");
+    expect(cssContent).toMatch(/\.coo-lora-chip\s+\.lora-name\s*\{[\s\S]*?min-width:\s*0[\s\S]*?overflow:\s*hidden[\s\S]*?text-overflow:\s*ellipsis/);
+    expect(cssContent).toMatch(/\.coo-lora-chip\s+\.weight\s*\{[\s\S]*?flex-shrink:\s*0/);
+  });
+
   it('未配置模型目录时调用 openModelFolder 会给出清晰中文提示', async () => {
     const dir = tempDir();
     try {

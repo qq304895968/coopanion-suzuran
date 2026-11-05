@@ -973,6 +973,9 @@ const worksPanel: WebUiPanel = {
     filters.append(row1, row2);
     const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词 / 种子 / 文件名','Search prompt / seed / filename') }) as HTMLInputElement;
     searchInput.classList.add('coo-filter-search', 'filter-control');
+    // 互斥下拉全局状态（模型 / LoRA / 日期 共用）
+    let activeDropdownId: string | null = null;
+    let closeAllDropdowns: () => void = () => {};
     // 规范一B + 核心交互逻辑规范：日期范围单容器全域热区 + Popover
     const createDateRangePicker = (): { container: HTMLElement; dateFrom: HTMLInputElement; dateTo: HTMLInputElement; getRange: () => { from: string; to: string } } => {
       // 隐藏的兼容 input（供 filtered() 读取 value）
@@ -992,6 +995,7 @@ const worksPanel: WebUiPanel = {
       let toDate: Date | null = null;
       let tempFrom: Date | null = null;
       let tempTo: Date | null = null;
+      let hoverDate: Date | null = null;
       let popover: HTMLElement | null = null;
       let currentMonth = new Date(); currentMonth.setDate(1);
       const pad = (n: number): string => String(n).padStart(2, '0');
@@ -1014,13 +1018,17 @@ const worksPanel: WebUiPanel = {
           textSpan.textContent = `${fmt(fromDate)} — ${fmt(toDate)}`;
           content.classList.remove('placeholder'); container.classList.add('has-value');
         } else if (fromDate) {
-          textSpan.textContent = `${fmt(fromDate)} — ${t('年/月/日','YYYY/MM/DD')}`;
+          // 仅选起点：深色起止 + 次要灰斜体“请选择结束日期”
+          const start = fmt(fromDate);
+          const placeholder = t('请选择结束日期','Select end date');
+          textSpan.innerHTML = `<span style="color:#111827">${start}</span> <span style="color:#9CA3AF">—</span> <span style="color:#9CA3AF; font-style:italic">${placeholder}</span>`;
           content.classList.remove('placeholder'); container.classList.add('has-value');
         }
       };
       const closePopover = (): void => {
         if (popover) { popover.remove(); popover = null; }
         container.classList.remove('is-active');
+        if (activeDropdownId === 'date') activeDropdownId = null;
         document.removeEventListener('mousedown', onClickAway);
         document.removeEventListener('keydown', onEsc);
       };
@@ -1061,13 +1069,25 @@ const worksPanel: WebUiPanel = {
             if (isToday) dayEl.classList.add('today');
             const inRange = (from: Date|null, to: Date|null): boolean => {
               if (!from || !to) return false;
-              const t = cur.getTime(); return t >= from.getTime() && t <= to.getTime();
+              const t = cur.getTime(); return t >= Math.min(from.getTime(), to.getTime()) && t <= Math.max(from.getTime(), to.getTime());
             };
             const effectiveFrom = tempFrom ?? fromDate;
             const effectiveTo = tempTo ?? toDate;
+            // 悬停预览：起点已选、终点未选时，hover 范围高亮
+            const previewFrom = (tempFrom && !tempTo && hoverDate) ? tempFrom : null;
+            const previewTo = (tempFrom && !tempTo && hoverDate) ? hoverDate : null;
+            const isPreviewRange = previewFrom && previewTo && inRange(previewFrom, previewTo);
             if (effectiveFrom && effectiveTo && cur.getTime()===effectiveFrom.getTime()) dayEl.classList.add('range-start');
             if (effectiveFrom && effectiveTo && cur.getTime()===effectiveTo.getTime()) dayEl.classList.add('range-end');
-            if (inRange(effectiveFrom, effectiveTo) && !dayEl.classList.contains('range-start') && !dayEl.classList.contains('range-end')) dayEl.classList.add('in-range');
+            // 端点已确定时正常高亮，否则悬停预览高亮
+            if (effectiveFrom && effectiveTo && inRange(effectiveFrom, effectiveTo) && !dayEl.classList.contains('range-start') && !dayEl.classList.contains('range-end')) dayEl.classList.add('in-range');
+            else if (isPreviewRange && !dayEl.classList.contains('range-start') && !dayEl.classList.contains('range-end')) dayEl.classList.add('in-range-preview');
+            dayEl.addEventListener('mouseenter', () => {
+              if (tempFrom && !tempTo) { hoverDate = cur; buildCalendar(); }
+            });
+            dayEl.addEventListener('mouseleave', () => {
+              if (tempFrom && !tempTo && hoverDate && hoverDate.getTime()===cur.getTime()) { hoverDate = null; }
+            });
             dayEl.addEventListener('click', () => handleDayClick(cur));
             daysGrid.append(dayEl);
           }
@@ -1082,19 +1102,28 @@ const worksPanel: WebUiPanel = {
         }
       };
       const handleDayClick = (cur: Date): void => {
+        // 双击同日 → 单日选中（当天起始=结束）
+        if (tempFrom && !tempTo && cur.getTime() === tempFrom.getTime()) {
+          tempTo = cur;
+          fromDate = tempFrom; toDate = tempTo;
+          syncHidden(); updateDisplay();
+          setTimeout(() => { closePopover(); tempFrom=null; tempTo=null; }, 300);
+          renderGallery(); return;
+        }
         if (!tempFrom || (tempFrom && tempTo)) {
           tempFrom = cur; tempTo = null;
         } else {
           if (cur.getTime() < tempFrom.getTime()) { tempTo = tempFrom; tempFrom = cur; }
           else tempTo = cur;
-          // 完成两次点击 200ms 后自动关闭
+          // 完成两次点击 300ms 后自动关闭
           fromDate = tempFrom; toDate = tempTo;
           syncHidden(); updateDisplay();
-          setTimeout(() => { closePopover(); tempFrom=null; tempTo=null; }, 200);
+          setTimeout(() => { closePopover(); tempFrom=null; tempTo=null; }, 300);
           renderGallery();
           return;
         }
         buildCalendar();
+        (container as any)._refreshFooter?.();
       };
       const applyShortcut = (type: string): void => {
         const today = new Date(); today.setHours(0,0,0,0);
@@ -1114,7 +1143,10 @@ const worksPanel: WebUiPanel = {
         }
       };
       const openPopover = (): void => {
-        if (popover) { closePopover(); return; }
+        if (activeDropdownId === 'date' && popover) { closePopover(); return; }
+        // 互斥关闭其他下拉
+        closeAllDropdowns();
+        activeDropdownId = 'date';
         container.classList.add('is-active');
         popover = ctx.ui.h('div','date-range-popover');
         const shortcuts = ctx.ui.h('div','date-range-shortcuts');
@@ -1127,15 +1159,46 @@ const worksPanel: WebUiPanel = {
           shortcuts.append(b);
         });
         const calendarsWrap = ctx.ui.h('div','date-range-calendars');
-        popover.append(shortcuts, calendarsWrap);
+        const footer = ctx.ui.h('div','date-range-footer');
+        const clearBtn = ctx.ui.h('button','date-range-footer-btn clear', t('清空','Clear'));
+        const cancelBtn = ctx.ui.h('button','date-range-footer-btn cancel', t('取消','Cancel'));
+        const confirmBtn = ctx.ui.h('button','date-range-footer-btn confirm', t('确定','Confirm'));
+        // 确认仅当起点终点俱全时启用
+        const refreshFooter = (): void => {
+          const hasFrom = !!(tempFrom || fromDate);
+          const hasTo = !!(tempTo || (tempFrom && tempTo));
+          // 若已有 tempFrom+tempTo 或已确定 fromDate+toDate 则可用
+          const ready = (tempFrom && tempTo) || (fromDate && toDate && !tempFrom);
+          // 首次打开若无 temp，按钮禁用
+          if (tempFrom && tempTo) { confirmBtn.removeAttribute('disabled'); confirmBtn.style.opacity='1'; }
+          else if (!tempFrom && !tempTo && fromDate && toDate) { confirmBtn.removeAttribute('disabled'); confirmBtn.style.opacity='1'; }
+          else { confirmBtn.setAttribute('disabled',''); confirmBtn.style.opacity='.4'; }
+        };
+        clearBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fromDate=null; toDate=null; tempFrom=null; tempTo=null; hoverDate=null; syncHidden(); updateDisplay(); closePopover(); renderGallery(); });
+        cancelBtn.addEventListener('click', (e)=>{ e.stopPropagation(); tempFrom=null; tempTo=null; hoverDate=null; closePopover(); });
+        confirmBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          if (tempFrom && tempTo) { fromDate = tempFrom; toDate = tempTo; }
+          else if (fromDate && toDate && !tempFrom) { /* 已有值保持 */ }
+          else return;
+          syncHidden(); updateDisplay(); closePopover(); tempFrom=null; tempTo=null; hoverDate=null; renderGallery();
+        });
+        footer.append(clearBtn, cancelBtn, confirmBtn);
+        const mainRow = ctx.ui.h('div','date-range-popover-main');
+        mainRow.append(shortcuts, calendarsWrap);
+        popover.append(mainRow, footer);
         container.append(popover);
         // 初始化 temp
         tempFrom = fromDate ? new Date(fromDate) : null;
         tempTo = toDate ? new Date(toDate) : null;
+        hoverDate = null;
         if (fromDate) currentMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-        buildCalendar();
+        buildCalendar(); refreshFooter();
+        (container as any)._refreshFooter = refreshFooter;
         setTimeout(()=>{ document.addEventListener('mousedown', onClickAway); document.addEventListener('keydown', onEsc); }, 0);
       };
+      // 暴露关闭供互斥调用
+      (container as any)._close = closePopover;
       // 全域热区：容器任意位置点击均触发面板（除清除按钮）
       container.addEventListener('click', (e)=>{
         if ((e.target as HTMLElement).closest('.date-range-clear')) return;
@@ -1208,11 +1271,29 @@ const worksPanel: WebUiPanel = {
     row2.append(modelDD.wrap, loraDD.wrap, sortWrap, clearBtn);
     left.append(filters);
 
-    // 填充模型下拉 - 统一为 filter-dropdown-select 自定义面板
+    // 填充模型下拉 - 统一为 filter-dropdown-select 自定义面板（默认收起，不自动展开）
+    closeAllDropdowns = (): void => {
+      modelFilterPanel.style.display='none'; loraFilterPanel.style.display='none';
+      modelDD.btn.classList.remove('active'); loraDD.btn.classList.remove('active');
+      // 同步关闭日期选择器
+      try {
+        const dpClose = (dateWrap as any)._close as (()=>void) | undefined;
+        if (dpClose) dpClose();
+      } catch {}
+      activeDropdownId = null;
+    };
+    const toggleDropdown = (id: string, panel: HTMLElement, btn: HTMLElement, onOpen: ()=>void): void => {
+      if (activeDropdownId === id) { closeAllDropdowns(); return; }
+      closeAllDropdowns();
+      activeDropdownId = id;
+      onOpen();
+      panel.style.display='flex';
+      btn.classList.add('active');
+    };
     const refreshModelOptions = (): void => {
       const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort();
+      const isOpen = modelFilterPanel.style.display !== 'none' && modelFilterPanel.style.display !== '';
       modelFilterPanel.replaceChildren();
-      modelFilterPanel.style.display='flex';
       const listWrap = ctx.ui.h('div',''); listWrap.style.flex='1'; listWrap.style.overflowY='auto'; listWrap.style.maxHeight='220px';
       modelFilterPanel.append(listWrap);
       const makeRow = (value:string, label:string, isSelected:boolean): HTMLElement => {
@@ -1221,19 +1302,20 @@ const worksPanel: WebUiPanel = {
         const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = isSelected && value!=='' ? true : (value==='' && !modelFilterValue); chk.style.flexShrink='0';
         const lab = ctx.ui.h('span','', label); lab.title=value || label; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap'; lab.style.fontSize='13px';
         row.append(chk, lab);
-        row.addEventListener('click', ()=>{ modelFilterValue = value; modelBtnLabel.textContent = label; modelFilterPanel.style.display='none'; modelDD.btn.classList.remove('active'); renderGallery(); });
+        row.addEventListener('click', ()=>{ modelFilterValue = value; modelBtnLabel.textContent = label; closeAllDropdowns(); renderGallery(); });
         return row;
       };
       listWrap.append(makeRow('', t('全部模型','All models'), !modelFilterValue));
       for (const m of models) { listWrap.append(makeRow(m, stripExt(m), modelFilterValue===m)); }
-      // 更新按钮文案
       if (!modelFilterValue) modelBtnLabel.textContent = t('全部模型','All models');
       else {
         const found = models.find(m=>m===modelFilterValue);
         modelBtnLabel.textContent = found ? stripExt(found) : modelFilterValue;
       }
+      if (!isOpen) modelFilterPanel.style.display='none';
     };
-    refreshModelOptions();
+    // 初始渲染不展开
+    refreshModelOptions(); modelFilterPanel.style.display='none';
     // 暴露给外部调用的 modelFilterSelected 兼容
     (modelSelect as any).value = modelFilterValue;
     Object.defineProperty(modelSelect, 'value', {
@@ -1250,8 +1332,8 @@ const worksPanel: WebUiPanel = {
     };
     const refreshLoraFilterOptions = (): void => {
       const list = allLorasInLib();
+      const wasOpen = loraFilterPanel.style.display !== 'none' && loraFilterPanel.style.display !== '';
       loraFilterPanel.replaceChildren();
-      loraFilterPanel.style.display='flex';
       // 顶部搜索
       const searchWrap = ctx.ui.h('div',''); searchWrap.style.padding='8px'; searchWrap.style.borderBottom='1px solid #e5e7eb'; searchWrap.style.flexShrink='0';
       const searchBox = ctx.ui.input({ type:'search', placeholder: t('搜索...','Search...') }) as HTMLInputElement; searchBox.style.width='100%'; searchBox.style.height='28px'; searchBox.style.fontSize='12px';
@@ -1284,33 +1366,27 @@ const worksPanel: WebUiPanel = {
       // 底部操作栏
       const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.justifyContent='flex-end'; actions.style.padding='8px'; actions.style.borderTop='1px solid #e5e7eb'; actions.style.flexShrink='0';
       const clear = ctx.ui.button(t('清空','Clear'), { size:'sm' }); clear.addEventListener('click', ()=>{ loraFilterSelected.clear(); listWrap.querySelectorAll('input[type="checkbox"]').forEach((c:any)=> c.checked=false); updateLoraBtn(); renderGallery(); });
-      const ok = ctx.ui.button(t('确定','Confirm'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> loraFilterPanel.style.display='none');
+      const ok = ctx.ui.button(t('确定','Confirm'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> closeAllDropdowns());
       actions.append(clear, ok); loraFilterPanel.append(actions);
+      if (!wasOpen) loraFilterPanel.style.display='none';
     };
     const updateLoraBtn = (): void => {
       if (!loraFilterSelected.size) loraBtnLabel.textContent = t('全部 LoRA','All LoRAs');
       else loraBtnLabel.textContent = t(`已选${loraFilterSelected.size}个`, `${loraFilterSelected.size} selected`);
     };
-    const togglePanel = (btn: HTMLElement, panel: HTMLElement, onShow: ()=>void): void => {
-      const hidden = panel.style.display==='none' || !panel.style.display;
-      // close others
-      modelFilterPanel.style.display='none'; loraFilterPanel.style.display='none';
-      modelDD.btn.classList.remove('active'); loraDD.btn.classList.remove('active');
-      if (hidden) {
-        panel.style.display='flex';
-        btn.classList.add('active');
-        onShow();
-      }
-    };
-    loraFilterBtn.addEventListener('click', ()=> togglePanel(loraDD.btn, loraFilterPanel, refreshLoraFilterOptions));
-    modelBtn.addEventListener('click', ()=> togglePanel(modelDD.btn, modelFilterPanel, refreshModelOptions));
+    loraFilterBtn.addEventListener('click', ()=> toggleDropdown('lora', loraFilterPanel, loraDD.btn, refreshLoraFilterOptions));
+    modelBtn.addEventListener('click', ()=> toggleDropdown('model', modelFilterPanel, modelDD.btn, refreshModelOptions));
+    // 全局 Click-away / Esc / 滚动 关闭
     document.addEventListener('click', (e)=>{
-      if (!(loraDD.wrap.contains(e.target as Node) || modelDD.wrap.contains(e.target as Node))) {
-        loraFilterPanel.style.display='none'; modelFilterPanel.style.display='none';
-        loraDD.btn.classList.remove('active'); modelDD.btn.classList.remove('active');
+      const target = e.target as Node;
+      if (!(loraDD.wrap.contains(target) || modelDD.wrap.contains(target) || dateWrap.contains(target))) {
+        closeAllDropdowns();
       }
     });
-    refreshLoraFilterOptions();
+    document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeAllDropdowns(); });
+    window.addEventListener('scroll', ()=>{ if (activeDropdownId) closeAllDropdowns(); }, true);
+    // 初始闭合
+    refreshLoraFilterOptions(); loraFilterPanel.style.display='none';
 
     // 统计行（筛选区下方、画廊上方）- 共X张 | 筛选出X/共Z + [批量模式] indigo 32px
     const statsRow = ctx.ui.h('div','coo-works-stats');

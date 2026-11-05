@@ -342,7 +342,13 @@
 }
 @media (max-width: 960px) { .coo-works-detail { position: static; } }
 
-/* 规范一：基础 Token - 所有过滤控件统一 36px */
+/* 规范一：边框/圆角/垂直居中强制统一 - 禁用 line-height 对齐，禁用 box-shadow/outline 模拟边框 */
+.coo-works-filters {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.filter-control,
 .coo-works-filters .filter-control,
 .coo-works-filters .coo-filter-search,
 .coo-works-filters .date-range-picker,
@@ -353,9 +359,27 @@
   border: 1px solid #E5E7EB;
   border-radius: 6px;
   background: #FFFFFF;
-  font-size: 13px;
-  line-height: 36px;
   padding: 0 12px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: #111827;
+  box-shadow: none;
+  outline: none;
+}
+.filter-control input,
+.coo-works-filters .filter-control input {
+  border: none;
+  outline: none;
+  background: transparent;
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: inherit;
 }
 
 /* 筛选区：两行重构 - Gap 12px */
@@ -363,7 +387,8 @@
 .coo-works-filters-row { display: flex; gap: 12px; align-items: center; }
 .coo-works-filters-row1 { gap: 12px; }
 .coo-works-filters-row1 .coo-filter-search { flex: 1; min-width: 280px; }
-.coo-works-filters-row1 .date-range-picker {
+.coo-works-filters-row1 .date-range-picker,
+.coo-works-filters-row1 .date-range-container {
   display: flex;
   align-items: center;
   height: 36px;
@@ -374,6 +399,8 @@
   border-radius: 6px;
   background: #FFFFFF;
   padding: 0 10px;
+  box-shadow: none;
+  outline: none;
 }
 .coo-works-filters-row1 .date-range-picker input {
   border: none !important;
@@ -384,13 +411,13 @@
   font-size: 13px;
   background: transparent;
   padding: 0;
-  line-height: 36px;
+  line-height: 1;
 }
 .coo-works-filters-row1 .date-range-picker .separator {
   color: #9CA3AF;
   margin: 0 4px;
   font-size: 13px;
-  line-height: 36px;
+  line-height: 1;
 }
 /* 新增：整体外框容器 - 必须设为全域 click 响应（统一热区） */
 .date-range-container {
@@ -453,7 +480,7 @@
 .date-range-container.has-value:hover .date-range-clear {
   display: block;
 }
-/* 弹出面板 */
+/* 弹出面板 - 规范二：560×320 8px圆角 4px阴影 触发器下4px */
 .date-range-popover {
   position: absolute;
   top: calc(100% + 4px);
@@ -462,12 +489,21 @@
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   padding: 12px;
   display: flex;
-  gap: 12px;
-  min-width: 520px;
+  flex-direction: column;
+  gap: 0;
+  width: 560px;
+  height: 320px;
+  box-sizing: border-box;
   animation: dateRangeFadeIn 0.15s ease;
+}
+.date-range-popover-main {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 @keyframes dateRangeFadeIn {
   from { opacity: 0; transform: translateY(-4px); }
@@ -477,7 +513,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 90px;
+  width: 80px;
   flex-shrink: 0;
   border-right: 1px solid #F3F4F6;
   padding-right: 12px;
@@ -503,9 +539,31 @@
 }
 .date-range-calendars {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   flex: 1;
+  width: 480px;
+  min-width: 0;
 }
+.date-range-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #F3F4F6;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+.date-range-footer button {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.date-range-footer .btn-clear { background: none; border: none; color: #6B7280; }
+.date-range-footer .btn-cancel { background: #FFFFFF; border: 1px solid #E5E7EB; color: #374151; }
+.date-range-footer .btn-confirm { background: #10B981; border: 1px solid #10B981; color: #FFFFFF; }
+.date-range-footer .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .date-range-month {
   flex: 1;
 }
@@ -568,8 +626,14 @@
   color: #10B981;
 }
 .date-range-day.in-range {
-  background: rgba(16, 185, 129, 0.1);
-  color: #065F46;
+  background: #D1FAE5;
+  color: #111827;
+  border-radius: 0;
+}
+.date-range-day.in-range-preview {
+  background: #D1FAE5;
+  color: #111827;
+  border-radius: 0;
 }
 .date-range-day.range-start,
 .date-range-day.range-end {
@@ -581,8 +645,8 @@
 .date-range-day.range-start.range-end { border-radius: 4px; }
 .coo-works-filters-row2 { display: flex; gap: 12px; align-items: center; }
 .coo-works-filters-row2 .filter-dropdown-select { flex: 1; min-width: 0; }
-.coo-works-filters-row2 .coo-filter-sort { display: flex; align-items: center; gap: 8px; height: 36px; }
-.coo-works-filters-row2 .coo-filter-sort label { font-size: 13px; color: #6B7280; white-space: nowrap; line-height: 36px; }
+.coo-works-filters-row2 .coo-filter-sort { display: flex; align-items: center; gap: 8px; height: 36px; -webkit-font-smoothing: antialiased; }
+.coo-works-filters-row2 .coo-filter-sort label { font-size: 13px; color: #6B7280; white-space: nowrap; line-height: 1; }
 .coo-works-filters-row2 .coo-filter-sort .sort-time { width: 110px; flex: 0 0 110px; }
 .coo-works-filters-row2 .coo-filter-sort .sort-dir { width: 100px; flex: 0 0 100px; }
 .coo-works-filters .coo-filter-clear { font-size: 12px; color: #8a8f98; background: none; border: none; cursor: pointer; white-space: nowrap; }
@@ -592,7 +656,7 @@
 .coo-filter-date span { opacity: .5; }
 
 
-/* 规范二：LoRA/模型统一组件 .filter-dropdown-select */
+/* 规范二：LoRA/模型统一组件 .filter-dropdown-select - 强制 Flex 居中 line-height:1 无 box-shadow */
 .filter-dropdown-select {
   height: 36px;
   box-sizing: border-box;
@@ -600,7 +664,7 @@
   border-radius: 6px;
   background: #FFFFFF;
   font-size: 13px;
-  line-height: 36px;
+  line-height: 1;
   padding: 0 12px;
   display: flex;
   align-items: center;
@@ -608,6 +672,8 @@
   gap: 8px;
   cursor: pointer;
   flex: 1;
+  box-shadow: none;
+  outline: none;
 }
 .filter-dropdown-select .label {
   flex: 1;

@@ -2862,6 +2862,1160 @@ var workflowsPanel = {
   }
 };
 
+// src/api/config.ts
+var PET_DRAW_DEFAULTS = {
+  enabled: false,
+  style: "crayon",
+  customStyle: "",
+  dailyLimit: 20,
+  maxImagesPerCall: 1,
+  cooldownSeconds: 20,
+  saveDir: "",
+  budgetCny: 0,
+  popupEnabled: true,
+  popupSeconds: 5,
+  popupScale: 1,
+  referenceSearch: true,
+  referenceScreen: true
+};
+var PET_DRAW_CONFIG_GROUP = {
+  id: "world:pet-draw",
+  owner: "world:pet-draw",
+  schema: {
+    type: "object",
+    title: "\u7ED8\u753B",
+    description: "\u684C\u5BA0\u6309\u81EA\u5DF1\u7684\u4EBA\u8BBE\u753B\u5C0F\u753B\u3002\u56FE\u7247\u56FA\u5B9A 512\xD7512\uFF1B\u4E0D\u751F\u6210\u89C6\u9891\u3001\u9AD8\u6E05\u56FE\u6216\u5199\u5B9E\u7167\u7247\u3002API Key \u53EA\u4ECE\u90E8\u7F72\u7684 .env \u8BFB\u53D6\uFF0C\u4E0D\u5199\u8FDB config.json\u3002",
+    properties: {
+      "worlds.pet-draw.style": {
+        type: "string",
+        title: "\u753B\u98CE",
+        description: "\u5B9E\u9645\u4F7F\u7528\u7684\u753B\u98CE\uFF1B\u56FA\u5B9A\u540E\u4E0D\u4F1A\u56E0\u4E3A\u522B\u4EBA\u8981\u6C42\u5C31\u6362\u98CE\u683C\u3002\u4EBA\u8BBE\u540D\u5B57/\u6027\u683C\u4ECD\u4ECE\u57FA\u7840\u8BBE\u5B9A\u8BFB\u3002",
+        enum: ["crayon", "pencil", "marker", "ink", "charcoal", "pen", "pixel", "custom"],
+        "x-options": "pet-draw-style",
+        "x-hot": true,
+        "x-section": "\u98CE\u683C\u4E0E\u753B\u6CD5",
+        "x-help": "\u8721\u7B14\u6D82\u9E26 / \u94C5\u7B14\u901F\u5199 \u7B49\u4E3A\u9884\u8BBE\u98CE\u683C\uFF1B\u9009\u201C\u81EA\u5B9A\u4E49\u201D\u540E\u4E0B\u65B9\u8BF4\u660E\u751F\u6548\u3002"
+      },
+      "worlds.pet-draw.customStyle": {
+        type: "string",
+        title: "\u81EA\u5B9A\u4E49\u753B\u98CE\u8BF4\u660E",
+        description: "\u753B\u98CE\u9009\u201C\u81EA\u5B9A\u4E49\u201D\u65F6\u4F7F\u7528\uFF1B\u5199\u6210\u4E00\u6BB5\u753B\u98CE\u8BF4\u660E\uFF0C\u6700\u591A 600 \u5B57\u3002\u7559\u7A7A\u4F1A\u9000\u56DE\u8721\u7B14\u6D82\u9E26\u3002",
+        "x-hot": true,
+        "x-section": "\u98CE\u683C\u4E0E\u753B\u6CD5",
+        "x-dependsOn": "worlds.pet-draw.style",
+        "x-dependsValue": "custom"
+      },
+      "worlds.pet-draw.dailyLimit": {
+        type: "integer",
+        title: "\u6BCF\u5929\u6700\u591A\u753B\u51E0\u5F20",
+        description: "0 \u8868\u793A\u4E0D\u9650\u3002\u5230\u4E0A\u9650\u540E\u5F53\u5929\u4E0D\u518D\u8C03\u7528\uFF0C\u56DE\u6267\u662F [skipped]\u3002",
+        minimum: 0,
+        maximum: 200,
+        "x-hot": true,
+        "x-section": "\u914D\u989D\u4E0E\u9650\u5236",
+        "x-unit": "\u5F20"
+      },
+      "worlds.pet-draw.maxImagesPerCall": {
+        type: "integer",
+        title: "\u6BCF\u6B21\u6700\u591A\u51FA\u51E0\u5F20",
+        description: "1\u20134\u3002pet_draw \u7684 count \u4F1A\u88AB\u5939\u5230\u8FD9\u4E2A\u4E0A\u9650\uFF1B\u9ED8\u8BA4 1\u3002",
+        minimum: 1,
+        maximum: 4,
+        "x-hot": true,
+        "x-section": "\u914D\u989D\u4E0E\u9650\u5236",
+        "x-unit": "\u5F20"
+      },
+      "worlds.pet-draw.saveDir": {
+        type: "string",
+        title: "\u753B\u5939\u76EE\u5F55",
+        description: "\u7559\u7A7A\u65F6\u4F7F\u7528\u9ED8\u8BA4\u76EE\u5F55\uFF08\u6570\u636E\u76EE\u5F55\u4E0B\u7684 pet-draw\uFF09\u3002",
+        "x-path": { kind: "directory" },
+        "x-hot": true,
+        "x-section": "\u5B58\u50A8",
+        "x-help": "\u753B\u597D\u7684\u56FE\u6309\u8BC4\u4EF7\u5B58\u8FDB\u8FD9\u91CC\uFF08unrated / favorite / like / neutral / dislike\uFF09\uFF0C\u5E76\u5199\u4E00\u4EFD index.json \u7ED9\u5176\u4ED6\u63D2\u4EF6\u8BFB\u3002"
+      },
+      "worlds.pet-draw.budgetCny": {
+        type: "number",
+        title: "\u6708\u5EA6\u753B\u56FE\u9884\u7B97\uFF08\u5143\uFF09",
+        description: "0 = \u4E0D\u8BBE\u3002\u53EA\u7528\u6765\u628A\u9884\u7B97\u6298\u7B97\u6210\u201C\u8FD8\u80FD\u753B\u5927\u7EA6\u51E0\u5F20\u201D\u3002",
+        minimum: 0,
+        maximum: 1e5,
+        "x-suffix": "\u5143",
+        "x-hot": true,
+        "x-section": "\u914D\u989D\u4E0E\u9650\u5236"
+      },
+      "worlds.pet-draw.popupEnabled": {
+        type: "boolean",
+        title: "\u753B\u5B8C\u81EA\u52A8\u5E26\u56FE",
+        description: "\u753B\u597D\u540E\u628A\u7B2C\u4E00\u5F20\u653E\u8FDB\u684C\u5BA0\u5934\u9876\u7684\u6C14\u6CE1\u3002",
+        "x-hot": true,
+        "x-section": "\u6C14\u6CE1\u5C55\u793A"
+      },
+      "worlds.pet-draw.popupSeconds": {
+        type: "integer",
+        title: "\u6C14\u6CE1\u505C\u7559\uFF08\u79D2\uFF09",
+        description: "1\u201330\uFF0C\u9ED8\u8BA4 5\u3002",
+        minimum: 1,
+        maximum: 30,
+        "x-hot": true,
+        "x-section": "\u6C14\u6CE1\u5C55\u793A",
+        "x-unit": "\u79D2"
+      },
+      "worlds.pet-draw.popupScale": {
+        type: "number",
+        title: "\u6C14\u6CE1\u5C3A\u5BF8\u7F29\u653E",
+        description: "0.3\u20132\uFF0C\u9ED8\u8BA4 1\u3002",
+        minimum: 0.3,
+        maximum: 2,
+        "x-hot": true,
+        "x-section": "\u6C14\u6CE1\u5C55\u793A"
+      },
+      "worlds.pet-draw.referenceSearch": {
+        type: "boolean",
+        title: "\u5141\u8BB8\u641C\u56FE\u53C2\u8003",
+        description: "\u73A9\u5BB6\u70B9\u540D\u4EBA\u7269\u65F6\uFF0C\u8054\u7F51\u641C\u4E00\u5F20\u53C2\u8003\u56FE\u3002",
+        "x-hot": true,
+        "x-section": "\u53C2\u8003\u56FE"
+      },
+      "worlds.pet-draw.referenceScreen": {
+        type: "boolean",
+        title: "\u5141\u8BB8\u622A\u56FE\u53C2\u8003",
+        description: "\u73A9\u5BB6\u8BF4\u201C\u7528\u5C4F\u5E55/\u622A\u56FE\u201D\u65F6\uFF0C\u622A\u5F53\u524D\u4E3B\u5C4F\u4F5C\u53C2\u8003\u3002",
+        "x-hot": true,
+        "x-section": "\u53C2\u8003\u56FE"
+      },
+      "worlds.pet-draw.cooldownSeconds": {
+        type: "integer",
+        title: "\u4E24\u6B21\u753B\u56FE\u7684\u6700\u5C0F\u95F4\u9694\uFF08\u79D2\uFF09",
+        description: "0 \u8868\u793A\u4E0D\u9650\u3002\u51B7\u5374\u671F\u5185\u56DE\u6267\u662F [skipped]\u3002",
+        minimum: 0,
+        maximum: 3600,
+        "x-hot": true,
+        "x-section": "\u914D\u989D\u4E0E\u9650\u5236",
+        "x-unit": "\u79D2"
+      }
+    }
+  }
+};
+
+// src/local/config.ts
+var COO_GEN_DEFAULTS = {
+  enabled: false,
+  url: "http://127.0.0.1:8188",
+  comfyDir: "",
+  modelsDir: "",
+  autoLaunch: false,
+  launchScript: "",
+  launchArgs: "",
+  stopScript: "",
+  launchCwd: "",
+  launchWaitSeconds: 60,
+  outputDir: "",
+  defaultCheckpoint: "",
+  loraMaxCount: 3,
+  historyLimit: 50,
+  sampler: "euler_ancestral",
+  scheduler: "normal",
+  steps: 20,
+  cfg: 7,
+  width: 768,
+  height: 1152,
+  batch: 1,
+  negativePrompt: "low quality, blurry, bad anatomy",
+  promptPrefix: "masterpiece, best quality",
+  promptSuffix: "",
+  translateUrl: "",
+  translateModel: "",
+  translateKeyEnv: "COO_GEN_LLM_KEY",
+  translateTimeoutSeconds: 12,
+  timeoutSeconds: 300,
+  pollSeconds: 2,
+  popupEnabled: true,
+  popupSeconds: 6,
+  popupScale: 0.8,
+  defaultWorkflow: "quick-txt2img"
+};
+var SAMPLERS = [
+  "euler_ancestral",
+  "euler",
+  "heun",
+  "dpm_2",
+  "dpm_2_ancestral",
+  "lms",
+  "dpmpp_2s_ancestral",
+  "dpmpp_sde",
+  "dpmpp_2m",
+  "dpmpp_2m_sde",
+  "dpmpp_3m_sde",
+  "ddim",
+  "uni_pc"
+];
+var SCHEDULERS = [
+  "normal",
+  "karras",
+  "exponential",
+  "sgm_uniform",
+  "simple",
+  "ddim_uniform",
+  "beta"
+];
+var COO_GEN_CONFIG_GROUP = {
+  id: "world:coo-gen",
+  owner: "world:coo-gen",
+  schema: {
+    type: "object",
+    title: "\u51FA\u56FE",
+    description: "\u7528\u672C\u5730 ComfyUI \u51FA\u7528\u6237\u81EA\u5DF1\u7684\u56FE\u3002\u8FD9\u91CC\u53EA\u653E\u8FDE\u63A5\u548C\u9ED8\u8BA4\u503C\uFF1BLoRA \u5E38\u9A7B\u7EC4\u5408\u3001\u522B\u540D\u548C\u9ED8\u8BA4\u53C2\u6570\u5728\u300C\u51FA\u56FE\u300D\u9762\u677F\u91CC\u7BA1\u7406\u3002",
+    properties: {
+      "worlds.coo-gen.url": {
+        type: "string",
+        title: "ComfyUI \u5730\u5740",
+        description: "\u9ED8\u8BA4 http://127.0.0.1:8188\u3002\u9762\u677F\u4F1A\u5B9E\u65F6\u68C0\u6D4B /system_stats\u3002",
+        "x-hot": true,
+        "x-section": "\u8FDE\u63A5\u4E0E\u8DEF\u5F84"
+      },
+      "worlds.coo-gen.comfyDir": {
+        type: "string",
+        title: "ComfyUI \u6839\u76EE\u5F55",
+        description: "\u5305\u542B main.py \u548C models \u7684\u90A3\u5C42\uFF0C\u4F8B\u5982 D:\\develop\\ComfyUI\\ComfyUI\u3002\u7528\u6765\u627E ComfyUI \u81EA\u5DF1\u7684 models \u548C extra_model_paths.yaml\u3002",
+        "x-path": { kind: "directory" },
+        "x-hot": true,
+        "x-section": "\u8FDE\u63A5\u4E0E\u8DEF\u5F84"
+      },
+      "worlds.coo-gen.modelsDir": {
+        type: "string",
+        title: "\u6A21\u578B\u6839\u76EE\u5F55",
+        description: "\u72EC\u7ACB\u7684\u6A21\u578B\u6587\u4EF6\u5939\uFF0C\u4F8B\u5982 D:\\develop\\ComfyUI\\models\u3002\u91CC\u9762\u653E checkpoints/\u3001loras/\u3001diffusion_models/\uFF1B\u7559\u7A7A\u65F6\u7528 ComfyUI \u6839\u76EE\u5F55\u4E0B\u7684 models\u3002\u63D2\u4EF6\u4F1A\u4ECE\u8FD9\u91CC\u626B\u63CF\u6A21\u578B\uFF0C\u5E76\u53EF\u901A\u8FC7\u9762\u677F\u5199\u5165 extra_model_paths.yaml \u8BA9 ComfyUI \u4E5F\u8BFB\u53D6\u3002",
+        "x-path": { kind: "directory" },
+        "x-hot": true,
+        "x-section": "\u8FDE\u63A5\u4E0E\u8DEF\u5F84"
+      },
+      "worlds.coo-gen.outputDir": {
+        type: "string",
+        title: "\u51FA\u56FE\u4FDD\u5B58\u76EE\u5F55",
+        description: "\u7559\u7A7A\u65F6\u4F7F\u7528\u9ED8\u8BA4\u76EE\u5F55\uFF08\u6570\u636E\u76EE\u5F55\u4E0B\u7684 output\uFF09\u3002",
+        "x-path": { kind: "directory" },
+        "x-hot": true,
+        "x-section": "\u8FDE\u63A5\u4E0E\u8DEF\u5F84"
+      },
+      "worlds.coo-gen.defaultCheckpoint": {
+        type: "string",
+        title: "\u9ED8\u8BA4\u6A21\u578B",
+        description: "ComfyUI \u7684 checkpoint \u6587\u4EF6\u540D\uFF1B\u9762\u677F\u91CC\u53EF\u4EE5\u6539\u3002\u7559\u7A7A\u65F6\u7528\u5217\u8868\u7B2C\u4E00\u4E2A\u3002",
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.loraMaxCount": {
+        type: "integer",
+        title: "LoRA \u6700\u591A\u53E0\u52A0\u6570",
+        description: "1\u20135\uFF0C\u9ED8\u8BA4 3\u3002\u5BF9\u8BDD\u5339\u914D\u4F18\u5148\u4E8E\u9ED8\u8BA4 LoRA\uFF1B\u8D85\u9650\u65F6\u6DD8\u6C70\u9ED8\u8BA4\u3002",
+        minimum: 1,
+        maximum: 5,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.historyLimit": {
+        type: "integer",
+        title: "\u9762\u677F\u5386\u53F2\u6761\u6570",
+        description: "1\u2013200\uFF0C\u9ED8\u8BA4 50\u3002\u53EA\u5F71\u54CD\u9762\u677F\u4E0E\u5386\u53F2\u7D22\u5F15\uFF0C\u4E0D\u5220\u56FE\u3002",
+        minimum: 1,
+        maximum: 200,
+        "x-hot": true,
+        "x-section": "\u8FD0\u884C\u65F6"
+      },
+      "worlds.coo-gen.sampler": {
+        type: "string",
+        title: "\u9ED8\u8BA4\u91C7\u6837\u5668",
+        description: "\u65B0\u4EFB\u52A1\u9ED8\u8BA4\u4F7F\u7528\uFF1B\u9762\u677F\u91CC\u53EF\u4EE5\u6539\u3002",
+        enum: [...SAMPLERS],
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.scheduler": {
+        type: "string",
+        title: "\u9ED8\u8BA4\u8C03\u5EA6\u5668",
+        enum: [...SCHEDULERS],
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.steps": {
+        type: "integer",
+        title: "\u9ED8\u8BA4\u6B65\u6570",
+        description: "1\u2013100\uFF0C\u9ED8\u8BA4 20\u3002",
+        minimum: 1,
+        maximum: 100,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.cfg": {
+        type: "number",
+        title: "\u9ED8\u8BA4 CFG",
+        description: "1\u201330\uFF0C\u9ED8\u8BA4 7\u3002",
+        minimum: 1,
+        maximum: 30,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.width": {
+        type: "integer",
+        title: "\u9ED8\u8BA4\u5BBD\u5EA6",
+        description: "64\u20134096\uFF0C\u9ED8\u8BA4 768\u3002",
+        minimum: 64,
+        maximum: 4096,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.height": {
+        type: "integer",
+        title: "\u9ED8\u8BA4\u9AD8\u5EA6",
+        description: "64\u20134096\uFF0C\u9ED8\u8BA4 1152\u3002",
+        minimum: 64,
+        maximum: 4096,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.batch": {
+        type: "integer",
+        title: "\u9ED8\u8BA4\u6279\u6B21",
+        description: "1\u20138\uFF0C\u9ED8\u8BA4 1\u3002",
+        minimum: 1,
+        maximum: 8,
+        "x-hot": true,
+        "x-section": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570"
+      },
+      "worlds.coo-gen.negativePrompt": {
+        type: "string",
+        title: "\u9ED8\u8BA4\u53CD\u5411\u63D0\u793A\u8BCD",
+        description: "\u9762\u677F\u91CC\u53EF\u6539\uFF1B\u5BF9\u8BDD\u89E6\u53D1\u51FA\u56FE\u65F6\u4E5F\u7528\u5B83\u3002",
+        "x-hot": true,
+        "x-section": "\u63D0\u793A\u8BCD\u9ED8\u8BA4"
+      },
+      "worlds.coo-gen.promptPrefix": {
+        type: "string",
+        title: "\u6B63\u5411\u63D0\u793A\u8BCD\u524D\u7F00",
+        description: "\u6BCF\u6B21\u51FA\u56FE\u81EA\u52A8\u52A0\u5728\u6700\u524D\u9762\uFF1B\u7559\u7A7A\u4E0D\u52A0\u3002",
+        "x-hot": true,
+        "x-section": "\u63D0\u793A\u8BCD\u9ED8\u8BA4"
+      },
+      "worlds.coo-gen.promptSuffix": {
+        type: "string",
+        title: "\u6B63\u5411\u63D0\u793A\u8BCD\u540E\u7F00",
+        description: "\u6BCF\u6B21\u51FA\u56FE\u81EA\u52A8\u52A0\u5728\u6700\u540E\u9762\uFF1B\u7559\u7A7A\u4E0D\u52A0\u3002",
+        "x-hot": true,
+        "x-section": "\u63D0\u793A\u8BCD\u9ED8\u8BA4"
+      },
+      "worlds.coo-gen.translateUrl": {
+        type: "string",
+        title: "\u7FFB\u8BD1\u7AEF\u70B9\uFF08\u53EF\u9009\uFF09",
+        description: "OpenAI \u517C\u5BB9\u7684 /v1/chat/completions \u5730\u5740\uFF0C\u4F8B\u5982 http://127.0.0.1:11434/v1\u3002\u7559\u7A7A\u65F6\u53EA\u7528\u8BCD\u5178\u548C\u8C03\u7528\u65B9\u7ED9\u7684\u82F1\u6587 tag\u3002",
+        "x-hot": true,
+        "x-section": "\u7FFB\u8BD1"
+      },
+      "worlds.coo-gen.translateModel": {
+        type: "string",
+        title: "\u7FFB\u8BD1\u6A21\u578B",
+        description: "\u4F8B\u5982 qwen2.5:7b\uFF1B\u7559\u7A7A\u5219\u4E0D\u5F00\u7FFB\u8BD1\u3002",
+        "x-hot": true,
+        "x-section": "\u7FFB\u8BD1"
+      },
+      "worlds.coo-gen.translateKeyEnv": {
+        type: "string",
+        title: "\u7FFB\u8BD1 Key \u7684\u73AF\u5883\u53D8\u91CF\u540D",
+        description: "\u9ED8\u8BA4 COO_GEN_LLM_KEY\uFF1B\u672C\u5730\u7AEF\u70B9\u901A\u5E38\u4E0D\u9700\u8981\uFF0C\u7559\u7A7A\u5373\u53EF\u3002",
+        "x-hot": true,
+        "x-section": "\u7FFB\u8BD1"
+      },
+      "worlds.coo-gen.translateTimeoutSeconds": {
+        type: "integer",
+        title: "\u7FFB\u8BD1\u8D85\u65F6\uFF08\u79D2\uFF09",
+        description: "3\u201360\uFF0C\u9ED8\u8BA4 12\u3002\u8D85\u65F6\u540E\u539F\u6587\u76F4\u63A5\u4F5C\u4E3A prompt\u3002",
+        minimum: 3,
+        maximum: 60,
+        "x-hot": true,
+        "x-section": "\u7FFB\u8BD1"
+      },
+      "worlds.coo-gen.timeoutSeconds": {
+        type: "integer",
+        title: "\u5355\u6B21\u51FA\u56FE\u8D85\u65F6\uFF08\u79D2\uFF09",
+        description: "30\u20131800\uFF0C\u9ED8\u8BA4 300\uFF1B\u8D85\u65F6\u540E\u4EFB\u52A1\u6807\u8BB0\u4E3A\u5931\u8D25\u5E76\u63D0\u793A\u53D6\u6D88\u3002",
+        minimum: 30,
+        maximum: 1800,
+        "x-hot": true,
+        "x-section": "\u8FD0\u884C\u65F6"
+      },
+      "worlds.coo-gen.pollSeconds": {
+        type: "integer",
+        title: "\u8F6E\u8BE2\u95F4\u9694\uFF08\u79D2\uFF09",
+        description: "1\u201310\uFF0C\u9ED8\u8BA4 2\uFF1BWebSocket \u65AD\u7EBF\u65F6\u9760\u5B83\u67E5 /history\u3002",
+        minimum: 1,
+        maximum: 10,
+        "x-hot": true,
+        "x-section": "\u8FD0\u884C\u65F6"
+      },
+      "worlds.coo-gen.popupEnabled": {
+        type: "boolean",
+        title: "\u753B\u5B8C\u81EA\u52A8\u5F39\u7B2C\u4E00\u5F20",
+        description: "\u5F39\u5728\u684C\u5BA0\u5934\u9876\u7684\u6C14\u6CE1\u91CC\uFF1B\u684C\u5BA0\u6CA1\u5F00\u65F6\u53EA\u7559\u5BF9\u8BDD\u9875\u548C\u9762\u677F\u3002",
+        "x-hot": true,
+        "x-section": "\u81EA\u52A8\u5316"
+      },
+      "worlds.coo-gen.popupSeconds": {
+        type: "integer",
+        title: "\u6C14\u6CE1\u505C\u7559\uFF08\u79D2\uFF09",
+        description: "1\u201330\uFF0C\u9ED8\u8BA4 6\u3002",
+        minimum: 1,
+        maximum: 30,
+        "x-hot": true,
+        "x-section": "\u81EA\u52A8\u5316"
+      },
+      "worlds.coo-gen.popupScale": {
+        type: "number",
+        title: "\u6C14\u6CE1\u5C3A\u5BF8\u7F29\u653E",
+        description: "0.3\u20132\uFF0C\u9ED8\u8BA4 0.8\u3002",
+        minimum: 0.3,
+        maximum: 2,
+        "x-hot": true,
+        "x-section": "\u81EA\u52A8\u5316"
+      },
+      "worlds.coo-gen.defaultWorkflow": {
+        type: "string",
+        title: "\u9ED8\u8BA4\u5DE5\u4F5C\u6D41",
+        description: "\u5185\u7F6E quick-txt2img / img2img / controlnet\uFF0C\u6216\u5BFC\u5165\u5DE5\u4F5C\u6D41\u7684 id\u3002",
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.launchScript": {
+        type: "string",
+        title: "ComfyUI \u542F\u52A8\u811A\u672C",
+        description: "\u4E00\u952E\u542F\u52A8\u7528\u7684 .bat / .cmd / .exe / .py\uFF1B\u7559\u7A7A\u5219\u4E0D\u63D0\u4F9B\u4E00\u952E\u542F\u52A8\u3002",
+        "x-path": { kind: "file", extensions: [".bat", ".cmd", ".exe", ".py", ".ps1"] },
+        "x-warning": true,
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.launchArgs": {
+        type: "string",
+        title: "\u542F\u52A8\u53C2\u6570",
+        description: "\u4F8B\u5982 --port 8188\uFF1B\u652F\u6301\u53CC\u5F15\u53F7\u3002\u7528 start_coo-gen \u811A\u672C\u65F6\u7559\u7A7A\u5373\u53EF\uFF0C\u811A\u672C\u4F1A\u81EA\u5DF1\u5E26\u7AEF\u53E3\u3002",
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.stopScript": {
+        type: "string",
+        title: "ComfyUI \u5173\u95ED\u811A\u672C",
+        description: "\u4E00\u952E\u5173\u95ED\u7528\u7684 .bat / .cmd / .exe / .ps1\uFF1B\u7559\u7A7A\u5219\u9762\u677F\u548C\u5BF9\u8BDD\u90FD\u4E0D\u63D0\u4F9B\u5173\u95ED\u3002",
+        "x-path": { kind: "file", extensions: [".bat", ".cmd", ".exe", ".ps1"] },
+        "x-warning": true,
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.launchCwd": {
+        type: "string",
+        title: "\u542F\u52A8\u5DE5\u4F5C\u76EE\u5F55",
+        description: "\u7559\u7A7A\u65F6\u7528\u811A\u672C\u6240\u5728\u76EE\u5F55\u3002",
+        "x-path": { kind: "directory" },
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.launchWaitSeconds": {
+        type: "integer",
+        title: "\u542F\u52A8\u7B49\u5F85\uFF08\u79D2\uFF09",
+        description: "10\u2013300\uFF0C\u9ED8\u8BA4 60\uFF1B\u671F\u95F4\u6BCF 1.5 \u79D2\u63A2\u6D4B\u4E00\u6B21\u3002",
+        minimum: 10,
+        maximum: 300,
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      },
+      "worlds.coo-gen.autoLaunch": {
+        type: "boolean",
+        title: "\u63D2\u4EF6\u542F\u52A8\u65F6\u81EA\u52A8\u62C9\u8D77 ComfyUI",
+        description: "\u53EA\u5728\u914D\u7F6E\u4E86\u542F\u52A8\u811A\u672C\u65F6\u751F\u6548\uFF1B\u4E0D\u4F1A\u91CD\u590D\u542F\u52A8\u5DF2\u7ECF\u5728\u8FD0\u884C\u7684\u5B9E\u4F8B\u3002",
+        "x-hot": true,
+        "x-section": "\u542F\u52A8\u4E0E\u5173\u95ED"
+      }
+    }
+  }
+};
+
+// src/config.ts
+var capitalize = (key) => key.charAt(0).toUpperCase() + key.slice(1);
+function prefixedLocalDefaults() {
+  const out = {};
+  for (const [key, value] of Object.entries(COO_GEN_DEFAULTS)) {
+    if (key === "enabled") continue;
+    out[`local${capitalize(key)}`] = value;
+  }
+  return out;
+}
+var LOCAL_DEFAULTS = prefixedLocalDefaults();
+var DRAW_DEFAULTS = {
+  ...PET_DRAW_DEFAULTS,
+  ...LOCAL_DEFAULTS,
+  routePet: "api",
+  routeDiary: "api",
+  personaWorkflow: "persona-krea2",
+  personaUnet: "krea2_turbo_nvfp4.safetensors",
+  personaClip: "qwen3vl_4b_fp8_scaled.safetensors",
+  personaVae: "qwen_image_vae.safetensors",
+  personaSteps: 8,
+  personaCfg: 1,
+  personaSampler: "euler",
+  personaScheduler: "simple",
+  personaLoras: "",
+  personaNegative: "\u7167\u7247, \u5199\u5B9E, 3D, \u9AD8\u6E05, \u6444\u5F71, \u7C97\u7CD9, \u6587\u5B57, \u6C34\u5370, \u7B7E\u540D, \u8FB9\u6846",
+  personaExtraPrompt: "",
+  personaReferenceMode: "describe",
+  personaImg2imgDenoise: 0.55
+};
+function remapGroup(group, oldPrefix, mapKey, overrides) {
+  const properties = {};
+  for (const [path, prop] of Object.entries(group.schema.properties)) {
+    const short = path.startsWith(oldPrefix) ? path.slice(oldPrefix.length) : path;
+    properties[mapKey(short)] = prop;
+  }
+  return {
+    id: overrides.id,
+    owner: "world:draw",
+    schema: {
+      type: "object",
+      title: overrides.title,
+      ...overrides.description ? { description: overrides.description } : {},
+      properties
+    }
+  };
+}
+var ROUTE_PROPERTIES = {
+  "worlds.draw.routePet": {
+    type: "string",
+    title: "\u684C\u5BA0\u4E3B\u52A8\u753B\u7528\u54EA\u79CD\u753B\u6CD5",
+    "x-section": "\u8DEF\u7531",
+    description: "\u94C3\u5170\u81EA\u5DF1\u60F3\u753B\u3001\u6216\u4F60\u8BA9\u5979\u753B\u4E00\u5F20\u65F6\u8D70\u8FD9\u8FB9\u3002API = \u5343\u95EE 512 \u5C0F\u753B\uFF1B\u672C\u5730 = \u4F60\u7684 ComfyUI\uFF0C\u6309\u300C\u4EBA\u8BBE\u7B14\u89E6\u300D\u9884\u8BBE\u51FA\u56FE\u3002\u9009\u54EA\u79CD\u5C31\u7528\u54EA\u79CD\uFF0C\u4E0D\u53EF\u7528\u65F6\u62A5\u9519\uFF0C\u4E0D\u4F1A\u5077\u5077\u6362\u3002",
+    enum: ["api", "local"],
+    "x-options": "draw-route",
+    "x-hot": true
+  },
+  "worlds.draw.routeDiary": {
+    type: "string",
+    title: "\u65E5\u8BB0\u914D\u56FE\u7528\u54EA\u79CD\u753B\u6CD5",
+    "x-section": "\u8DEF\u7531",
+    description: "\u5199\u65E5\u8BB0\u65F6\u73B0\u753B\u4E00\u5F20\u8D70\u8FD9\u8FB9\u3002\u65E0\u8BBA API \u8FD8\u662F\u672C\u5730\uFF0C\u90FD\u6309\u4EBA\u8BBE\u7B14\u89E6\u51FA\u56FE\uFF1B\u672C\u5730\u4E0D\u4F1A\u5957\u7528\u4F60\u5DE5\u4F5C\u5BA4\u7684\u6A21\u578B/LoRA\u3002",
+    enum: ["api", "local"],
+    "x-options": "draw-route",
+    "x-hot": true
+  }
+};
+var apiProperties = remapGroup(
+  PET_DRAW_CONFIG_GROUP,
+  "worlds.pet-draw.",
+  (short) => `worlds.draw.${short}`,
+  {
+    id: "world:draw",
+    title: "\u7ED8\u56FE \xB7 \u901A\u7528\u4E0E API",
+    description: "\u753B\u98CE\u3001\u914D\u989D\u3001\u753B\u5939\u548C\u53C2\u8003\u56FE\u662F API \u7ED8\u753B\u4E0E\u672C\u5730\u4EBA\u8BBE\u51FA\u56FE\u5171\u7528\u7684\u4EBA\u8BBE\u8BBE\u5B9A\u3002API Key \u53EA\u4ECE\u90E8\u7F72 .env \u8BFB\u53D6\uFF0C\u4E0D\u5199\u8FDB config.json\u3002"
+  }
+).schema.properties;
+var DRAW_CONFIG_GROUP = {
+  id: "world:draw",
+  owner: "world:draw",
+  schema: {
+    type: "object",
+    title: "\u7ED8\u56FE \xB7 \u901A\u7528\u4E0E API",
+    description: "\u753B\u98CE\u3001\u914D\u989D\u3001\u753B\u5939\u548C\u53C2\u8003\u56FE\u662F API \u7ED8\u753B\u4E0E\u672C\u5730\u4EBA\u8BBE\u51FA\u56FE\u5171\u7528\u7684\u4EBA\u8BBE\u8BBE\u5B9A\u3002API Key \u53EA\u4ECE\u90E8\u7F72 .env \u8BFB\u53D6\uFF0C\u4E0D\u5199\u8FDB config.json\u3002",
+    properties: { ...ROUTE_PROPERTIES, ...apiProperties }
+  }
+};
+var DRAW_LOCAL_CONFIG_GROUP = remapGroup(
+  COO_GEN_CONFIG_GROUP,
+  "worlds.coo-gen.",
+  (short) => `worlds.draw.local${capitalize(short)}`,
+  {
+    id: "world:draw-local",
+    title: "\u672C\u5730\u51FA\u56FE \xB7 ComfyUI",
+    description: "\u7528\u6237\u81EA\u5DF1\u7684\u51FA\u56FE\uFF1A\u8FDE\u63A5\u3001\u6A21\u578B\u3001LoRA\u3001\u91C7\u6837\u3001\u4FDD\u5B58\u76EE\u5F55\u3001\u542F\u52A8\u811A\u672C\u3002\u8FD9\u91CC\u53EA\u5F71\u54CD\u300C\u672C\u5730\u51FA\u56FE\u300D\u9875\uFF0C\u4E0D\u5F71\u54CD\u94C3\u5170\u7684\u4EBA\u8BBE\u7B14\u89E6\u3002"
+  }
+);
+var DRAW_PERSONA_CONFIG_GROUP = {
+  id: "world:draw-persona",
+  owner: "world:draw",
+  schema: {
+    type: "object",
+    title: "\u4EBA\u8BBE\u7B14\u89E6 \xB7 \u672C\u5730",
+    description: "\u94C3\u5170\u4E3B\u52A8\u753B\u6216\u65E5\u8BB0\u914D\u56FE\u88AB\u8DEF\u7531\u5230\u672C\u5730\u65F6\uFF0C\u7528\u8FD9\u5957\u72EC\u7ACB\u7684\u6A21\u578B\u3001LoRA \u548C\u91C7\u6837\u53C2\u6570\uFF0C\u56FA\u5B9A 512\xD7512\u3001\u4E00\u6B21\u4E00\u5F20\u3002\u6539\u52A8\u4E0D\u4F1A\u5F71\u54CD\u300C\u672C\u5730\u51FA\u56FE\u300D\u9875\u7684\u7528\u6237\u53C2\u6570\uFF1B\u753B\u51FA\u6765\u7684\u56FE\u4ECD\u8FDB\u753B\u5939\u3001\u53EF\u4EE5\u8BC4\u4EF7\u3002",
+    properties: {
+      "worlds.draw.personaWorkflow": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u5DE5\u4F5C\u6D41",
+        "x-section": "\u6A21\u578B",
+        description: "\u7F3A\u7701 persona-krea2\uFF08\u5185\u7F6E Krea2 \u6587\u751F\u56FE\uFF09\u3002\u56FE\u751F\u56FE\u4F1A\u6309\u53C2\u8003\u56FE\u81EA\u52A8\u6D3E\u751F\uFF0C\u4E0D\u7528\u53E6\u9009\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaUnet": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u6A21\u578B\uFF08UNET\uFF09",
+        "x-section": "\u6A21\u578B",
+        description: "\u5185\u7F6E\u4EBA\u8BBE\u5DE5\u4F5C\u6D41\u52A0\u8F7D\u7684 diffusion/UNET \u6587\u4EF6\u540D\uFF0C\u4F8B\u5982 krea2_turbo_nvfp4.safetensors\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaClip": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u6587\u672C\u7F16\u7801\u5668",
+        "x-section": "\u6A21\u578B",
+        description: "Krea2 \u914D qwen3vl_4b_fp8_scaled.safetensors\uFF1B\u6362\u6A21\u578B\u65F6\u4E00\u8D77\u6539\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaVae": {
+        type: "string",
+        title: "\u4EBA\u8BBE VAE",
+        "x-section": "\u6A21\u578B",
+        description: "\u4E0E\u6A21\u578B\u914D\u5957\u7684 VAE\uFF0C\u4F8B\u5982 qwen_image_vae.safetensors\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaSteps": {
+        type: "integer",
+        title: "\u4EBA\u8BBE\u6B65\u6570",
+        "x-section": "\u91C7\u6837",
+        description: "Krea2 Turbo \u5EFA\u8BAE 8 \u6B65\uFF1B\u5176\u5B83\u5DE5\u4F5C\u6D41\u6309\u81EA\u5DF1\u7684\u9700\u8981\u6539\u3002",
+        minimum: 1,
+        maximum: 100,
+        "x-hot": true
+      },
+      "worlds.draw.personaCfg": {
+        type: "number",
+        title: "\u4EBA\u8BBE CFG",
+        "x-section": "\u91C7\u6837",
+        description: "Krea2 Turbo \u56FA\u5B9A 1\uFF1B\u6362\u666E\u901A\u6A21\u578B\u65F6\u518D\u8C03\u3002",
+        minimum: 1,
+        maximum: 30,
+        "x-hot": true
+      },
+      "worlds.draw.personaSampler": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u91C7\u6837\u5668",
+        "x-section": "\u91C7\u6837",
+        description: "\u4F8B\u5982 euler / euler_ancestral\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaScheduler": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u8C03\u5EA6\u5668",
+        "x-section": "\u91C7\u6837",
+        description: "\u4F8B\u5982 simple / normal\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaLoras": {
+        type: "string",
+        title: "\u4EBA\u8BBE LoRA",
+        "x-section": "\u63D0\u793A\u8BCD",
+        description: "`\u6587\u4EF6\u540D:\u6743\u91CD`\uFF0C\u9017\u53F7\u5206\u9694\uFF0C\u6700\u591A 3 \u4E2A\uFF1B\u7559\u7A7A = \u7EAF\u6A21\u578B\u3002\u53EA\u5F71\u54CD\u4EBA\u8BBE\u7B14\u89E6\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaNegative": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u8D1F\u9762\u8BCD",
+        "x-section": "\u63D0\u793A\u8BCD",
+        description: "\u538B\u4F4F\u7167\u7247/\u5199\u5B9E/3D/\u6587\u5B57/\u6C34\u5370\u8FD9\u7C7B\u4F1A\u7834\u574F\u624B\u7ED8\u611F\u7684\u5143\u7D20\uFF1BKrea2 CFG=1 \u65F6\u53EF\u80FD\u4E0D\u8D77\u4F5C\u7528\uFF0C\u6362\u666E\u901A\u6A21\u578B\u65F6\u751F\u6548\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaExtraPrompt": {
+        type: "string",
+        title: "\u4EBA\u8BBE\u63D0\u793A\u8BCD\u8865\u5145",
+        "x-section": "\u63D0\u793A\u8BCD",
+        description: "\u8FFD\u52A0\u5728\u6BCF\u5F20\u4EBA\u8BBE\u753B\u540E\u9762\u7684\u4E00\u53E5\uFF0C\u6BD4\u5982\u7EB8\u5F20\u3001\u7B14\u89E6\u7EC6\u8282\uFF1B\u7559\u7A7A\u5373\u53EF\u3002",
+        "x-hot": true
+      },
+      "worlds.draw.personaReferenceMode": {
+        type: "string",
+        title: "\u672C\u5730\u53C2\u8003\u56FE\u65B9\u5F0F",
+        "x-section": "\u53C2\u8003",
+        description: "describe = \u94C3\u5170\u5148\u770B\u53C2\u8003\u56FE\u3001\u5199\u4E00\u53E5\u753B\u4EC0\u4E48\uFF0C\u518D\u51FA\u56FE\uFF08\u66F4\u7A33\uFF0C\u4F46\u591A\u4E00\u8F6E\uFF09\uFF1Bimg2img = \u76F4\u63A5\u628A\u53C2\u8003\u56FE\u91CD\u7ED8\uFF08\u5FEB\uFF0C\u4F46\u53EF\u80FD\u4E0D\u591F\u50CF\u94C3\u5170\u7684\u624B\u7B14\uFF09\u3002",
+        enum: ["describe", "img2img"],
+        "x-options": "draw-persona-reference",
+        "x-hot": true
+      },
+      "worlds.draw.personaImg2imgDenoise": {
+        type: "number",
+        title: "\u56FE\u751F\u56FE\u91CD\u7ED8\u5E45\u5EA6",
+        "x-section": "\u53C2\u8003",
+        description: "0.05\u20131\u3002\u8D8A\u9AD8\u8D8A\u50CF\u65B0\u753B\u3001\u8D8A\u4F4E\u8D8A\u4FDD\u7559\u53C2\u8003\u56FE\uFF1B\u4EBA\u8BBE\u7B14\u89E6\u5EFA\u8BAE 0.45\u20130.65\u3002",
+        minimum: 0.05,
+        maximum: 1,
+        "x-hot": true
+      }
+    }
+  }
+};
+var DRAW_GROUPS = [
+  DRAW_CONFIG_GROUP,
+  DRAW_LOCAL_CONFIG_GROUP,
+  DRAW_PERSONA_CONFIG_GROUP
+];
+
+// src/webui/parts/config-panel.ts
+var SECTION_ORDER = {
+  "world:draw": ["\u8DEF\u7531", "\u98CE\u683C\u4E0E\u753B\u6CD5", "\u5B58\u50A8", "\u914D\u989D\u4E0E\u9650\u5236", "\u6C14\u6CE1\u5C55\u793A", "\u53C2\u8003\u56FE"],
+  "world:draw-local": ["\u8FDE\u63A5\u4E0E\u8DEF\u5F84", "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570", "\u63D0\u793A\u8BCD\u9ED8\u8BA4", "\u7FFB\u8BD1", "\u8FD0\u884C\u65F6", "\u81EA\u52A8\u5316", "\u542F\u52A8\u4E0E\u5173\u95ED"],
+  "world:draw-persona": ["\u6A21\u578B", "\u91C7\u6837", "\u63D0\u793A\u8BCD", "\u53C2\u8003"]
+};
+function groupSections(groupId) {
+  return SECTION_ORDER[groupId] || [];
+}
+function labelZh(key) {
+  const map = {
+    "\u8DEF\u7531": "\u8DEF\u7531",
+    "\u98CE\u683C\u4E0E\u753B\u6CD5": "\u98CE\u683C\u4E0E\u753B\u6CD5",
+    "\u5B58\u50A8": "\u5B58\u50A8",
+    "\u914D\u989D\u4E0E\u9650\u5236": "\u914D\u989D\u4E0E\u9650\u5236",
+    "\u6C14\u6CE1\u5C55\u793A": "\u6C14\u6CE1\u5C55\u793A",
+    "\u53C2\u8003\u56FE": "\u53C2\u8003\u56FE",
+    "\u8FDE\u63A5\u4E0E\u8DEF\u5F84": "\u8FDE\u63A5\u4E0E\u8DEF\u5F84",
+    "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570": "\u9ED8\u8BA4\u91C7\u6837\u53C2\u6570",
+    "\u63D0\u793A\u8BCD\u9ED8\u8BA4": "\u63D0\u793A\u8BCD\u9ED8\u8BA4",
+    "\u7FFB\u8BD1": "\u7FFB\u8BD1",
+    "\u8FD0\u884C\u65F6": "\u8FD0\u884C\u65F6",
+    "\u81EA\u52A8\u5316": "\u81EA\u52A8\u5316",
+    "\u542F\u52A8\u4E0E\u5173\u95ED": "\u542F\u52A8\u4E0E\u5173\u95ED",
+    "\u6A21\u578B": "\u6A21\u578B",
+    "\u91C7\u6837": "\u91C7\u6837",
+    "\u63D0\u793A\u8BCD": "\u63D0\u793A\u8BCD",
+    "\u53C2\u8003": "\u53C2\u8003"
+  };
+  return map[key] || key;
+}
+var configPanel = {
+  async mount(ctx) {
+    const zh = ctx.language.startsWith("zh");
+    const t = (z, e) => zh ? z : e;
+    const doc = ctx.root.ownerDocument;
+    const root = doc.createElement("div");
+    root.className = "coo-config-root";
+    const style = doc.createElement("style");
+    style.textContent = `
+.coo-config-root{ display:flex; gap:24px; align-items:flex-start; }
+.coo-config-nav{ position:sticky; top:16px; width:200px; flex-shrink:0; border:1px solid #e5e7eb; border-radius:8px; padding:12px 8px; background:#fafafa; max-height:calc(100vh - 32px); overflow:auto; }
+.coo-config-nav a{ display:block; padding:6px 8px; border-radius:6px; color:#374151; text-decoration:none; font-size:13px; }
+.coo-config-nav a.active{ background:#e0e7ff; color:#3730a3; font-weight:600; }
+.coo-config-nav .nav-h3{ padding-left:16px; font-size:12px; color:#6b7280; }
+.coo-config-nav .nav-group{ font-weight:600; margin-top:10px; }
+.coo-config-nav .nav-group:first-child{ margin-top:0; }
+.coo-config-main{ flex:1; min-width:0; padding-bottom:72px; }
+.coo-config-card{ background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:20px; }
+.coo-config-card h2{ margin:0 0 4px 0; font-size:16px; }
+.coo-config-card .desc{ color:#6b7280; font-size:12px; margin-bottom:12px; }
+.coo-config-h3{ font-size:14px; font-weight:600; color:#1f2937; margin:16px 0 8px 0; padding:6px 0 6px 8px; border-left:3px solid #6366f1; background:#f8fafc; }
+.coo-config-row{ display:grid; grid-template-columns:160px minmax(0,480px) 1fr; gap:6px 16px; align-items:start; padding:10px 0; border-bottom:1px solid #f3f4f6; }
+.coo-config-row:last-child{ border-bottom:none; }
+.coo-config-label{ width:160px; text-align:left; font-size:13px; color:#374151; line-height:1.45; padding-top:6px; word-break:break-word; }
+.coo-config-field{ max-width:480px; display:flex; align-items:center; gap:8px; }
+.coo-config-field input[type=text], .coo-config-field input[type=number], .coo-config-field select, .coo-config-field textarea{ width:100%; box-sizing:border-box; border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; font-size:13px; }
+.coo-config-field textarea{ min-height:56px; resize:vertical; line-height:1.45; }
+.coo-config-desc{ font-size:12px; color:#6b7280; line-height:1.4; padding-top:6px; }
+.coo-config-desc .help{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:#e5e7eb; font-size:10px; cursor:help; margin-left:4px; }
+.coo-config-unit{ font-size:12px; color:#6b7280; white-space:nowrap; }
+.coo-config-path{ display:flex; gap:6px; width:100%; }
+.coo-config-path button{ flex-shrink:0; }
+.coo-config-switch{ position:relative; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+.coo-config-switch input{ appearance:none; width:36px; height:20px; background:#e5e7eb; border-radius:999px; position:relative; cursor:pointer; transition:.2s; }
+.coo-config-switch input:checked{ background:#6366f1; }
+.coo-config-switch input::after{ content:''; position:absolute; left:2px; top:2px; width:16px; height:16px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+.coo-config-switch input:checked::after{ transform:translateX(16px); }
+.coo-config-disabled{ opacity:.5; pointer-events:none; }
+.coo-config-char{ font-size:11px; color:#9ca3af; text-align:right; margin-top:2px; }
+.coo-config-footer{ position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e5e7eb; padding:10px 24px; display:flex; align-items:center; gap:12px; justify-content:flex-end; z-index:10; box-shadow:0 -2px 8px rgba(0,0,0,.06); }
+.coo-config-footer .dirty{ margin-right:auto; font-size:13px; color:#d97706; }
+.coo-config-footer .saved{ margin-right:auto; font-size:13px; color:#059669; }
+.coo-config-footer button{ padding:6px 14px; border-radius:6px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:13px; }
+.coo-config-footer button.primary{ background:#6366f1; color:#fff; border-color:#6366f1; }
+.coo-config-footer button:disabled{ opacity:.5; cursor:not-allowed; }
+@media (max-width: 900px){ .coo-config-root{ flex-direction:column; } .coo-config-nav{ position:static; width:100%; display:flex; flex-wrap:wrap; gap:4px; } }
+`;
+    root.appendChild(style);
+    const nav = doc.createElement("nav");
+    nav.className = "coo-config-nav";
+    const main = doc.createElement("div");
+    main.className = "coo-config-main";
+    root.append(nav, main);
+    const msgEl = doc.createElement("div");
+    msgEl.style.cssText = "padding:20px;color:#6b7280";
+    msgEl.textContent = t("\u52A0\u8F7D\u4E2D\u2026", "Loading\u2026");
+    main.appendChild(msgEl);
+    ctx.root.appendChild(root);
+    let values = {};
+    let initialValues = {};
+    let dirty = false;
+    let fieldEls = [];
+    function updateDirty() {
+      const nowDirty = fieldEls.some((f) => {
+        const cur = f.read();
+        const saved = initialValues[f.groupId]?.[f.path];
+        return JSON.stringify(cur) !== JSON.stringify(saved);
+      });
+      if (nowDirty !== dirty) {
+        dirty = nowDirty;
+        renderFooter();
+      }
+      for (const f of fieldEls) {
+        if (f.dependsOn) {
+          const dep = fieldEls.find((x) => x.path === f.dependsOn);
+          const depVal = dep?.read();
+          const disabled = String(depVal) !== String(f.dependsValue);
+          f.el.classList.toggle("coo-config-disabled", disabled);
+          const inputs = f.el.querySelectorAll("input,select,textarea,button");
+          inputs.forEach((inp) => inp.disabled = disabled);
+          if (disabled) f.el.title = t("\u9700\u5148\u6EE1\u8DB3\u8054\u52A8\u6761\u4EF6", "Requirement not met");
+          else f.el.title = "";
+        }
+      }
+    }
+    let footer = null;
+    function renderFooter() {
+      if (footer) footer.remove();
+      footer = doc.createElement("div");
+      footer.className = "coo-config-footer";
+      const status = doc.createElement("span");
+      status.className = dirty ? "dirty" : "saved";
+      status.textContent = dirty ? "\u25CF " + t("\u6709\u672A\u4FDD\u5B58\u7684\u4FEE\u6539", "Unsaved changes") : t("\u6240\u6709\u914D\u7F6E\u5DF2\u4FDD\u5B58", "All saved");
+      const btnReset = doc.createElement("button");
+      btnReset.textContent = t("\u6062\u590D\u9ED8\u8BA4", "Reset");
+      btnReset.onclick = async () => {
+        if (!confirm(t("\u6062\u590D\u5F53\u524D\u9875\u7684\u9ED8\u8BA4\u503C\uFF1F", "Reset to defaults?"))) return;
+        await load();
+      };
+      const btnCancel = doc.createElement("button");
+      btnCancel.textContent = t("\u53D6\u6D88", "Cancel");
+      btnCancel.onclick = () => {
+        if (dirty && !confirm(t("\u653E\u5F03\u672A\u4FDD\u5B58\u7684\u4FEE\u6539\uFF1F", "Discard changes?"))) return;
+        for (const f of fieldEls) {
+          const v = initialValues[f.groupId]?.[f.path];
+          if (v !== void 0) f.write(v);
+        }
+        updateDirty();
+      };
+      const btnSave = doc.createElement("button");
+      btnSave.className = "primary";
+      btnSave.textContent = t("\u4FDD\u5B58", "Save");
+      btnSave.disabled = !dirty;
+      btnSave.onclick = async () => {
+        btnSave.disabled = true;
+        status.textContent = t("\u4FDD\u5B58\u4E2D\u2026", "Saving\u2026");
+        try {
+          for (const g of DRAW_GROUPS) {
+            const vals = {};
+            let has = false;
+            for (const f of fieldEls.filter((x) => x.groupId === g.id)) {
+              vals[f.path] = f.read();
+              has = true;
+            }
+            if (!has) continue;
+            const res = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ group: g.id, values: vals }) });
+            if (!res.ok) throw new Error(await res.text());
+          }
+          await refreshValues();
+          msgEl.textContent = "";
+          status.textContent = t("\u5DF2\u4FDD\u5B58", "Saved");
+          status.className = "saved";
+          dirty = false;
+          renderFooter();
+        } catch (e) {
+          alert(t("\u4FDD\u5B58\u5931\u8D25\uFF1A", "Save failed: ") + (e?.message || String(e)));
+          btnSave.disabled = false;
+        }
+      };
+      footer.append(status, btnReset, btnCancel, btnSave);
+      doc.body.appendChild(footer);
+    }
+    async function fetchValues() {
+      const r = await fetch("/api/config");
+      if (!r.ok) throw new Error(await r.text());
+      const j = await r.json();
+      const out = {};
+      for (const g of j.groups || []) {
+        out[g.group.id] = g.values || {};
+      }
+      return out;
+    }
+    async function refreshValues() {
+      const v = await fetchValues();
+      values = v;
+      initialValues = JSON.parse(JSON.stringify(v));
+      updateDirty();
+    }
+    async function load() {
+      try {
+        const v = await fetchValues();
+        values = v;
+        initialValues = JSON.parse(JSON.stringify(v));
+        build();
+        renderFooter();
+        window.addEventListener("beforeunload", (e) => {
+          if (dirty) {
+            e.preventDefault();
+            e.returnValue = "";
+          }
+        });
+      } catch (e) {
+        msgEl.textContent = t("\u52A0\u8F7D\u5931\u8D25\uFF1A", "Load failed: ") + (e?.message || String(e));
+      }
+    }
+    function build() {
+      fieldEls = [];
+      main.replaceChildren();
+      nav.replaceChildren();
+      for (const group of DRAW_GROUPS) {
+        const props = group.schema.properties || {};
+        const sectionMap = /* @__PURE__ */ new Map();
+        const noSection = [];
+        for (const [path, prop] of Object.entries(props)) {
+          const sec = prop["x-section"];
+          if (sec) {
+            if (!sectionMap.has(sec)) sectionMap.set(sec, []);
+            sectionMap.get(sec).push([path, prop]);
+          } else noSection.push([path, prop]);
+        }
+        const orderedSecs = groupSections(group.id);
+        const sortedSections = [];
+        for (const s of orderedSecs) {
+          if (sectionMap.has(s)) sortedSections.push([s, sectionMap.get(s)]);
+        }
+        for (const [k, v] of sectionMap) {
+          if (!orderedSecs.includes(k)) sortedSections.push([k, v]);
+        }
+        const secId = `sec-${group.id}`;
+        const navGroup = doc.createElement("div");
+        navGroup.className = "nav-group";
+        const navA = doc.createElement("a");
+        navA.href = `#${secId}`;
+        navA.textContent = group.schema.title || group.id;
+        navA.onclick = (e) => {
+          e.preventDefault();
+          doc.getElementById(secId)?.scrollIntoView({ behavior: "smooth" });
+        };
+        navGroup.appendChild(navA);
+        nav.appendChild(navGroup);
+        for (const [sName] of sortedSections) {
+          const subA = doc.createElement("a");
+          subA.className = "nav-h3";
+          subA.href = `#${secId}-${sName}`;
+          subA.textContent = labelZh(sName);
+          subA.onclick = (e) => {
+            e.preventDefault();
+            doc.getElementById(`${secId}-${sName}`)?.scrollIntoView({ behavior: "smooth" });
+          };
+          nav.appendChild(subA);
+        }
+        if (noSection.length) {
+          const subA = doc.createElement("a");
+          subA.className = "nav-h3";
+          subA.textContent = t("\u5176\u4ED6", "Other");
+          nav.appendChild(subA);
+        }
+        const card = doc.createElement("div");
+        card.className = "coo-config-card";
+        card.id = secId;
+        const h2 = doc.createElement("h2");
+        h2.textContent = group.schema.title || group.id;
+        const desc = doc.createElement("div");
+        desc.className = "desc";
+        desc.textContent = group.schema.description || "";
+        card.append(h2, desc);
+        const renderRows = (list, sectionName) => {
+          if (sectionName) {
+            const h3 = doc.createElement("div");
+            h3.className = "coo-config-h3";
+            h3.id = `${secId}-${sectionName}`;
+            h3.textContent = labelZh(sectionName);
+            card.appendChild(h3);
+          }
+          for (const [path, prop] of list) {
+            const row = doc.createElement("div");
+            row.className = "coo-config-row";
+            const label = doc.createElement("div");
+            label.className = "coo-config-label";
+            label.textContent = prop.title || path;
+            if (prop["x-warning"]) label.style.color = "#d97706";
+            if (prop["x-hot"] === false) {
+              const tag = doc.createElement("span");
+              tag.style.cssText = "margin-left:6px;font-size:11px;background:#fef3c7;padding:1px 4px;border-radius:4px";
+              tag.textContent = t("\u9700\u91CD\u542F", "Restart required");
+              label.appendChild(tag);
+            }
+            const fieldWrap = doc.createElement("div");
+            fieldWrap.className = "coo-config-field";
+            const descWrap = doc.createElement("div");
+            descWrap.className = "coo-config-desc";
+            descWrap.textContent = prop.description || "";
+            if (prop["x-help"]) {
+              const help = doc.createElement("span");
+              help.className = "help";
+              help.textContent = "\u24D8";
+              help.title = prop["x-help"];
+              descWrap.appendChild(help);
+            }
+            const currentVal = values[group.id]?.[path] ?? (prop.type === "boolean" ? false : prop.type === "integer" || prop.type === "number" ? 0 : "");
+            let read = () => currentVal;
+            let write = () => {
+            };
+            if (prop.type === "boolean") {
+              const lab = doc.createElement("label");
+              lab.className = "coo-config-switch";
+              const cb = doc.createElement("input");
+              cb.type = "checkbox";
+              cb.checked = !!currentVal;
+              cb.onchange = () => updateDirty();
+              lab.append(cb, doc.createTextNode(cb.checked ? t("\u5F00", "On") : t("\u5173", "Off")));
+              cb.addEventListener("change", () => lab.lastChild.textContent = cb.checked ? t("\u5F00", "On") : t("\u5173", "Off"));
+              fieldWrap.appendChild(lab);
+              read = () => cb.checked;
+              write = (v) => {
+                cb.checked = !!v;
+                lab.lastChild.textContent = cb.checked ? t("\u5F00", "On") : t("\u5173", "Off");
+              };
+            } else if (prop.enum || prop["x-options"]) {
+              const sel = doc.createElement("select");
+              const xopts = prop["x-options"];
+              if (xopts === "draw-route") {
+                sel.appendChild(new Option(t("API \u7ED8\u753B\uFF08\u5343\u95EE\uFF09", "API (Qianwen)"), "api"));
+                sel.appendChild(new Option(t("\u672C\u5730\u51FA\u56FE\uFF08ComfyUI\uFF09", "Local ComfyUI"), "local"));
+                sel.value = String(currentVal);
+              } else if (xopts === "draw-persona-reference") {
+                sel.appendChild(new Option(t("\u5148\u770B\u53C2\u8003\u56FE\u5199\u63D0\u793A\u8BCD", "Describe first"), "describe"));
+                sel.appendChild(new Option(t("\u56FE\u751F\u56FE", "img2img"), "img2img"));
+                sel.value = String(currentVal);
+              } else {
+                let opts = prop.enum || [];
+                for (const o of opts) {
+                  const op = doc.createElement("option");
+                  op.value = o;
+                  op.textContent = o;
+                  sel.appendChild(op);
+                }
+                sel.value = String(currentVal);
+              }
+              sel.onchange = () => updateDirty();
+              fieldWrap.appendChild(sel);
+              read = () => sel.value;
+              write = (v) => {
+                sel.value = v == null ? "" : String(v);
+              };
+            } else if (prop["x-path"]) {
+              const inp = doc.createElement("input");
+              inp.type = "text";
+              inp.value = String(currentVal || "");
+              inp.placeholder = t("\u8DEF\u5F84", "Path");
+              inp.oninput = () => updateDirty();
+              const btnBrowse = doc.createElement("button");
+              btnBrowse.type = "button";
+              btnBrowse.textContent = t("\u6D4F\u89C8\u2026", "Browse\u2026");
+              btnBrowse.style.cssText = "padding:6px 10px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer";
+              btnBrowse.onclick = async () => {
+                const v = prompt(t("\u8F93\u5165\u8DEF\u5F84", "Enter path"), inp.value);
+                if (v != null) {
+                  inp.value = v;
+                  updateDirty();
+                }
+              };
+              const btnOpen = doc.createElement("button");
+              btnOpen.type = "button";
+              btnOpen.textContent = t("\u6253\u5F00", "Open");
+              btnOpen.style.cssText = "padding:6px 10px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer";
+              btnOpen.onclick = async () => {
+                try {
+                  await fetch("/api/open?path=" + encodeURIComponent(inp.value));
+                } catch {
+                }
+              };
+              const pathWrap = doc.createElement("div");
+              pathWrap.className = "coo-config-path";
+              pathWrap.append(inp, btnBrowse, btnOpen);
+              fieldWrap.appendChild(pathWrap);
+              read = () => inp.value;
+              write = (v) => {
+                inp.value = v == null ? "" : String(v);
+              };
+            } else if (prop.type === "integer" || prop.type === "number") {
+              const inp = doc.createElement("input");
+              inp.type = "number";
+              if (prop.minimum != null) inp.min = String(prop.minimum);
+              if (prop.maximum != null) inp.max = String(prop.maximum);
+              if (prop.multipleOf != null) inp.step = String(prop.multipleOf);
+              else inp.step = prop.type === "integer" ? "1" : "0.1";
+              inp.value = String(currentVal ?? "");
+              inp.oninput = () => updateDirty();
+              fieldWrap.appendChild(inp);
+              if (prop["x-suffix"] || prop["x-unit"]) {
+                const unit = doc.createElement("span");
+                unit.className = "coo-config-unit";
+                unit.textContent = prop["x-suffix"] || prop["x-unit"];
+                fieldWrap.appendChild(unit);
+              }
+              read = () => {
+                const v = inp.value.trim() === "" ? prop.nullable ? null : 0 : Number(inp.value);
+                return v;
+              };
+              write = (v) => {
+                inp.value = v == null ? "" : String(v);
+              };
+            } else {
+              const isLong = path.includes("negative") || path.includes("customStyle") || path.includes("personaNegative") || path.includes("prompt") || path.includes("loras") || (prop.description || "").length > 60 || prop["x-multiline"];
+              if (isLong) {
+                const ta = doc.createElement("textarea");
+                ta.rows = 2;
+                ta.value = String(currentVal || "");
+                ta.oninput = () => {
+                  updateDirty();
+                  if (counter) counter.textContent = `${ta.value.length} / 600`;
+                };
+                fieldWrap.appendChild(ta);
+                const counter = doc.createElement("div");
+                counter.className = "coo-config-char";
+                counter.textContent = `${ta.value.length} / 600`;
+                const wrap = doc.createElement("div");
+                wrap.style.width = "100%";
+                wrap.append(ta, counter);
+                fieldWrap.replaceChildren(wrap);
+                read = () => ta.value;
+                write = (v) => {
+                  ta.value = v == null ? "" : String(v);
+                  counter.textContent = `${ta.value.length} / 600`;
+                };
+              } else {
+                const inp = doc.createElement("input");
+                inp.type = "text";
+                inp.value = String(currentVal || "");
+                inp.oninput = () => updateDirty();
+                fieldWrap.appendChild(inp);
+                read = () => inp.value;
+                write = (v) => {
+                  inp.value = v == null ? "" : String(v);
+                };
+              }
+            }
+            row.append(label, fieldWrap, descWrap);
+            card.appendChild(row);
+            fieldEls.push({ groupId: group.id, path, read, write, el: row, dependsOn: prop["x-dependsOn"], dependsValue: prop["x-dependsValue"] });
+          }
+        };
+        for (const [secName, list] of sortedSections) renderRows(list, secName);
+        if (noSection.length) renderRows(noSection, void 0);
+        main.appendChild(card);
+      }
+      updateDirty();
+      const obs = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            const id = e.target.id;
+            nav.querySelectorAll("a").forEach((a) => a.classList.remove("active"));
+            const hit = nav.querySelector(`a[href="#${id}"]`);
+            if (hit) hit.classList.add("active");
+          }
+        }
+      }, { rootMargin: "-40% 0px -50% 0px", threshold: 0 });
+      main.querySelectorAll(".coo-config-card, .coo-config-h3").forEach((el) => obs.observe(el));
+      ctx.own({ dispose: () => obs.disconnect() });
+    }
+    await load();
+  }
+};
+
 // src/webui/client.ts
 function message2(error) {
   return error instanceof Error ? error.message : String(error);
@@ -2982,6 +4136,7 @@ var bundle = {
   panels: {
     api: apiPanel,
     local: localPanel,
+    config2: configPanel,
     studio: studioPanel,
     loras: lorasPanel,
     workflows: workflowsPanel,

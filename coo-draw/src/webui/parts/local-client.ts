@@ -580,7 +580,7 @@ const studioPanel: WebUiPanel = {
       // 生成中：生成按钮 60% opacity 仍可点击（不禁用），取消按钮 red fill
       if (isActive(current)) {
         generateBtn.disabled = false; generateBtn.style.opacity = '0.6'; generateBtn.classList.add('is-generating');
-        cancelBtn.disabled = false; cancelBtn.className = cancelBtn.className.replace('btn-cancel-idle','').replace('  ',' ').trim() + ' btn-cancel-active'; cancelBtn.style.background='#e74c3c'; cancelBtn.style.color='#fff'; cancelBtn.style.borderColor='#e74c3c';
+        cancelBtn.disabled = false; cancelBtn.className = cancelBtn.className.replace('btn-cancel-idle','').replace('  ',' ').trim() + ' btn-cancel-active'; cancelBtn.style.background='var(--coo-danger)'; cancelBtn.style.color='#fff'; cancelBtn.style.borderColor='var(--coo-danger)';
       } else {
         generateBtn.style.opacity = ''; generateBtn.classList.remove('is-generating');
         cancelBtn.className = cancelBtn.className.replace('btn-cancel-active','').replace('  ',' ').trim() + ' btn-cancel-idle'; cancelBtn.style.background='#fff'; cancelBtn.style.color='#6b7280'; cancelBtn.style.borderColor='rgba(127,127,127,.3)'; cancelBtn.disabled = true;
@@ -1288,7 +1288,7 @@ const worksPanel: WebUiPanel = {
     const batchCount = ctx.ui.h('span','', '');
     const batchAll = ctx.ui.button(t('全选','Select all'), { size:'sm' });
     const batchInverse = ctx.ui.button(t('反选','Invert'), { size:'sm' });
-    const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size:'sm', variant:'plain' }); batchDel.style.color='#c44';
+    const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size:'sm', variant:'plain' }); batchDel.style.color='var(--coo-danger)';
     const batchExport = ctx.ui.button(t('批量导出','Export'), { size:'sm' });
     batchBar.append(batchCount, batchAll, batchInverse, batchDel, batchExport);
     right.append(batchBar);
@@ -1619,7 +1619,7 @@ const worksPanel: WebUiPanel = {
         emptySub.textContent = t('去「出图」页画一张吧','Go to Studio and create one');
         emptyAction.replaceChildren();
         const go = ctx.ui.button(t('前往出图','Go to Studio'), { variant:'primary' });
-        go.style.background='#2ecc71'; go.style.borderColor='#2ecc71'; go.style.color='#fff';
+        go.classList.add('btn-action', 'primary');
         go.addEventListener('click', ()=>{ ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab',{ detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); });
         emptyAction.append(go);
         dispatchUnread(); return;

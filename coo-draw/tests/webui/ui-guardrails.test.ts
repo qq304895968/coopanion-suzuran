@@ -101,6 +101,11 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(cssContent).toMatch(/\.coo-lora-chip\s+\.weight\s*\{[\s\S]*?flex-shrink:\s*0/);
   });
 
+  it('作品页操作区已物理移除冗余的「使用全部参数」按钮', () => {
+    expect(localClient).not.toContain('使用全部参数');
+    expect(localClient).not.toContain('Use all params');
+  });
+
   it('未配置模型目录时调用 openModelFolder 会给出清晰中文提示', async () => {
     const dir = tempDir();
     try {

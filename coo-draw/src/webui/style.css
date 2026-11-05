@@ -348,6 +348,7 @@
   -moz-osx-font-smoothing: grayscale;
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
+/* 四条蓝线统一：所有筛选控件强制 36px 同高同边框，禁用 line-height/box-shadow 模拟 */
 .filter-control,
 .coo-works-filters .filter-control,
 .coo-works-filters .coo-filter-search,
@@ -355,6 +356,8 @@
 .coo-works-filters .filter-dropdown-select,
 .coo-works-filters .coo-filter-sort select {
   height: 36px;
+  min-height: 36px;
+  max-height: 36px;
   box-sizing: border-box;
   border: 1px solid #E5E7EB;
   border-radius: 6px;
@@ -367,6 +370,7 @@
   color: #111827;
   box-shadow: none;
   outline: none;
+  vertical-align: middle;
 }
 .filter-control input,
 .coo-works-filters .filter-control input {
@@ -426,6 +430,7 @@
   justify-content: space-between;
   width: 280px;
   height: 36px;
+  min-height: 36px; max-height: 36px;
   padding: 0 12px;
   box-sizing: border-box;
   background-color: #FFFFFF;
@@ -433,7 +438,6 @@
   border-radius: 6px;
   cursor: pointer;
   user-select: none;
-  transition: all 0.2s ease;
   position: relative;
 }
 .date-range-container:hover {
@@ -645,10 +649,17 @@
 .date-range-day.range-start.range-end { border-radius: 4px; }
 .coo-works-filters-row2 { display: flex; gap: 12px; align-items: center; }
 .coo-works-filters-row2 .filter-dropdown-select { flex: 1; min-width: 0; }
-.coo-works-filters-row2 .coo-filter-sort { display: flex; align-items: center; gap: 8px; height: 36px; -webkit-font-smoothing: antialiased; }
-.coo-works-filters-row2 .coo-filter-sort label { font-size: 13px; color: #6B7280; white-space: nowrap; line-height: 1; }
+/* 排序原生 select 重置为与 div 同高，避免 4 条蓝线中 row2 的 2 条错位 */
+.coo-works-filters-row2 .coo-filter-sort { display: flex; align-items: center; gap: 8px; height: 36px; min-height: 36px; -webkit-font-smoothing: antialiased; }
+.coo-works-filters-row2 .coo-filter-sort label { font-size: 13px; color: #6B7280; white-space: nowrap; line-height: 1; display: flex; align-items: center; height: 36px; }
 .coo-works-filters-row2 .coo-filter-sort .sort-time { width: 110px; flex: 0 0 110px; }
 .coo-works-filters-row2 .coo-filter-sort .sort-dir { width: 100px; flex: 0 0 100px; }
+.coo-works-filters .coo-filter-sort select {
+  -webkit-appearance: none; appearance: none;
+  display: block; line-height: 34px; padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239CA3AF' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 10px 6px;
+}
 .coo-works-filters .coo-filter-clear { font-size: 12px; color: #8a8f98; background: none; border: none; cursor: pointer; white-space: nowrap; }
 .coo-works-filters .coo-filter-clear:hover { color: var(--accent, #5b8def); }
 .coo-filter-date { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 160px; min-width: 150px; border: 1px solid var(--line, rgba(127,127,127,.2)); border-radius: 6px; padding: 4px 6px; background: var(--bg, #fff); font-size: 12px; }

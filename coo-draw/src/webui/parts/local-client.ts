@@ -99,6 +99,7 @@ function svgIcon(name: string, size = 16): HTMLElement {
   else if(name==='refresh') inner='<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>';
   else if(name==='warn') inner='<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 1.71H20.47a2 2 0 0 0 1.71-1.71L13.71 3.86a1 1 0 0 0-1.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
   else if(name==='plug') inner='<path d="M7 11V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v4"/><path d="M10 11v6"/><path d="M14 11v6"/><rect x="7" y="17" width="10" height="3" rx="1"/>';
+  else if(name==='gear') inner='<circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>';
   else inner='<circle cx="12" cy="12" r="9"/>';
   svg.innerHTML = inner;
   return svg as unknown as HTMLElement;
@@ -136,6 +137,7 @@ const shared: SharedDrawState = {
   resultEntry: null,
   resultUrl: '',
 };
+
 
 /* ------------------------------------------------------------------ studio */
 
@@ -554,30 +556,22 @@ const studioPanel: WebUiPanel = {
 
     const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
     const updateGenerateEnabled = (): void => {
-      const needsCkpt = checkpoints.length === 0 && !(presets.find(p => p.id === state.workflow)?.warnings?.join('') ?? '').includes('无需');
-      // 简化：有 checkpoint 列表为空时禁用生成，提示选择
-      const missingCkpt = checkpoints.length === 0;
-      // 若工作流确实需要而没有，禁用
-      const mustHave = checkpoints.length === 0;
-      // 若有列表但未选
-      const notSelected = checkpoints.length > 0 && !state.checkpoint;
-      const shouldDisable = (mustHave || notSelected) && !isActive(current);
-      // 但若当前工作流无需 checkpoint，则不禁用
+      let disable = false; let hint = '';
       const preset = presets.find(p=>p.id===state.workflow);
-      const noNeed = preset && (preset.kind === 'imported' && checkpoints.length===0); // fallback
-      // 实际禁用逻辑：没有 checkpoint 且工作流需要时禁用
-      let disable = false;
-      let hint = '';
       if (checkpoints.length === 0) {
-        // 检查是否真的需要
-        // 若 mapping 中无 checkpoint 则不需
-        // 我们暂时保守：若预设为内置 txt2img/img2img/controlnet 则需要
-        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || (preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet');
+        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
         if (needs) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
       } else if (!state.checkpoint) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
-      generateBtn.disabled = disable || busy || isActive(current);
+      // 生成中：生成按钮 60% opacity 仍可点击（不禁用），取消按钮 red fill
+      if (isActive(current)) {
+        generateBtn.disabled = false; generateBtn.style.opacity = '0.6'; generateBtn.classList.add('is-generating');
+        cancelBtn.disabled = false; cancelBtn.className = cancelBtn.className.replace('btn-cancel-idle','').replace('  ',' ').trim() + ' btn-cancel-active'; cancelBtn.style.background='#e74c3c'; cancelBtn.style.color='#fff'; cancelBtn.style.borderColor='#e74c3c';
+      } else {
+        generateBtn.style.opacity = ''; generateBtn.classList.remove('is-generating');
+        cancelBtn.className = cancelBtn.className.replace('btn-cancel-active','').replace('  ',' ').trim() + ' btn-cancel-idle'; cancelBtn.style.background='#fff'; cancelBtn.style.color='#6b7280'; cancelBtn.style.borderColor='rgba(127,127,127,.3)'; cancelBtn.disabled = true;
+        generateBtn.disabled = disable || busy;
+      }
       if (disable && hint) actionHint.textContent = hint;
-      // 样式提示
       generateBtn.title = disable ? hint : '';
     };
 
@@ -940,15 +934,15 @@ const worksPanel: WebUiPanel = {
     // 字段配置
     type FieldId = 'filename'|'seed'|'size'|'lora'|'model'|'time'|'sampler'|'prompt'|'negative';
     const DEFAULT_FIELDS: Array<{ id: FieldId; labelZh: string; labelEn: string }> = [
-      { id:'filename', labelZh:'文件名', labelEn:'File' },
-      { id:'seed', labelZh:'种子', labelEn:'Seed' },
-      { id:'size', labelZh:'尺寸', labelEn:'Size' },
-      { id:'lora', labelZh:'LoRA', labelEn:'LoRA' },
-      { id:'model', labelZh:'模型', labelEn:'Model' },
-      { id:'time', labelZh:'时间', labelEn:'Time' },
-      { id:'sampler', labelZh:'采样参数', labelEn:'Sampler' },
       { id:'prompt', labelZh:'提示词', labelEn:'Prompt' },
       { id:'negative', labelZh:'反向', labelEn:'Negative' },
+      { id:'seed', labelZh:'种子', labelEn:'Seed' },
+      { id:'lora', labelZh:'LoRA', labelEn:'LoRA' },
+      { id:'model', labelZh:'模型', labelEn:'Model' },
+      { id:'size', labelZh:'尺寸', labelEn:'Size' },
+      { id:'sampler', labelZh:'采样参数', labelEn:'Sampler' },
+      { id:'time', labelZh:'时间', labelEn:'Time' },
+      { id:'filename', labelZh:'文件名', labelEn:'Filename' },
     ];
     const loadFieldConfig = (): { order: FieldId[]; hidden: Set<string> } => {
       try {
@@ -1081,11 +1075,12 @@ const worksPanel: WebUiPanel = {
     document.addEventListener('click', (e)=>{ if (!loraFilterWrap.contains(e.target as Node)) loraFilterPanel.style.display='none'; });
     refreshLoraFilterOptions();
 
-    // 统计行（筛选区下方、画廊上方）
+    // 统计行（筛选区下方、画廊上方）- 共X张 | 筛选出X/共Z + [批量模式] outline 32px
     const statsRow = ctx.ui.h('div','coo-works-stats');
     const statsText = ctx.ui.h('span','', '');
     const statsActions = ctx.ui.h('div','coo-batch-bar');
     const batchToggle = ctx.ui.button(t('批量模式','Batch'), { size:'sm', variant:'plain' });
+    batchToggle.style.height='32px'; batchToggle.style.borderRadius='4px'; batchToggle.style.border='1px solid #d1d5db'; batchToggle.style.background='#fff';
     statsActions.append(batchToggle);
     statsRow.append(statsText, statsActions);
     left.append(statsRow);
@@ -1129,31 +1124,48 @@ const worksPanel: WebUiPanel = {
     const metaCard = ctx.ui.h('div','coo-meta-card');
     const metaHead = ctx.ui.h('div','coo-meta-head');
     const metaTitle = ctx.ui.h('div','coo-meta-title', t('元信息','Metadata'));
-    const fieldBtn = document.createElement('button'); fieldBtn.className='coo-info-btn'; fieldBtn.title=t('字段设置','Fields'); fieldBtn.textContent='⚙';
+    const fieldBtn = document.createElement('button'); fieldBtn.className='coo-info-btn'; fieldBtn.title=t('字段设置','Fields');
+    fieldBtn.style.width='16px'; fieldBtn.style.height='16px'; fieldBtn.style.marginLeft='4px'; fieldBtn.style.flexShrink='0';
+    fieldBtn.append(svgIcon('gear', 16));
     metaHead.append(metaTitle, fieldBtn);
     const metaGrid = ctx.ui.h('div', 'coo-meta-grid');
     metaCard.append(metaHead, metaGrid);
-    // 字段设置面板
+    // 字段设置面板 - 标题 元信息字段设置，行 [handle][Switch] name 拖拽排序
     const fieldPanel = ctx.ui.h('div','coo-field-settings'); fieldPanel.style.display='none';
+    fieldPanel.style.minWidth='280px';
     const buildFieldPanel = (): void => {
       fieldPanel.replaceChildren();
+      const title = ctx.ui.h('div','', t('元信息字段设置','Metadata Fields')); title.style.fontWeight='600'; title.style.fontSize='13px'; title.style.marginBottom='8px';
+      fieldPanel.append(title);
+      let dragSrc: number | null = null;
       for (let i=0;i<fieldConfig.order.length;i++) {
         const id = fieldConfig.order[i]!;
         const def = DEFAULT_FIELDS.find(f=>f.id===id)!;
-        const row = ctx.ui.h('div','item');
-        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !fieldConfig.hidden.has(id);
-        chk.addEventListener('change', ()=>{ if (chk.checked) fieldConfig.hidden.delete(id); else fieldConfig.hidden.add(id); saveFieldConfig(); renderMeta(activeEntry); });
+        const row = ctx.ui.h('div','item'); row.draggable=true; row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='6px 0';
+        // handle
+        const handle = ctx.ui.h('span','', '☰'); handle.style.cursor='grab'; handle.style.opacity='.5';
+        // Switch (styled checkbox)
+        const sw = document.createElement('input'); sw.type='checkbox'; sw.checked = !fieldConfig.hidden.has(id); sw.style.width='32px'; sw.style.height='18px';
+        sw.addEventListener('change', ()=>{ if (sw.checked) fieldConfig.hidden.delete(id); else fieldConfig.hidden.add(id); });
         const lab = ctx.ui.h('span','', zh?def.labelZh:def.labelEn); lab.style.flex='1';
-        const up = ctx.ui.button('↑', { size:'sm' }); up.disabled=i===0; up.addEventListener('click', ()=>{ if(i>0){ const tmp=fieldConfig.order[i-1]!; fieldConfig.order[i-1]=fieldConfig.order[i]!; fieldConfig.order[i]=tmp; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); }});
-        const down = ctx.ui.button('↓', { size:'sm' }); down.disabled=i===fieldConfig.order.length-1; down.addEventListener('click', ()=>{ if(i<fieldConfig.order.length-1){ const tmp=fieldConfig.order[i+1]!; fieldConfig.order[i+1]=fieldConfig.order[i]!; fieldConfig.order[i]=tmp; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); }});
-        row.append(chk, lab, up, down); fieldPanel.append(row);
+        row.append(handle, sw, lab);
+        row.addEventListener('dragstart', ()=>{ dragSrc=i; });
+        row.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+        row.addEventListener('drop', (e)=>{ e.preventDefault(); if (dragSrc===null || dragSrc===i) return; const moved = fieldConfig.order.splice(dragSrc,1)[0]!; fieldConfig.order.splice(i,0,moved); buildFieldPanel(); });
+        fieldPanel.append(row);
       }
-      const reset = ctx.ui.button(t('恢复默认','Reset'), { size:'sm' }); reset.addEventListener('click', ()=>{ fieldConfig = { order: DEFAULT_FIELDS.map(f=>f.id), hidden: new Set() }; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); });
-      fieldPanel.append(reset);
+      const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.justifyContent='flex-end'; actions.style.marginTop='8px';
+      const reset = ctx.ui.button(t('恢复默认','Reset'), { size:'sm' });
+      reset.addEventListener('click', ()=>{ fieldConfig = { order: DEFAULT_FIELDS.map(f=>f.id), hidden: new Set() }; saveFieldConfig(); buildFieldPanel(); renderMeta(activeEntry); });
+      const cancel = ctx.ui.button(t('取消','Cancel'), { size:'sm' });
+      cancel.addEventListener('click', ()=>{ fieldPanel.style.display='none'; fieldConfig = loadFieldConfig(); buildFieldPanel(); });
+      const save = ctx.ui.button(t('保存','Save'), { size:'sm', variant:'primary' });
+      save.addEventListener('click', ()=>{ saveFieldConfig(); fieldPanel.style.display='none'; renderMeta(activeEntry); });
+      actions.append(reset, cancel, save); fieldPanel.append(actions);
     };
     buildFieldPanel();
     metaHead.style.position='relative'; metaHead.append(fieldPanel);
-    fieldBtn.addEventListener('click', ()=>{ fieldPanel.style.display = fieldPanel.style.display==='none' ? 'block' : 'none'; });
+    fieldBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fieldPanel.style.display = fieldPanel.style.display==='none' ? 'block' : 'none'; });
     document.addEventListener('click', (e)=>{ if (!metaHead.contains(e.target as Node)) fieldPanel.style.display='none'; });
 
     // 操作卡片（分组）
@@ -1164,13 +1176,15 @@ const worksPanel: WebUiPanel = {
     opsCard.append(opsGroups);
     right.append(metaCard, opsCard);
 
-    // 批量操作栏（替代详情）
+    // 批量操作栏（替代详情）- 已选3张 [全选][反选] [批量删除][批量导出] sticky
     const batchBar = ctx.ui.h('div','coo-works-batch-actions'); batchBar.style.display='none';
+    batchBar.style.position='sticky'; batchBar.style.bottom='0'; batchBar.style.background='#fff';
     const batchCount = ctx.ui.h('span','', '');
+    const batchAll = ctx.ui.button(t('全选','Select all'), { size:'sm' });
+    const batchInverse = ctx.ui.button(t('反选','Invert'), { size:'sm' });
     const batchDel = ctx.ui.button(t('批量删除','Delete selected'), { size:'sm', variant:'plain' }); batchDel.style.color='#c44';
     const batchExport = ctx.ui.button(t('批量导出','Export'), { size:'sm' });
-    const batchFav = ctx.ui.button(t('批量收藏','Favorite'), { size:'sm' });
-    batchBar.append(batchCount, batchDel, batchExport, batchFav);
+    batchBar.append(batchCount, batchAll, batchInverse, batchDel, batchExport);
     right.append(batchBar);
 
     let activeEntry: HistoryEntry | null = shared.resultEntry ?? allHistory[0] ?? null;
@@ -1452,7 +1466,7 @@ const worksPanel: WebUiPanel = {
       } else if (list.length===total) {
         statsText.textContent = t(`共 ${total} 张`, `${total} pictures`);
       } else {
-        statsText.textContent = t(`筛选出 ${list.length} 张 / 共 ${total} 张`, `${list.length} / ${total} pictures`);
+        statsText.textContent = t(`共 ${total} 张 | 筛选出 ${list.length} 张 / 共 ${total} 张`, `${total} | ${list.length} / ${total} pictures`);
       }
       // 清除筛选按钮显隐
       const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelSelect.value || loraFilterSelected.size>0;
@@ -1532,20 +1546,25 @@ const worksPanel: WebUiPanel = {
       ctx.ui.toast(t(`已加载至 ${allHistory.length} 张`,`Loaded ${allHistory.length}`));
     });
 
-    // 批量模式
+    // 批量模式 - 激活时 primary fill “退出批量模式”
     batchToggle.addEventListener('click', ()=>{
       batchMode=!batchMode;
-      batchToggle.textContent = batchMode ? t('退出批量','Exit batch') : t('批量模式','Batch');
       if (batchMode) {
+        batchToggle.textContent = t('退出批量模式','Exit batch');
+        batchToggle.style.background='#5b8def'; batchToggle.style.color='#fff'; batchToggle.style.borderColor='#5b8def';
         batchBar.style.display='flex'; previewWrap.style.display='none'; metaCard.style.display='none'; opsCard.style.display='none';
         batchCount.textContent = t('已选 0 张','0 selected');
       } else {
+        batchToggle.textContent = t('批量模式','Batch');
+        batchToggle.style.background='#fff'; batchToggle.style.color=''; batchToggle.style.borderColor='#d1d5db';
         batchBar.style.display='none'; metaCard.style.display=''; opsCard.style.display='';
         selected.clear();
         if (activeEntry) { previewWrap.style.display='block'; void showDetail(activeEntry); } else { previewWrap.style.display='none'; empty.style.display=''; }
       }
       renderGallery();
     });
+    batchAll.addEventListener('click', ()=>{ const list = filtered(); for (const h of list) selected.add(h.id); batchCount.textContent = t(`已选 ${selected.size} 张`, `${selected.size} selected`); renderGallery(); });
+    batchInverse.addEventListener('click', ()=>{ const list = filtered(); for (const h of list) { if (selected.has(h.id)) selected.delete(h.id); else selected.add(h.id); } batchCount.textContent = t(`已选 ${selected.size} 张`, `${selected.size} selected`); renderGallery(); });
     batchDel.addEventListener('click', async ()=>{
       if (!selected.size) return; const ok = await ctx.ui.confirm({ title: t('批量删除？', 'Delete selected?'), body: t(`确定删除 ${selected.size} 张？此操作不可恢复。`, `Delete ${selected.size} pictures? This cannot be undone.`), danger: true }); if (!ok) return;
       allHistory = allHistory.filter(h=> !selected.has(h.id)); shared.history = allHistory;
@@ -1557,7 +1576,6 @@ const worksPanel: WebUiPanel = {
       ctx.ui.toast(t('已删除','Deleted'));
     });
     batchExport.addEventListener('click', ()=>{ ctx.ui.toast(t('已请求打开文件夹，请手动复制','Open folder to copy')); void ctx.invoke('openFolder'); });
-    batchFav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); });
 
     // 自动选中
     renderGallery();

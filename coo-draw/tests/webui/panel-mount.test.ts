@@ -669,9 +669,18 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       stepBtns[1]!.click();
       stepBtns[0]!.click();
 
-      // 3. 依次切换到「作品」「LoRA 管理」「工作流」再切回「出图」，全程零报错
+      // 3. 验证出图页展示最近一张生成的图片，点击该图片后直接跳转到「作品」Tab 页
+      const latestCard = localCtx.root.querySelector('.coo-latest-card');
+      expect(latestCard).not.toBeNull();
+      expect(latestCard!.style.display).toBe('flex');
+      const latestThumb = latestCard!.querySelector('.coo-latest-thumb')!;
+      latestThumb.click();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(localCtx.root.querySelector('.coo-works')).not.toBeNull();
+
+      // 4. 依次切换到「LoRA 管理」「工作流」「作品」再切回「出图」，全程零报错
       const segButtons = localCtx.root.querySelectorAll('.seg-btn');
-      for (const tabValue of ['works', 'loras', 'workflows', 'studio']) {
+      for (const tabValue of ['loras', 'workflows', 'works', 'studio']) {
         const btn = segButtons.find((b) => b.dataset.value === tabValue)!;
         btn.click();
         await new Promise((r) => setTimeout(r, 15));

@@ -8,7 +8,7 @@ import type {
 } from 'cortico/web/shared/client-panel.ts';
 import type {
   CooGenBootstrap, DefaultLoRA, GenerateResponse, GenerateTaskView, HistoryEntry, LoRARecord,
-  ParamMapping, StatusResponse, WorkflowSummary,
+  ParamMapping, SavedStudioParams, StatusResponse, WorkflowSummary,
 } from '../../local/types.ts';
 import { createDateRangePicker, type DateRangePickerHandle } from './date-range-picker.ts';
 import { dayEndExclusiveValue, dayStartValue, parseDate } from './date-range-model.ts';
@@ -136,6 +136,7 @@ interface SharedDrawState {
   lastFinished: string;
   resultEntry: HistoryEntry | null;
   resultUrl: string;
+  savedParams: SavedStudioParams | null;
 }
 const shared: SharedDrawState = {
   boot: null,
@@ -148,7 +149,20 @@ const shared: SharedDrawState = {
   lastFinished: '',
   resultEntry: null,
   resultUrl: '',
+  savedParams: null,
 };
+
+const LAST_PARAMS_KEY = 'coo-draw-last-params';
+function readStoredStudioParams(): SavedStudioParams | null {
+  try {
+    const raw = localStorage.getItem(LAST_PARAMS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as SavedStudioParams) : null;
+  } catch {
+    return null;
+  }
+}
 
 
 /* ------------------------------------------------------------------ studio */
@@ -186,8 +200,11 @@ const studioPanel: WebUiPanel = {
     shared.loras = boot.loras;
     shared.controlNets = boot.control_nets ?? [];
     shared.presets = boot.presets;
-    if (!shared.history.length) shared.history = boot.history;
-    if (!shared.current) shared.current = boot.task;
+    shared.history = boot.history;
+    shared.current = boot.task;
+    if (boot.task && boot.task.status !== 'queued' && boot.task.status !== 'running' && !shared.lastFinished) {
+      shared.lastFinished = `${boot.task.id}:${boot.task.status}`;
+    }
 
     const state = {
       workflow: boot.workflow,
@@ -217,6 +234,43 @@ const studioPanel: WebUiPanel = {
       state.sizePreset = match ? match.value : 'custom';
     }
     for (const lora of boot.defaults) state.loras.set(lora.path, lora.weight);
+
+    const initialSaved = readStoredStudioParams() ?? boot.last_params ?? null;
+    const hasSavedLoras = Boolean(initialSaved && Array.isArray(initialSaved.loras));
+    if (initialSaved) {
+      shared.savedParams = initialSaved;
+      if (initialSaved.workflow && boot.presets.some((p) => p.id === initialSaved.workflow)) {
+        state.workflow = initialSaved.workflow;
+      }
+      if (typeof initialSaved.positive === 'string') state.positive = initialSaved.positive;
+      if (typeof initialSaved.negative === 'string') state.negative = initialSaved.negative;
+      if (typeof initialSaved.checkpoint === 'string' && initialSaved.checkpoint && (!boot.checkpoints.length || boot.checkpoints.includes(initialSaved.checkpoint))) {
+        state.checkpoint = initialSaved.checkpoint;
+      }
+      if (typeof initialSaved.sampler === 'string' && initialSaved.sampler) state.sampler = initialSaved.sampler;
+      if (typeof initialSaved.scheduler === 'string' && initialSaved.scheduler) state.scheduler = initialSaved.scheduler;
+      if (typeof initialSaved.steps === 'number' && Number.isFinite(initialSaved.steps)) state.steps = initialSaved.steps;
+      if (typeof initialSaved.cfg === 'number' && Number.isFinite(initialSaved.cfg)) state.cfg = initialSaved.cfg;
+      if (typeof initialSaved.width === 'number' && Number.isFinite(initialSaved.width)) state.width = initialSaved.width;
+      if (typeof initialSaved.height === 'number' && Number.isFinite(initialSaved.height)) state.height = initialSaved.height;
+      if (typeof initialSaved.batch === 'number' && Number.isFinite(initialSaved.batch)) state.batch = initialSaved.batch;
+      if (typeof initialSaved.seed === 'number' && Number.isFinite(initialSaved.seed)) state.seed = initialSaved.seed;
+      if (typeof initialSaved.inputImage === 'string') state.inputImage = initialSaved.inputImage;
+      if (typeof initialSaved.controlImage === 'string') state.controlImage = initialSaved.controlImage;
+      if (typeof initialSaved.controlNet === 'string') state.controlNet = initialSaved.controlNet;
+      if (typeof initialSaved.denoise === 'number' && Number.isFinite(initialSaved.denoise)) state.denoise = initialSaved.denoise;
+      if (typeof initialSaved.controlStrength === 'number' && Number.isFinite(initialSaved.controlStrength)) state.controlStrength = initialSaved.controlStrength;
+      if (initialSaved.custom && typeof initialSaved.custom === 'object') state.custom = { ...initialSaved.custom };
+      if (Array.isArray(initialSaved.loras)) {
+        state.loras = new Map(
+          initialSaved.loras
+            .filter((item) => item && typeof item.path === 'string' && boot.loras.some((l) => l.path === item.path))
+            .map((item) => [item.path, Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0.75]),
+        );
+      }
+      const match = SIZE_PRESETS.find((p) => p.w === state.width && p.h === state.height && p.value !== 'custom');
+      state.sizePreset = match ? match.value : 'custom';
+    }
 
     let loras = boot.loras;
     let checkpoints = boot.checkpoints;
@@ -339,7 +393,7 @@ const studioPanel: WebUiPanel = {
       return wrap;
     };
     const positive = ctx.ui.textarea({
-      value: '', rows: 4,
+      value: state.positive, rows: 4,
       placeholder: t('想画什么？例如：塞尔达站在海边看日落，金色时刻，电影感', 'What should it be? e.g. Zelda watching sunset by sea, golden hour, cinematic'),
       onInput: (v) => { state.positive = v; },
     }); positive.style.width = '100%';
@@ -590,8 +644,8 @@ const studioPanel: WebUiPanel = {
       state.loras = next; persistLora(); renderLoraTable();
     });
     btnClear.addEventListener('click', () => { state.loras.clear(); persistLora(); renderLoraTable(); });
-    // 首次加载时尝试恢复上次选择（覆盖 defaults）
-    restoreLora();
+    // 首次加载时若无上次生成保存的 LoRA 快照，尝试恢复上次手动选择（覆盖 defaults）
+    if (!hasSavedLoras) restoreLora();
     loraSearch.addEventListener('input', renderLoraTable);
     renderLoraTable();
 
@@ -856,6 +910,7 @@ const studioPanel: WebUiPanel = {
     const connMeta = ctx.ui.h('div', 'coo-conn-fields');
     let editingUrl = false;
     let savingUrl = false;
+    let launchPending = Boolean(boot.launch.running && !boot.health.ok);
     const urlInput = ctx.ui.input({ value: boot.config.url, cls: 'addr-input' });
     const inlineAction = (label: string, handler: () => void): HTMLButtonElement => {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'inline-action'; button.textContent = label; button.addEventListener('click', handler); return button;
@@ -875,31 +930,43 @@ const studioPanel: WebUiPanel = {
       const cancel = inlineAction(t('取消','Cancel'), () => { editingUrl = false; renderConnMeta(); }); cancel.disabled = savingUrl;
       const open = inlineAction(t('打开','Open'), () => { void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开','Opening'))).catch(e => ctx.ui.toast(errText(e),'bad')); });
       const version = [boot.health.version ? 'v' + boot.health.version : '', boot.health.system ?? ''].filter(Boolean).join(' · ') || '—';
-      connMeta.append(row(t('状态','Status'), boot.health.ok ? t('在线','Online') : t('离线','Offline')),
+      const statusText = boot.health.ok ? t('在线','Online') : launchPending ? t('启动中…','Starting…') : t('离线','Offline');
+      connMeta.append(row(t('状态','Status'), statusText),
         row(t('版本','Version'), version), row(t('设备','Device'), boot.health.devices?.[0] ?? '—'),
         row(t('地址','URL'), editingUrl ? urlInput : boot.config.url, editingUrl ? [save, cancel] : [edit, checkBtn]),
         row(t('模型','Model'), `Checkpoint ${checkpoints.length} · LoRA ${loras.length}`), row(t('输出','Output'), boot.config.output_dir, [open]));
     };
     const connActions = ctx.ui.h('div', 'coo-conn-actions');
-    const launchBtn = ctx.ui.button(t('一键启动','Launch'), { size: 'sm', variant: 'primary' }); launchBtn.disabled = !boot.launch.configured;
+    const launchBtn = ctx.ui.button(t('一键启动','Launch'), { size: 'sm', variant: 'primary' }); launchBtn.disabled = !boot.launch.configured || launchPending;
     const stopBtn = ctx.ui.button(t('关闭 ComfyUI','Stop ComfyUI'), { size: 'sm', variant: 'plain' }); stopBtn.disabled = !boot.launch.stop_configured;
     stopBtn.style.color = 'var(--coo-danger)';
     const refreshBtn = ctx.ui.button(t('刷新','Refresh'), { size: 'sm' }); refreshBtn.prepend(svgIcon('refresh',14));
     connActions.append(launchBtn, refreshBtn, stopBtn);
     connCard.append(connHead, connMeta, connActions);
     const healthLine = ctx.ui.msgline(''); // errors are surfaced as toasts rather than extra card rows
-    renderConnMeta();
     right.append(connCard);
     right.append(actionFloat);
 
     const renderHealth = (health: CooGenBootstrap['health']): void => {
       const ok = health.ok;
-      connBadge.replaceChildren(); const d=ctx.ui.h('span','coo-conn-dot '+(ok?'on':'off')); connBadge.append(d, document.createTextNode(ok ? t('在线','Online') : t('离线','Offline')));
-      connBadge.style.background = ok ? 'var(--coo-success-soft)' : 'var(--coo-danger-soft)';
-      healthLine.classList.toggle('bad', !ok);
-      healthLine.textContent = ok ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`) : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
+      if (ok) launchPending = false;
+      connBadge.replaceChildren();
+      const d = ctx.ui.h('span', 'coo-conn-dot ' + (ok ? 'on' : 'off'));
+      const badgeLabel = ok ? t('在线','Online') : launchPending ? t('启动中','Starting') : t('离线','Offline');
+      connBadge.append(d, document.createTextNode(badgeLabel));
+      connBadge.style.background = ok ? 'var(--coo-success-soft)' : launchPending ? 'var(--coo-accent-soft)' : 'var(--coo-danger-soft)';
+      launchBtn.textContent = launchPending ? t('启动中…','Starting…') : t('一键启动','Launch');
+      launchBtn.disabled = !boot.launch.configured || launchPending;
+      stopBtn.disabled = !boot.launch.stop_configured || launchPending;
+      healthLine.classList.toggle('bad', !ok && !launchPending);
+      healthLine.textContent = ok
+        ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`)
+        : launchPending
+          ? t('正在后台启动 ComfyUI…', 'Starting ComfyUI in background…')
+          : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
       renderConnMeta();
     };
+    renderHealth(boot.health);
 
     const applyModelRefresh = (res: { checkpoints: string[]; samplers: string[]; schedulers: string[]; control_nets: string[]; loras: LoRARecord[]; health: CooGenBootstrap['health']; model_root?: string; }): void => {
       checkpoints = res.checkpoints; loras = res.loras; controlNets = res.control_nets ?? []; boot.health = res.health;
@@ -936,11 +1003,54 @@ const studioPanel: WebUiPanel = {
       catch (e) { ctx.ui.toast(errText(e), 'bad'); }
     };
     refreshBtn.addEventListener('click', () => { void doRefreshModels(); });
+    const pollLaunchState = async (): Promise<void> => {
+      if (!launchPending) return;
+      try {
+        const res = await ctx.invoke<StatusResponse>('status');
+        if (!alive) return;
+        boot.health = res.health;
+        if (res.launch) boot.launch = res.launch;
+        if (res.health.ok) {
+          launchPending = false;
+          renderHealth(res.health);
+          ctx.ui.toast(t('ComfyUI 已就绪','ComfyUI is ready'), 'ok');
+          await doRefreshModels();
+          return;
+        }
+        if (res.launch && !res.launch.running) {
+          launchPending = false;
+          renderHealth(res.health);
+          ctx.ui.toast(res.launch.last_error || t('ComfyUI 启动失败或超时，请检查控制台','ComfyUI failed to start'), 'bad');
+          return;
+        }
+        renderHealth(res.health);
+      } catch {}
+    };
+    ctx.interval(() => { void pollLaunchState(); }, 1200);
+
     launchBtn.addEventListener('click', () => {
       void (async () => {
-        const busyHandle = ctx.ui.busy(t('启动 ComfyUI','Launching ComfyUI'), t('等待 /system_stats 就绪…','Waiting for /system_stats…'));
-        launchBtn.disabled = true; stopBtn.disabled = true;
-        try { const res = await ctx.invoke<{ ok: boolean; message: string }>('launch'); if (!alive) return; ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad'); healthLine.classList.toggle('bad', !res.ok); healthLine.textContent = res.message; if (res.ok) await doRefreshModels(); } catch(e){ ctx.ui.toast(errText(e),'bad'); } finally { busyHandle.dispose(); launchBtn.disabled = !boot.launch.configured; stopBtn.disabled = !boot.launch.stop_configured; }
+        launchBtn.disabled = true;
+        try {
+          const res = await ctx.invoke<{ ok: boolean; starting?: boolean; already?: boolean; message: string; launch?: CooGenBootstrap['launch'] }>('launch');
+          if (!alive) return;
+          if (res.launch) boot.launch = res.launch;
+          ctx.ui.toast(res.message, res.ok ? 'ok' : 'bad');
+          if (res.ok && res.starting) {
+            launchPending = true;
+            renderHealth(boot.health);
+          } else if (res.ok) {
+            launchPending = false;
+            await doRefreshModels();
+          } else {
+            launchPending = false;
+            renderHealth(boot.health);
+          }
+        } catch (e) {
+          launchPending = false;
+          if (alive) renderHealth(boot.health);
+          ctx.ui.toast(errText(e), 'bad');
+        }
       })();
     });
     stopBtn.addEventListener('click', () => {
@@ -964,19 +1074,107 @@ const studioPanel: WebUiPanel = {
     progressMeta.append(progressBar, progressPercent); progressCard.append(progressTitle, progressMeta);
     right.append(progressCard);
 
+    // 最近生成图片卡片（含用户生成与桌宠生成；点击跳转作品页）
+    const latestCard = ctx.ui.h('div', 'coo-latest-card');
+    latestCard.style.display = 'none';
+    const latestHead = ctx.ui.h('div', 'coo-latest-head');
+    const latestTitleWrap = ctx.ui.h('div', 'coo-latest-title');
+    const latestTitleText = ctx.ui.h('span', '', t('最近生成', 'Latest Image'));
+    const latestBadge = ctx.ui.h('span', 'coo-latest-badge', '');
+    latestTitleWrap.append(latestTitleText, latestBadge);
+    const latestJump = document.createElement('button');
+    latestJump.type = 'button';
+    latestJump.className = 'coo-latest-jump';
+    latestJump.textContent = t('查看作品 →', 'View in Works →');
+    latestHead.append(latestTitleWrap, latestJump);
+
+    const latestThumb = document.createElement('button');
+    latestThumb.type = 'button';
+    latestThumb.className = 'coo-latest-thumb';
+    latestThumb.title = t('点击前往作品页查看详情', 'Click to view in Works');
+    const latestImg = document.createElement('img');
+    latestImg.className = 'coo-latest-img';
+    latestThumb.append(latestImg);
+    const latestMeta = ctx.ui.h('div', 'coo-latest-meta', '');
+    latestCard.append(latestHead, latestThumb, latestMeta);
+    right.append(latestCard);
+
+    let renderedLatestId = '';
+    let latestBlobUrl = '';
+    ctx.own({
+      dispose: () => {
+        if (latestBlobUrl) {
+          try { URL.revokeObjectURL(latestBlobUrl); } catch {}
+          latestBlobUrl = '';
+        }
+      },
+    });
+    const jumpToWorksForLatest = (): void => {
+      const target = history[0] ?? resultEntry;
+      if (target) shared.resultEntry = target;
+      const switcher = (ctx as WebUiPanelContext & { switchTab?: (v: string) => void }).switchTab;
+      if (switcher) switcher('works');
+      else ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'works', bubbles: true }));
+    };
+    latestThumb.addEventListener('click', jumpToWorksForLatest);
+    latestJump.addEventListener('click', jumpToWorksForLatest);
+
+    const renderLatestImage = (entry: HistoryEntry | null): void => {
+      if (!entry) {
+        latestCard.style.display = 'none';
+        renderedLatestId = '';
+        return;
+      }
+      latestCard.style.display = 'flex';
+      const isPet = entry.source === 'pet';
+      latestBadge.textContent = isPet ? t('桌宠生成', 'Pet') : t('用户生成', 'Studio');
+      latestBadge.style.display = '';
+      const summaryPrompt = (entry.note || entry.positive || '').trim();
+      latestMeta.textContent = [
+        `${entry.width}×${entry.height}`,
+        shortDate(entry.created_at),
+        summaryPrompt,
+      ].filter(Boolean).join(' · ');
+      latestImg.alt = entry.filename;
+      if (renderedLatestId === entry.id && latestImg.src) return;
+      renderedLatestId = entry.id;
+      void ctx.invokeBinary('image', [entry.id]).then((blob) => {
+        if (!alive || renderedLatestId !== entry.id) return;
+        const nextUrl = URL.createObjectURL(blob);
+        if (latestBlobUrl) {
+          try { URL.revokeObjectURL(latestBlobUrl); } catch {}
+        }
+        latestBlobUrl = nextUrl;
+        latestImg.src = nextUrl;
+      }).catch(() => {
+        // 忽略单次缩略图读取异常
+      });
+    };
+
     const renderTask = (task: GenerateTaskView | null): void => {
       shared.current = task;
+      const isPet = task?.source === 'pet' || task?.params?.source === 'pet';
+      progressTitle.textContent = isPet ? t('桌宠生图进度', 'Pet Drawing Progress') : t('生成进度', 'Progress');
       const total = Math.max(1, task?.progress.total || task?.params.steps || 1);
       const cur = task?.status === 'done' ? total : task && isActive(task) ? Math.max(0, Math.min(total, task.progress.current || 0)) : 0;
-      const percent = Math.round(cur / total * 100);
+      const percent = task && isActive(task) && total <= 1 && cur === 0 && task.status === 'running'
+        ? 15
+        : Math.round(cur / total * 100);
       progressFill.style.width = `${percent}%`; progressPercent.textContent = `${percent}%`; progressBar.setAttribute('aria-valuenow', String(percent));
       progressCard.querySelector('.coo-progress-info')?.remove();
       if (task) {
         const elapsed = Math.max(0, Math.round(((task.finished_at || Date.now()) - task.created_at) / 1000));
         let text = '';
-        if (isActive(task)) text = t(`步数 ${cur}/${total} · 已用 ${elapsed}s`, `Steps ${cur}/${total} · ${elapsed}s elapsed`);
-        else if (task.status === 'done') text = t(`已完成 · 用时 ${elapsed}s`, `Completed · ${elapsed}s`);
-        else if (task.status === 'cancelled') text = t('已取消', 'Cancelled');
+        if (isActive(task)) {
+          const stage = task.progress.message || t(`步数 ${cur}/${total}`, `Steps ${cur}/${total}`);
+          text = isPet
+            ? t(`${stage} · 已用 ${elapsed}s`, `${stage} · ${elapsed}s elapsed`)
+            : t(`步数 ${cur}/${total} · 已用 ${elapsed}s`, `Steps ${cur}/${total} · ${elapsed}s elapsed`);
+        } else if (task.status === 'done') {
+          text = isPet
+            ? t(`桌宠已完成生图 · 用时 ${elapsed}s`, `Pet finished · ${elapsed}s`)
+            : t(`已完成 · 用时 ${elapsed}s`, `Completed · ${elapsed}s`);
+        } else if (task.status === 'cancelled') text = t('已取消', 'Cancelled');
         else if (task.status === 'error') text = task.error || t('生成失败', 'Generation failed');
         if (text) { const info = ctx.ui.h('div', 'coo-progress-info', text); info.classList.toggle('is-cancelled', task.status === 'cancelled' || task.status === 'error'); progressCard.append(info); }
       }
@@ -987,27 +1185,117 @@ const studioPanel: WebUiPanel = {
     const refreshHistory = async (): Promise<void> => {
       try {
         const res = await ctx.invoke<HistoryResponse>('history', [Math.max(1, boot.config.history_limit)]);
-        if (!alive) return; history = res.history; shared.history = history; shared.current = res.task; current = res.task; renderTask(current); if (current && current.status==='done' && current.id !== lastFinished) { lastFinished = current.id; shared.lastFinished = lastFinished; showTaskResult(current); }
+        if (!alive) return;
+        history = res.history;
+        shared.history = history;
+        shared.current = res.task;
+        current = res.task;
+        renderTask(current);
+        renderLatestImage(history[0] ?? null);
       } catch {}
     };
     const showTaskResult = (task: GenerateTaskView): void => {
-      if (task.id === shared.lastFinished) {} // avoid dup but still show
-      const entry = history.find((item)=> item.id===task.images[0]?.id);
-      if (entry) { shared.resultEntry = entry; resultEntry = entry; // 保存到共享
+      const entry = history.find((item) => item.id === task.images[0]?.id) ?? history[0];
+      if (entry) {
+        shared.resultEntry = entry;
+        resultEntry = entry;
       }
+      renderLatestImage(history[0] ?? entry ?? null);
     };
     const afterTask = async (task: GenerateTaskView): Promise<void> => {
-      if (task.id === lastFinished) return; lastFinished = task.id; shared.lastFinished = lastFinished;
-      if (task.status==='done') { await refreshHistory(); const ent = history.find(h=> h.id===task.images[0]?.id); if (ent) { shared.resultEntry = ent; } say(t('画好了，已经保存。','Done and saved.')); ctx.ui.toast(t('画好了','Done')); // 自动在右栏显示预览已在 renderTask 处理
-      } else if (task.status==='error') { say(task.error ?? t('出图失败','Generation failed'), true); ctx.ui.toast(t('出图失败','Generation failed'),'bad'); }
-      else if (task.status==='cancelled') say(t('已取消。','Cancelled.'));
+      const termKey = `${task.id}:${task.status}`;
+      if (termKey === lastFinished) return;
+      lastFinished = termKey;
+      shared.lastFinished = lastFinished;
+      const isPet = task.source === 'pet' || task.params?.source === 'pet';
+      if (task.status === 'done') {
+        await refreshHistory();
+        showTaskResult(task);
+        ctx.root.dispatchEvent(new CustomEvent('coo-works-unread', { detail: 1, bubbles: true }));
+        say(isPet ? t('桌宠画好了，已经保存。', 'Pet drawing saved.') : t('画好了，已经保存。', 'Done and saved.'));
+      } else if (task.status === 'error') {
+        say(task.error ?? t('出图失败', 'Generation failed'), true);
+      } else if (task.status === 'cancelled') {
+        say(t('已取消。', 'Cancelled.'));
+      }
+    };
+    const applyIncomingTask = async (nextTask: GenerateTaskView | null): Promise<void> => {
+      const hadActive = isActive(current);
+      const changed = nextTask?.id !== current?.id
+        || nextTask?.status !== current?.status
+        || nextTask?.progress.current !== current?.progress.current
+        || nextTask?.progress.total !== current?.progress.total
+        || nextTask?.progress.message !== current?.progress.message;
+      current = nextTask;
+      if (changed || hadActive || isActive(current)) {
+        renderTask(current);
+      }
+      if (current && !isActive(current) && `${current.id}:${current.status}` !== lastFinished) {
+        await afterTask(current);
+      }
     };
     const poll = async (): Promise<void> => {
-      if (!current || !isActive(current)) return;
-      try { const res = await ctx.invoke<StatusResponse>('status'); if (!alive) return; current=res.task; renderTask(current); if (current && !isActive(current)) await afterTask(current); } catch {}
+      try {
+        const res = await ctx.invoke<StatusResponse>('status');
+        if (!alive) return;
+        boot.health = res.health;
+        await applyIncomingTask(res.task);
+      } catch {}
     };
-    ctx.interval(()=>{ void poll(); }, 800);
+    ctx.stream?.({
+      message: (text) => {
+        try {
+          const data = JSON.parse(text) as { type?: string; task?: GenerateTaskView | null };
+          if (data && data.type === 'task' && 'task' in data) {
+            void applyIncomingTask(data.task ?? null);
+          }
+        } catch {}
+      },
+    });
+    ctx.interval(() => { void poll(); }, 1000);
+    const syncInputsToState = (): void => {
+      state.positive = positive.value;
+      state.negative = negative.value;
+      if (stepsInput.value.trim()) state.steps = Math.max(1, Math.min(100, Math.round(num(stepsInput.value, state.steps))));
+      if (cfgInput.value.trim()) state.cfg = Math.min(30, Math.max(1, num(cfgInput.value, state.cfg)));
+      if (widthInput.value.trim()) state.width = Math.max(64, Math.min(4096, Math.round(num(widthInput.value, state.width) / 8) * 8));
+      if (heightInput.value.trim()) state.height = Math.max(64, Math.min(4096, Math.round(num(heightInput.value, state.height) / 8) * 8));
+      if (batchInput.value.trim()) state.batch = Math.max(1, Math.min(8, Math.round(num(batchInput.value, state.batch))));
+      if (seedInput.value.trim()) state.seed = Math.trunc(num(seedInput.value, state.seed));
+    };
+
+    const persistStudioParams = (): void => {
+      syncInputsToState();
+      const snapshot: SavedStudioParams = {
+        workflow: state.workflow,
+        positive: state.positive,
+        negative: state.negative,
+        checkpoint: state.checkpoint,
+        loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
+        sampler: state.sampler,
+        scheduler: state.scheduler,
+        steps: state.steps,
+        cfg: state.cfg,
+        width: state.width,
+        height: state.height,
+        batch: state.batch,
+        seed: state.seed,
+        ...(state.inputImage ? { inputImage: state.inputImage } : {}),
+        ...(state.controlImage ? { controlImage: state.controlImage } : {}),
+        ...(state.controlNet ? { controlNet: state.controlNet } : {}),
+        ...(state.denoise !== undefined ? { denoise: state.denoise } : {}),
+        ...(state.controlStrength !== undefined ? { controlStrength: state.controlStrength } : {}),
+        ...(Object.keys(state.custom).length ? { custom: { ...state.custom } } : {}),
+      };
+      shared.savedParams = snapshot;
+      try { localStorage.setItem(LAST_PARAMS_KEY, JSON.stringify(snapshot)); } catch {}
+      persistLora();
+      void ctx.invoke('saveLastParams', [snapshot]).catch(() => {});
+    };
+
     async function generate(): Promise<void> {
+      // 点击生成即持久化保存当前所有参数（无论后续校验拦截或生图成功/失败，切换标签页或重启均不丢失）
+      persistStudioParams();
       if (busy) return;
       if (isActive(current)) { say(t('上一张还在画，等它完成或点取消。','Previous picture still running; wait or cancel.')); return; }
       if (!state.positive.trim()) { say(t('先写正向提示词。','Write a positive prompt first.'), true); positive.focus(); return; }
@@ -1038,6 +1326,7 @@ const studioPanel: WebUiPanel = {
       void (async ()=>{ try { await ctx.invoke('cancel', [current?.id]); ctx.ui.toast(t('已请求取消','Cancel requested')); const res=await ctx.invoke<StatusResponse>('status'); if (!alive) return; current=res.task; shared.current=current; renderTask(current); } catch(e){ say(errText(e), true); } })();
     });
     renderTask(current);
+    renderLatestImage(history[0] ?? null);
     if (current && isActive(current)) void poll();
   },
 };
@@ -1056,8 +1345,8 @@ const worksPanel: WebUiPanel = {
     }
     if (!alive) return;
 
-    // 初始历史
-    let allHistory: HistoryEntry[] = shared.history.length ? shared.history : boot.history;
+    // 初始历史（始终以最新服务端 bootstrap.history 为准，确保桌宠与用户最新作品均能立即显示）
+    let allHistory: HistoryEntry[] = boot.history.length ? boot.history : shared.history;
     shared.history = allHistory;
     let pageLimit = Math.max(50, boot.config.history_limit);
     const fetchHistory = async (limit = pageLimit): Promise<void> => {

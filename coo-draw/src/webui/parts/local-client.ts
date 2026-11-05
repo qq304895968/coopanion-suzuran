@@ -10,6 +10,11 @@ import type {
   CooGenBootstrap, DefaultLoRA, GenerateResponse, GenerateTaskView, HistoryEntry, LoRARecord,
   ParamMapping, StatusResponse, WorkflowSummary,
 } from '../../local/types.ts';
+import { createDateRangePicker, type DateRangePickerHandle } from './date-range-picker.ts';
+import { dayEndExclusiveValue, dayStartValue, parseDate } from './date-range-model.ts';
+import { closeAllPopovers, closePopover, openPopover } from './popover-stack.ts';
+import { createCaretIcon, createDropdown } from './ui-dropdown.ts';
+
 
 interface HistoryResponse {
   task: GenerateTaskView | null;
@@ -100,6 +105,16 @@ function svgIcon(name: string, size = 16): HTMLElement {
   else if(name==='warn') inner='<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 1.71H20.47a2 2 0 0 0 1.71-1.71L13.71 3.86a1 1 0 0 0-1.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
   else if(name==='plug') inner='<path d="M7 11V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v4"/><path d="M10 11v6"/><path d="M14 11v6"/><rect x="7" y="17" width="10" height="3" rx="1"/>';
   else if(name==='gear') inner='<circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>';
+  else if(name==='checkbox') inner='<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/>';
+  else if(name==='check') inner='<path d="M20 6L9 17l-5-5"/>';
+  else if(name==='copy') inner='<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>';
+  else if(name==='send') inner='<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>';
+  else if(name==='compare') inner='<rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/>';
+  else if(name==='folder') inner='<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>';
+  else if(name==='star') inner='<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3z"/>';
+  else if(name==='trash') inner='<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/>';
+  else if(name==='sliders') inner='<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>';
+  else if(name==='layers') inner='<path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>';
   else inner='<circle cx="12" cy="12" r="9"/>';
   svg.innerHTML = inner;
   return svg as unknown as HTMLElement;
@@ -971,357 +986,87 @@ const worksPanel: WebUiPanel = {
     const row1 = ctx.ui.h('div', 'coo-works-filters-row coo-works-filters-row1');
     const row2 = ctx.ui.h('div', 'coo-works-filters-row coo-works-filters-row2');
     filters.append(row1, row2);
+
+    // 搜索框：外层统一边框，内层 input 去边框，保证与其它控件严格等高
+    const searchWrap = ctx.ui.h('div', 'coo-filter-search');
     const searchInput = ctx.ui.input({ type: 'search', placeholder: t('搜索提示词 / 种子 / 文件名','Search prompt / seed / filename') }) as HTMLInputElement;
-    searchInput.classList.add('coo-filter-search', 'filter-control');
-    // 互斥下拉全局状态（模型 / LoRA / 日期 共用）
-    let activeDropdownId: string | null = null;
-    let closeAllDropdowns: () => void = () => {};
-    // 规范一B + 核心交互逻辑规范：日期范围单容器全域热区 + Popover
-    const createDateRangePicker = (): { container: HTMLElement; dateFrom: HTMLInputElement; dateTo: HTMLInputElement; getRange: () => { from: string; to: string } } => {
-      // 隐藏的兼容 input（供 filtered() 读取 value）
-      const dateFrom = document.createElement('input') as HTMLInputElement; dateFrom.type = 'hidden';
-      const dateTo = document.createElement('input') as HTMLInputElement; dateTo.type = 'hidden';
-      const container = ctx.ui.h('div', 'date-range-container');
-      // 内部结构：[日历图标]  年/月/日 — 年/月/日  [展开/清除]
-      const content = ctx.ui.h('div', 'date-range-content placeholder');
-      const calIcon = ctx.ui.h('span', 'date-range-icon', '📅');
-      const textSpan = ctx.ui.h('span', '', t('年/月/日 — 年/月/日', 'YYYY/MM/DD — YYYY/MM/DD')); textSpan.style.flex = '1'; textSpan.style.textAlign = 'center';
-      const arrowIcon = ctx.ui.h('span', 'date-range-icon', '▼'); arrowIcon.style.fontSize = '10px';
-      const clearIcon = ctx.ui.h('span', 'date-range-clear', '✖');
-      content.append(textSpan);
-      container.append(calIcon, content, arrowIcon, clearIcon);
-      // 状态：fromDate / toDate (Date | null) + 临时选择态
-      let fromDate: Date | null = null;
-      let toDate: Date | null = null;
-      let tempFrom: Date | null = null;
-      let tempTo: Date | null = null;
-      let hoverDate: Date | null = null;
-      let popover: HTMLElement | null = null;
-      let currentMonth = new Date(); currentMonth.setDate(1);
-      const pad = (n: number): string => String(n).padStart(2, '0');
-      const fmt = (d: Date): string => `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
-      const fmtInput = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      const parseInput = (s: string): Date | null => { if (!s) return null; const p = s.split('-'); if (p.length!==3) return null; return new Date(Number(p[0]), Number(p[1])-1, Number(p[2])); };
-      const syncHidden = (): void => {
-        dateFrom.value = fromDate ? fmtInput(fromDate) : '';
-        dateTo.value = toDate ? fmtInput(toDate) : '';
-        // 触发 filtered 更新
-        dateFrom.dispatchEvent(new Event('change', { bubbles: true }));
-        dateTo.dispatchEvent(new Event('change', { bubbles: true }));
-      };
-      const updateDisplay = (): void => {
-        if (!fromDate && !toDate) {
-          textSpan.textContent = t('年/月/日 — 年/月/日', 'YYYY/MM/DD — YYYY/MM/DD');
-          content.classList.add('placeholder'); container.classList.remove('has-value');
-          clearIcon.style.display = 'none'; arrowIcon.style.display = '';
-        } else if (fromDate && toDate) {
-          textSpan.textContent = `${fmt(fromDate)} — ${fmt(toDate)}`;
-          content.classList.remove('placeholder'); container.classList.add('has-value');
-        } else if (fromDate) {
-          // 仅选起点：深色起止 + 次要灰斜体“请选择结束日期”
-          const start = fmt(fromDate);
-          const placeholder = t('请选择结束日期','Select end date');
-          textSpan.innerHTML = `<span style="color:#111827">${start}</span> <span style="color:#9CA3AF">—</span> <span style="color:#9CA3AF; font-style:italic">${placeholder}</span>`;
-          content.classList.remove('placeholder'); container.classList.add('has-value');
-        }
-      };
-      const closePopover = (): void => {
-        if (popover) { popover.remove(); popover = null; }
-        container.classList.remove('is-active');
-        if (activeDropdownId === 'date') activeDropdownId = null;
-        document.removeEventListener('mousedown', onClickAway);
-        document.removeEventListener('keydown', onEsc);
-      };
-      const onClickAway = (e: MouseEvent): void => {
-        if (popover && !popover.contains(e.target as Node) && !container.contains(e.target as Node)) closePopover();
-      };
-      const onEsc = (e: KeyboardEvent): void => { if (e.key === 'Escape') closePopover(); };
-      const buildCalendar = (): void => {
-        if (!popover) return;
-        const calendarsWrap = popover.querySelector('.date-range-calendars') as HTMLElement;
-        if (!calendarsWrap) return;
-        calendarsWrap.replaceChildren();
-        for (let offset = 0; offset < 2; offset++) {
-          const monthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
-          const monthEl = ctx.ui.h('div', 'date-range-month');
-          const header = ctx.ui.h('div', 'date-range-month-header');
-          const prevBtn = ctx.ui.h('button', '', '‹'); prevBtn.addEventListener('click', () => { currentMonth.setMonth(currentMonth.getMonth()-1); buildCalendar(); });
-          const nextBtn = ctx.ui.h('button', '', '›'); nextBtn.addEventListener('click', () => { currentMonth.setMonth(currentMonth.getMonth()+1); buildCalendar(); });
-          const title = ctx.ui.h('span', '', `${monthDate.getFullYear()}年 ${monthDate.getMonth()+1}月`);
-          if (offset===0) header.append(prevBtn, title, ctx.ui.h('span',''));
-          else header.append(ctx.ui.h('span',''), title, nextBtn);
-          monthEl.append(header);
-          const weekdays = ctx.ui.h('div', 'date-range-weekdays');
-          ['日','一','二','三','四','五','六'].forEach(w => weekdays.append(ctx.ui.h('span','',w)));
-          monthEl.append(weekdays);
-          const daysGrid = ctx.ui.h('div', 'date-range-days');
-          const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
-          const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth()+1, 0).getDate();
-          const daysInPrev = new Date(monthDate.getFullYear(), monthDate.getMonth(), 0).getDate();
-          for (let i=0;i<firstDay;i++) {
-            const d = ctx.ui.h('div','date-range-day other-month', String(daysInPrev - firstDay + 1 + i));
-            d.style.pointerEvents='none'; daysGrid.append(d);
-          }
-          for (let d=1; d<=daysInMonth; d++) {
-            const cur = new Date(monthDate.getFullYear(), monthDate.getMonth(), d);
-            const dayEl = ctx.ui.h('div','date-range-day', String(d));
-            const isToday = cur.toDateString() === new Date().toDateString();
-            if (isToday) dayEl.classList.add('today');
-            const inRange = (from: Date|null, to: Date|null): boolean => {
-              if (!from || !to) return false;
-              const t = cur.getTime(); return t >= Math.min(from.getTime(), to.getTime()) && t <= Math.max(from.getTime(), to.getTime());
-            };
-            const effectiveFrom = tempFrom ?? fromDate;
-            const effectiveTo = tempTo ?? toDate;
-            // 悬停预览：起点已选、终点未选时，hover 范围高亮
-            const previewFrom = (tempFrom && !tempTo && hoverDate) ? tempFrom : null;
-            const previewTo = (tempFrom && !tempTo && hoverDate) ? hoverDate : null;
-            const isPreviewRange = previewFrom && previewTo && inRange(previewFrom, previewTo);
-            if (effectiveFrom && effectiveTo && cur.getTime()===effectiveFrom.getTime()) dayEl.classList.add('range-start');
-            if (effectiveFrom && effectiveTo && cur.getTime()===effectiveTo.getTime()) dayEl.classList.add('range-end');
-            // 端点已确定时正常高亮，否则悬停预览高亮
-            if (effectiveFrom && effectiveTo && inRange(effectiveFrom, effectiveTo) && !dayEl.classList.contains('range-start') && !dayEl.classList.contains('range-end')) dayEl.classList.add('in-range');
-            else if (isPreviewRange && !dayEl.classList.contains('range-start') && !dayEl.classList.contains('range-end')) dayEl.classList.add('in-range-preview');
-            dayEl.addEventListener('mouseenter', () => {
-              if (tempFrom && !tempTo) { hoverDate = cur; buildCalendar(); }
-            });
-            dayEl.addEventListener('mouseleave', () => {
-              if (tempFrom && !tempTo && hoverDate && hoverDate.getTime()===cur.getTime()) { hoverDate = null; }
-            });
-            dayEl.addEventListener('click', () => handleDayClick(cur));
-            daysGrid.append(dayEl);
-          }
-          const totalCells = firstDay + daysInMonth;
-          const remain = (7 - (totalCells % 7)) % 7;
-          for (let i=1;i<=remain;i++) {
-            const d = ctx.ui.h('div','date-range-day other-month', String(i));
-            d.style.pointerEvents='none'; daysGrid.append(d);
-          }
-          monthEl.append(daysGrid);
-          calendarsWrap.append(monthEl);
-        }
-      };
-      const handleDayClick = (cur: Date): void => {
-        // 双击同日 → 单日选中（当天起始=结束）
-        if (tempFrom && !tempTo && cur.getTime() === tempFrom.getTime()) {
-          tempTo = cur;
-          fromDate = tempFrom; toDate = tempTo;
-          syncHidden(); updateDisplay();
-          setTimeout(() => { closePopover(); tempFrom=null; tempTo=null; }, 300);
-          renderGallery(); return;
-        }
-        if (!tempFrom || (tempFrom && tempTo)) {
-          tempFrom = cur; tempTo = null;
-        } else {
-          if (cur.getTime() < tempFrom.getTime()) { tempTo = tempFrom; tempFrom = cur; }
-          else tempTo = cur;
-          // 完成两次点击 300ms 后自动关闭
-          fromDate = tempFrom; toDate = tempTo;
-          syncHidden(); updateDisplay();
-          setTimeout(() => { closePopover(); tempFrom=null; tempTo=null; }, 300);
-          renderGallery();
-          return;
-        }
-        buildCalendar();
-        (container as any)._refreshFooter?.();
-      };
-      const applyShortcut = (type: string): void => {
-        const today = new Date(); today.setHours(0,0,0,0);
-        let f: Date|null = null; let t: Date|null = null;
-        if (type==='today') { f=new Date(today); t=new Date(today); }
-        else if (type==='7days') { t=new Date(today); f=new Date(today); f.setDate(f.getDate()-6); }
-        else if (type==='30days') { t=new Date(today); f=new Date(today); f.setDate(f.getDate()-29); }
-        else if (type==='month') { f=new Date(today.getFullYear(), today.getMonth(), 1); t=new Date(today.getFullYear(), today.getMonth()+1, 0); }
-        else if (type==='all') { f=null; t=null; }
-        fromDate=f; toDate=t; tempFrom=null; tempTo=null;
-        if (f) currentMonth = new Date(f.getFullYear(), f.getMonth(), 1);
-        syncHidden(); updateDisplay(); buildCalendar();
-        if (type==='all') { closePopover(); renderGallery(); }
-        else {
-          // 快捷选择后也自动关闭并刷新
-          setTimeout(()=>{ closePopover(); renderGallery(); }, 100);
-        }
-      };
-      const openPopover = (): void => {
-        if (activeDropdownId === 'date' && popover) { closePopover(); return; }
-        // 互斥关闭其他下拉
-        closeAllDropdowns();
-        activeDropdownId = 'date';
-        container.classList.add('is-active');
-        popover = ctx.ui.h('div','date-range-popover');
-        const shortcuts = ctx.ui.h('div','date-range-shortcuts');
-        const btns: Array<[string,string]> = [
-          ['today', t('今天','Today')], ['7days', t('近 7 天','Last 7 days')], ['30days', t('近 30 天','Last 30 days')], ['month', t('本月','This month')], ['all', t('全部','All')]
-        ];
-        btns.forEach(([k,label])=>{
-          const b = ctx.ui.h('button','date-range-shortcut', label);
-          b.addEventListener('click', (e)=>{ e.stopPropagation(); applyShortcut(k); });
-          shortcuts.append(b);
-        });
-        const calendarsWrap = ctx.ui.h('div','date-range-calendars');
-        const footer = ctx.ui.h('div','date-range-footer');
-        const clearBtn = ctx.ui.h('button','date-range-footer-btn clear', t('清空','Clear'));
-        const cancelBtn = ctx.ui.h('button','date-range-footer-btn cancel', t('取消','Cancel'));
-        const confirmBtn = ctx.ui.h('button','date-range-footer-btn confirm', t('确定','Confirm'));
-        // 确认仅当起点终点俱全时启用
-        const refreshFooter = (): void => {
-          const hasFrom = !!(tempFrom || fromDate);
-          const hasTo = !!(tempTo || (tempFrom && tempTo));
-          // 若已有 tempFrom+tempTo 或已确定 fromDate+toDate 则可用
-          const ready = (tempFrom && tempTo) || (fromDate && toDate && !tempFrom);
-          // 首次打开若无 temp，按钮禁用
-          if (tempFrom && tempTo) { confirmBtn.removeAttribute('disabled'); confirmBtn.style.opacity='1'; }
-          else if (!tempFrom && !tempTo && fromDate && toDate) { confirmBtn.removeAttribute('disabled'); confirmBtn.style.opacity='1'; }
-          else { confirmBtn.setAttribute('disabled',''); confirmBtn.style.opacity='.4'; }
-        };
-        clearBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fromDate=null; toDate=null; tempFrom=null; tempTo=null; hoverDate=null; syncHidden(); updateDisplay(); closePopover(); renderGallery(); });
-        cancelBtn.addEventListener('click', (e)=>{ e.stopPropagation(); tempFrom=null; tempTo=null; hoverDate=null; closePopover(); });
-        confirmBtn.addEventListener('click', (e)=>{
-          e.stopPropagation();
-          if (tempFrom && tempTo) { fromDate = tempFrom; toDate = tempTo; }
-          else if (fromDate && toDate && !tempFrom) { /* 已有值保持 */ }
-          else return;
-          syncHidden(); updateDisplay(); closePopover(); tempFrom=null; tempTo=null; hoverDate=null; renderGallery();
-        });
-        footer.append(clearBtn, cancelBtn, confirmBtn);
-        const mainRow = ctx.ui.h('div','date-range-popover-main');
-        mainRow.append(shortcuts, calendarsWrap);
-        popover.append(mainRow, footer);
-        container.append(popover);
-        // 初始化 temp
-        tempFrom = fromDate ? new Date(fromDate) : null;
-        tempTo = toDate ? new Date(toDate) : null;
-        hoverDate = null;
-        if (fromDate) currentMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-        buildCalendar(); refreshFooter();
-        (container as any)._refreshFooter = refreshFooter;
-        setTimeout(()=>{ document.addEventListener('mousedown', onClickAway); document.addEventListener('keydown', onEsc); }, 0);
-      };
-      // 暴露关闭供互斥调用
-      (container as any)._close = closePopover;
-      // 全域热区：容器任意位置点击均触发面板（除清除按钮）
-      container.addEventListener('click', (e)=>{
-        if ((e.target as HTMLElement).closest('.date-range-clear')) return;
-        openPopover();
-      });
-      clearIcon.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        fromDate=null; toDate=null; tempFrom=null; tempTo=null;
-        syncHidden(); updateDisplay(); closePopover(); renderGallery();
-      });
-      // 初始化显示
-      updateDisplay();
-      return { container, dateFrom, dateTo, getRange: ()=>({ from: dateFrom.value, to: dateTo.value }) };
-    };
-    const datePicker = createDateRangePicker();
-    const dateWrap = datePicker.container;
-    const dateFrom = datePicker.dateFrom;
-    const dateTo = datePicker.dateTo;
-    row1.append(searchInput, dateWrap);
-    // 规范二：模型 / LoRA 统一为 .filter-dropdown-select
-    let modelFilterValue = '';
+    searchWrap.append(searchInput);
+
+    // 日期范围：自定义月历弹层（不使用原生 date input）
+    const datePicker: DateRangePickerHandle = createDateRangePicker({
+      t,
+      className: 'coo-filter-date',
+      onChange: () => renderGallery(),
+    });
+    row1.append(searchWrap, datePicker.el);
+    // 面板卸载时收起所有弹层，移除挂在 document 上的监听
+    ctx.own({ dispose: () => { closeAllPopovers(); datePicker.destroy(); } });
+
+    // 模型筛选：自定义 ul/li 下拉，杜绝原生 select 的系统蓝 Hover
+    const modelDD = createDropdown({
+      className: 'coo-filter-model',
+      ariaLabel: t('模型筛选','Filter by model'),
+      options: [{ value: '', label: t('全部模型','All models') }],
+      onChange: () => renderGallery(),
+    });
+
+    // LoRA 多选弹层（同样是 ul/li，内部搜索框单独规范尺寸）
     let loraFilterSelected = new Set<string>();
-    const modelFilterPanel = ctx.ui.h('div','coo-lora-dropdown-panel'); modelFilterPanel.style.display='none';
-    modelFilterPanel.style.position='absolute'; modelFilterPanel.style.left='0'; modelFilterPanel.style.top='38px';
-    modelFilterPanel.style.minWidth='240px'; modelFilterPanel.style.width='100%'; modelFilterPanel.style.maxHeight='320px';
-    modelFilterPanel.style.overflow='hidden'; modelFilterPanel.style.display='none'; modelFilterPanel.style.flexDirection='column';
-    modelFilterPanel.style.background='#fff'; modelFilterPanel.style.border='1px solid #E5E7EB'; modelFilterPanel.style.borderRadius='6px';
-    modelFilterPanel.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'; modelFilterPanel.style.zIndex='10';
-    const createDropdown = (initialText: string, wrapClass: string): { wrap: HTMLElement; btn: HTMLElement; labelEl: HTMLElement; arrowEl: HTMLElement; panel: HTMLElement } => {
-      const wrap = ctx.ui.h('div', wrapClass); wrap.style.position='relative'; wrap.style.flex='1';
-      const btn = ctx.ui.h('div', 'filter-dropdown-select');
-      const labelEl = ctx.ui.h('span','label', initialText);
-      const arrowEl = ctx.ui.h('span','arrow', '▼'); arrowEl.style.fontSize='10px';
-      btn.append(labelEl, arrowEl);
-      const panel = wrapClass.includes('model') ? modelFilterPanel : ctx.ui.h('div','coo-lora-dropdown-panel');
-      if (!wrapClass.includes('model')) {
-        panel.style.position='absolute'; panel.style.left='0'; panel.style.top='38px';
-        panel.style.minWidth='240px'; panel.style.width='100%'; panel.style.maxHeight='320px';
-        panel.style.overflow='hidden'; panel.style.display='none'; panel.style.flexDirection='column';
-        panel.style.background='#fff'; panel.style.border='1px solid #E5E7EB'; panel.style.borderRadius='6px';
-        panel.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'; panel.style.zIndex='10';
-      }
-      wrap.append(btn, panel);
-      return { wrap, btn, labelEl, arrowEl, panel };
-    };
-    const modelDD = createDropdown(t('全部模型','All models'), 'model-dropdown-wrap');
-    const modelSelect = modelDD.panel as unknown as HTMLSelectElement; // 兼容旧变量名：实际为 panel，但保留接口
-    // 为兼容后续 refreshModelOptions 对 modelSelect 的操作，重写为 div 容器，保留 select 语义通过内部状态
-    const loraDD = createDropdown(t('全部 LoRA','All LoRAs'), 'lora-dropdown-wrap');
-    const loraFilterBtn = loraDD.btn;
-    const loraFilterPanel = loraDD.panel;
-    const loraBtnLabel = loraDD.labelEl;
-    const loraBtnArrow = loraDD.arrowEl;
-    const modelBtnLabel = modelDD.labelEl;
-    const modelBtnArrow = modelDD.arrowEl;
-    const modelBtn = modelDD.btn;
-    // 排序 - 规范三：固定宽度 110px / 100px 36px
-    const sortLabel = ctx.ui.h('span','', t('排序:','Sort:')); sortLabel.style.fontSize='13px'; sortLabel.style.color='#6B7280'; sortLabel.style.whiteSpace='nowrap'; sortLabel.style.lineHeight='36px';
-    const sortElement = ctx.ui.select({ options: [
-      { value:'time', label: t('时间','Time') },
-      { value:'size', label: t('尺寸','Size') },
-      { value:'filename', label: t('文件名','Filename') },
-    ] }) as HTMLSelectElement; sortElement.value='time'; sortElement.classList.add('sort-time', 'filter-control');
-    const sortDir = ctx.ui.select({ options: [
-      { value:'desc', label: t('降序','Desc') },
-      { value:'asc', label: t('升序','Asc') },
-    ] }) as HTMLSelectElement; sortDir.value='desc'; sortDir.classList.add('sort-dir', 'filter-control');
-    const sortWrap = ctx.ui.h('div','coo-filter-sort'); sortWrap.append(sortLabel, sortElement, sortDir);
-    const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size:'sm', variant:'plain' }); clearBtn.classList.add('coo-filter-clear'); clearBtn.style.display='none';
-    row2.append(modelDD.wrap, loraDD.wrap, sortWrap, clearBtn);
+    const loraFilterWrap = ctx.ui.h('div', 'coo-filter-lora coo-dd');
+    const loraFilterBtn = document.createElement('button');
+    loraFilterBtn.type = 'button';
+    loraFilterBtn.className = 'coo-dd-trigger';
+    loraFilterBtn.setAttribute('aria-haspopup', 'listbox');
+    loraFilterBtn.setAttribute('aria-expanded', 'false');
+    loraFilterBtn.setAttribute('aria-label', t('LoRA 筛选','Filter by LoRA'));
+    const loraBtnLabel = ctx.ui.h('span', 'coo-dd-value', t('全部 LoRA','All LoRAs'));
+    loraFilterBtn.append(loraBtnLabel, createCaretIcon());
+    const loraFilterPanel = ctx.ui.h('div', 'coo-lora-dropdown-panel');
+    loraFilterPanel.hidden = true;
+    loraFilterWrap.append(loraFilterBtn, loraFilterPanel);
+
+    // 排序：两个自定义下拉 + label
+    const sortLabel = ctx.ui.h('span', 'coo-filter-sort-label', t('排序:','Sort:'));
+    const sortElement = createDropdown({
+      className: 'coo-filter-sort-field',
+      ariaLabel: t('排序字段','Sort field'),
+      options: [
+        { value: 'time', label: t('时间','Time') },
+        { value: 'size', label: t('尺寸','Size') },
+        { value: 'filename', label: t('文件名','Filename') },
+      ],
+      value: 'time',
+      onChange: () => renderGallery(),
+    });
+    const sortDir = createDropdown({
+      className: 'coo-filter-sort-dir',
+      ariaLabel: t('排序方向','Sort direction'),
+      options: [
+        { value: 'desc', label: t('降序','Desc') },
+        { value: 'asc', label: t('升序','Asc') },
+      ],
+      value: 'desc',
+      onChange: () => renderGallery(),
+    });
+    const sortWrap = ctx.ui.h('div', 'coo-filter-sort');
+    sortWrap.append(sortLabel, sortElement.el, sortDir.el);
+
+    const clearBtn = ctx.ui.button(t('清除筛选','Clear'), { size: 'sm', variant: 'plain' });
+    clearBtn.classList.add('coo-filter-clear');
+    clearBtn.style.display = 'none';
+
+    row2.append(modelDD.el, loraFilterWrap, sortWrap, clearBtn);
     left.append(filters);
 
-    // 填充模型下拉 - 统一为 filter-dropdown-select 自定义面板（默认收起，不自动展开）
-    closeAllDropdowns = (): void => {
-      modelFilterPanel.style.display='none'; loraFilterPanel.style.display='none';
-      modelDD.btn.classList.remove('active'); loraDD.btn.classList.remove('active');
-      // 同步关闭日期选择器
-      try {
-        const dpClose = (dateWrap as any)._close as (()=>void) | undefined;
-        if (dpClose) dpClose();
-      } catch {}
-      activeDropdownId = null;
-    };
-    const toggleDropdown = (id: string, panel: HTMLElement, btn: HTMLElement, onOpen: ()=>void): void => {
-      if (activeDropdownId === id) { closeAllDropdowns(); return; }
-      closeAllDropdowns();
-      activeDropdownId = id;
-      onOpen();
-      panel.style.display='flex';
-      btn.classList.add('active');
-    };
+    // 填充模型下拉（保留当前选中值）
     const refreshModelOptions = (): void => {
       const models = [...new Set(allHistory.map(h=>h.checkpoint).filter(Boolean))].sort();
-      const isOpen = modelFilterPanel.style.display !== 'none' && modelFilterPanel.style.display !== '';
-      modelFilterPanel.replaceChildren();
-      const listWrap = ctx.ui.h('div',''); listWrap.style.flex='1'; listWrap.style.overflowY='auto'; listWrap.style.maxHeight='220px';
-      modelFilterPanel.append(listWrap);
-      const makeRow = (value:string, label:string, isSelected:boolean): HTMLElement => {
-        const row = ctx.ui.h('div','item'); row.style.display='flex'; row.style.alignItems='center'; row.style.padding='6px 12px'; row.style.height='32px'; row.style.cursor='pointer'; row.style.gap='8px';
-        if (isSelected) row.style.background='rgba(16,185,129,.08)';
-        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = isSelected && value!=='' ? true : (value==='' && !modelFilterValue); chk.style.flexShrink='0';
-        const lab = ctx.ui.h('span','', label); lab.title=value || label; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap'; lab.style.fontSize='13px';
-        row.append(chk, lab);
-        row.addEventListener('click', ()=>{ modelFilterValue = value; modelBtnLabel.textContent = label; closeAllDropdowns(); renderGallery(); });
-        return row;
-      };
-      listWrap.append(makeRow('', t('全部模型','All models'), !modelFilterValue));
-      for (const m of models) { listWrap.append(makeRow(m, stripExt(m), modelFilterValue===m)); }
-      if (!modelFilterValue) modelBtnLabel.textContent = t('全部模型','All models');
-      else {
-        const found = models.find(m=>m===modelFilterValue);
-        modelBtnLabel.textContent = found ? stripExt(found) : modelFilterValue;
-      }
-      if (!isOpen) modelFilterPanel.style.display='none';
+      modelDD.setOptions([
+        { value: '', label: t('全部模型','All models') },
+        ...models.map((m) => ({ value: m, label: stripExt(m) })),
+      ]);
     };
-    // 初始渲染不展开
-    refreshModelOptions(); modelFilterPanel.style.display='none';
-    // 暴露给外部调用的 modelFilterSelected 兼容
-    (modelSelect as any).value = modelFilterValue;
-    Object.defineProperty(modelSelect, 'value', {
-      get: () => modelFilterValue,
-      set: (v:string) => { modelFilterValue = v; if (v) modelBtnLabel.textContent = stripExt(v); else modelBtnLabel.textContent = t('全部模型','All models'); },
-    });
+    refreshModelOptions();
 
     // LoRA 筛选选项
     const allLorasInLib = (): Array<{ path:string; name:string }> => {
@@ -1330,72 +1075,119 @@ const worksPanel: WebUiPanel = {
       if (!map.size && boot.loras) for (const l of boot.loras) if (!map.has(l.path)) map.set(l.path, stripExt(l.name));
       return [...map.entries()].map(([path,name])=>({ path, name })).sort((a,b)=> a.name.localeCompare(b.name));
     };
+    const updateLoraBtn = (): void => {
+      loraBtnLabel.textContent = loraFilterSelected.size
+        ? t(`${loraFilterSelected.size} 个 LoRA`, `${loraFilterSelected.size} LoRAs`)
+        : t('全部 LoRA','All LoRAs');
+      loraBtnLabel.classList.toggle('is-placeholder', !loraFilterSelected.size);
+    };
     const refreshLoraFilterOptions = (): void => {
       const list = allLorasInLib();
-      const wasOpen = loraFilterPanel.style.display !== 'none' && loraFilterPanel.style.display !== '';
       loraFilterPanel.replaceChildren();
-      // 顶部搜索
-      const searchWrap = ctx.ui.h('div',''); searchWrap.style.padding='8px'; searchWrap.style.borderBottom='1px solid #e5e7eb'; searchWrap.style.flexShrink='0';
-      const searchBox = ctx.ui.input({ type:'search', placeholder: t('搜索...','Search...') }) as HTMLInputElement; searchBox.style.width='100%'; searchBox.style.height='28px'; searchBox.style.fontSize='12px';
-      searchWrap.append(searchBox); loraFilterPanel.append(searchWrap);
-      // 列表容器
-      const listWrap = ctx.ui.h('div',''); listWrap.style.flex='1'; listWrap.style.overflowY='auto'; listWrap.style.maxHeight='220px';
-      loraFilterPanel.append(listWrap);
+      // 内部搜索框：比外部触发器更轻量（32px / 13px / 单像素 focus 环）
+      const searchWrapInner = ctx.ui.h('div', 'lora-dropdown-search-wrapper');
+      const searchBox = document.createElement('input');
+      searchBox.type = 'search';
+      searchBox.className = 'lora-dropdown-search-input';
+      searchBox.placeholder = t('搜索 LoRA...','Search LoRA...');
+      searchWrapInner.append(searchBox);
+      // ul/li 列表
+      const listWrap = document.createElement('ul');
+      listWrap.className = 'coo-dd-list coo-lora-list';
+      listWrap.setAttribute('role', 'listbox');
+      listWrap.setAttribute('aria-multiselectable', 'true');
+      const actions = ctx.ui.h('div', 'lora-dropdown-actions');
+      const clear = document.createElement('button');
+      clear.type = 'button'; clear.className = 'btn-action default'; clear.textContent = t('清空','Clear');
+      clear.addEventListener('click', () => {
+        loraFilterSelected.clear();
+        renderList(searchBox.value);
+        updateLoraBtn();
+        renderGallery();
+      });
+      const ok = document.createElement('button');
+      ok.type = 'button'; ok.className = 'btn-action primary'; ok.textContent = t('确定','Confirm');
+      ok.addEventListener('click', () => closeLora());
+      actions.append(clear, ok);
+      loraFilterPanel.append(searchWrapInner, listWrap, actions);
+
       const renderList = (filterText: string): void => {
         listWrap.replaceChildren();
-        // 第一项 全部
-        const allRow = ctx.ui.h('div','item'); allRow.style.display='flex'; allRow.style.alignItems='center'; allRow.style.padding='6px 12px'; allRow.style.cursor='pointer'; allRow.style.height='32px';
-        const allChk = document.createElement('input'); allChk.type='checkbox'; allChk.checked = !loraFilterSelected.size; allChk.style.marginRight='8px';
-        const allLab = ctx.ui.h('span','', t('全部','All')); allLab.style.flex='1';
+        const allRow = document.createElement('li');
+        allRow.className = 'coo-dd-option';
+        allRow.tabIndex = -1;
+        const allChk = document.createElement('input');
+        allChk.type = 'checkbox'; allChk.checked = !loraFilterSelected.size; allChk.tabIndex = -1;
+        const allLab = ctx.ui.h('span', 'coo-dd-option-label', t('全部','All'));
         allRow.append(allChk, allLab);
-        allRow.addEventListener('click', ()=>{ loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; renderGallery(); });
+        allRow.addEventListener('click', () => {
+          loraFilterSelected.clear();
+          updateLoraBtn();
+          closeLora();
+          renderGallery();
+        });
         listWrap.append(allRow);
+
         const q = filterText.trim().toLowerCase();
         for (const item of list) {
           if (q && !item.name.toLowerCase().includes(q) && !item.path.toLowerCase().includes(q)) continue;
-          const row = ctx.ui.h('div','item'); row.style.display='flex'; row.style.alignItems='center'; row.style.padding='6px 12px'; row.style.height='32px'; row.style.gap='8px';
-          const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = loraFilterSelected.has(item.path); chk.style.flexShrink='0';
-          chk.addEventListener('change', ()=>{ if (chk.checked) loraFilterSelected.add(item.path); else loraFilterSelected.delete(item.path); updateLoraBtn(); renderGallery(); });
-          const lab = ctx.ui.h('span','', item.name); lab.title=item.path; lab.style.flex='1'; lab.style.overflow='hidden'; lab.style.textOverflow='ellipsis'; lab.style.whiteSpace='nowrap'; lab.style.fontSize='13px';
-          row.append(chk, lab); listWrap.append(row);
+          const row = document.createElement('li');
+          row.className = 'coo-dd-option';
+          row.tabIndex = -1;
+          row.title = item.path;
+          const chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.checked = loraFilterSelected.has(item.path);
+          chk.tabIndex = -1;
+          const lab = ctx.ui.h('span', 'coo-dd-option-label', item.name);
+          row.append(chk, lab);
+          row.addEventListener('click', (event) => {
+            if (event.target !== chk) chk.checked = !chk.checked;
+            if (chk.checked) loraFilterSelected.add(item.path);
+            else loraFilterSelected.delete(item.path);
+            updateLoraBtn();
+            renderGallery();
+          });
+          listWrap.append(row);
         }
-        if (!listWrap.children.length) listWrap.append(ctx.ui.msgline(t('暂无','Empty'), false));
+        if (!list.length) listWrap.append(ctx.ui.msgline(t('暂无','Empty'), false));
       };
       renderList('');
-      searchBox.addEventListener('input', ()=> renderList(searchBox.value));
-      // 底部操作栏
-      const actions = ctx.ui.h('div',''); actions.style.display='flex'; actions.style.gap='6px'; actions.style.justifyContent='flex-end'; actions.style.padding='8px'; actions.style.borderTop='1px solid #e5e7eb'; actions.style.flexShrink='0';
-      const clear = ctx.ui.button(t('清空','Clear'), { size:'sm' }); clear.addEventListener('click', ()=>{ loraFilterSelected.clear(); listWrap.querySelectorAll('input[type="checkbox"]').forEach((c:any)=> c.checked=false); updateLoraBtn(); renderGallery(); });
-      const ok = ctx.ui.button(t('确定','Confirm'), { size:'sm', variant:'primary' }); ok.addEventListener('click', ()=> closeAllDropdowns());
-      actions.append(clear, ok); loraFilterPanel.append(actions);
-      if (!wasOpen) loraFilterPanel.style.display='none';
+      searchBox.addEventListener('input', () => renderList(searchBox.value));
+      updateLoraBtn();
     };
-    const updateLoraBtn = (): void => {
-      if (!loraFilterSelected.size) loraBtnLabel.textContent = t('全部 LoRA','All LoRAs');
-      else loraBtnLabel.textContent = t(`已选${loraFilterSelected.size}个`, `${loraFilterSelected.size} selected`);
+    const closeLora = (): void => {
+      loraFilterPanel.hidden = true;
+      loraFilterBtn.setAttribute('aria-expanded', 'false');
+      loraFilterWrap.classList.remove('is-open');
+      closePopover(closeLora);
+      document.removeEventListener('mousedown', onLoraOutside, true);
     };
-    loraFilterBtn.addEventListener('click', ()=> toggleDropdown('lora', loraFilterPanel, loraDD.btn, refreshLoraFilterOptions));
-    modelBtn.addEventListener('click', ()=> toggleDropdown('model', modelFilterPanel, modelDD.btn, refreshModelOptions));
-    // 全局 Click-away / Esc / 滚动 关闭
-    document.addEventListener('click', (e)=>{
-      const target = e.target as Node;
-      if (!(loraDD.wrap.contains(target) || modelDD.wrap.contains(target) || dateWrap.contains(target))) {
-        closeAllDropdowns();
-      }
+    function onLoraOutside(event: MouseEvent): void {
+      if (!loraFilterWrap.contains(event.target as Node)) closeLora();
+    }
+    loraFilterBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!loraFilterPanel.hidden) { closeLora(); return; }
+      openPopover(closeLora);
+      refreshLoraFilterOptions();
+      loraFilterPanel.hidden = false;
+      loraFilterBtn.setAttribute('aria-expanded', 'true');
+      loraFilterWrap.classList.add('is-open');
+      document.addEventListener('mousedown', onLoraOutside, true);
     });
-    document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeAllDropdowns(); });
-    window.addEventListener('scroll', ()=>{ if (activeDropdownId) closeAllDropdowns(); }, true);
-    // 初始闭合
-    refreshLoraFilterOptions(); loraFilterPanel.style.display='none';
-
-    // 统计行（筛选区下方、画廊上方）- 共X张 | 筛选出X/共Z + [批量模式] indigo 32px
+    loraFilterPanel.addEventListener('mousedown', (event) => event.stopPropagation());
+    updateLoraBtn();
+    // 统计行（筛选区下方、画廊上方）- 共X张 | 筛选出X/共Z + [批量模式] outline 32px
     const statsRow = ctx.ui.h('div','coo-works-stats');
     const statsText = ctx.ui.h('span','', '');
     const statsActions = ctx.ui.h('div','coo-batch-bar');
-    const batchToggle = document.createElement('button'); batchToggle.className='batch-toggle idle';
-    const batchIcon = ctx.ui.h('span','', '☑'); batchIcon.style.fontSize='14px';
-    const batchLabel = ctx.ui.h('span','', t('[批量模式]','[Batch]'));
-    batchToggle.append(batchIcon, batchLabel);
+    const batchToggle = document.createElement('button');
+    batchToggle.type = 'button';
+    batchToggle.className = 'btn-batch-mode';
+    const batchToggleIcon = svgIcon('checkbox', 14);
+    const batchToggleLabel = ctx.ui.h('span','', t('批量模式','Batch'));
+    batchToggle.append(batchToggleIcon, batchToggleLabel);
     statsActions.append(batchToggle);
     statsRow.append(statsText, statsActions);
     left.append(statsRow);
@@ -1483,12 +1275,11 @@ const worksPanel: WebUiPanel = {
     fieldBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fieldPanel.style.display = fieldPanel.style.display==='none' ? 'block' : 'none'; });
     document.addEventListener('click', (e)=>{ if (!metaHead.contains(e.target as Node)) fieldPanel.style.display='none'; });
 
-    // 操作卡片（分组）
+    // 操作卡片：统一 flex 换行网格 + 标准按钮（.operations-panel / .btn-action）
     const opsCard = ctx.ui.h('div','coo-meta-card');
     const opsTitle = ctx.ui.h('div','coo-meta-title', t('操作','Actions'));
-    opsCard.append(opsTitle);
-    const opsGroups = ctx.ui.h('div','coo-ops-groups');
-    opsCard.append(opsGroups);
+    const opsPanel = ctx.ui.h('div','operations-panel');
+    opsCard.append(opsTitle, opsPanel);
     right.append(metaCard, opsCard);
 
     // 批量操作栏（替代详情）- 已选3张 [全选][反选] [批量删除][批量导出] sticky
@@ -1628,51 +1419,67 @@ const worksPanel: WebUiPanel = {
       metaGrid.replaceChildren(...ordered);
     };
 
+    /** 统一按钮工厂：图标 + 文本，图标不随文案更新丢失。 */
+    const opButton = (label: string, variant: 'primary' | 'default' | 'danger', icon: string): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `btn-action ${variant}`;
+      const text = document.createElement('span');
+      text.textContent = label;
+      button.append(svgIcon(icon, 14), text);
+      (button as unknown as { _label: HTMLElement })._label = text;
+      return button;
+    };
+
     const buildOps = (entry: HistoryEntry | null): void => {
-      opsGroups.replaceChildren();
-      if (!entry) { opsGroups.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
-      const g1 = ctx.ui.h('div','coo-ops-group');
-      const redraw = ctx.ui.button(t('重画','Repaint'), { size:'sm', variant:'primary' });
-      redraw.style.background='#2ecc71'; redraw.style.borderColor='#2ecc71'; redraw.style.color='#fff';
+      opsPanel.replaceChildren();
+      if (!entry) { opsPanel.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
+
+      const redraw = opButton(t('重画','Repaint'), 'primary', 'refresh');
       redraw.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'sameSeed' };
         ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail: 'studio', bubbles: true })); const m = ctx as unknown as { switchTab?: (v:string)=>void }; if (m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，将用相同参数重画','Switched to Studio; repaint with same seed'));
       });
-      const tweak = ctx.ui.button(t('微调','Tweak'), { size:'sm'});
+      const tweak = opButton(t('微调','Tweak'), 'default', 'sliders');
       tweak.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'randomSeed' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，种子将随机','Switched to Studio; seed randomized'));
       });
-      const useAll = ctx.ui.button(t('使用全部参数','Use all params'), { size:'sm'});
+      const useAll = opButton(t('使用全部参数','Use all params'), 'default', 'layers');
       useAll.addEventListener('click', ()=>{
         (window as any).__coo_draw_repaint = { entry, mode: 'useAll' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab',{detail:'studio',bubbles:true})); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('参数已回填到出图页','Params filled to Studio'));
       });
-      g1.append(redraw, tweak, useAll);
 
-      const g2 = ctx.ui.h('div','coo-ops-group');
       const copySeed = ctx.ui.copyButton(()=>String(entry.seed), { label: t('复制种子','Copy seed'), size:'sm' });
-      const toPet = ctx.ui.button(t('发送到桌宠','Send to pet'), { size:'sm'});
+      copySeed.classList.add('btn-action', 'default');
+      copySeed.prepend(svgIcon('copy', 14));
+
+      const toPet = opButton(t('发送到桌宠','Send to pet'), 'default', 'send');
       toPet.addEventListener('click', ()=>{ void ctx.invoke('sendToPet', [entry.id]).then(res=>ctx.ui.toast((res as any).message, (res as any).ok?'ok':'bad')).catch(e=>ctx.ui.toast(errText(e),'bad')); });
-      g2.append(copySeed, toPet);
 
-      const g3 = ctx.ui.h('div','coo-ops-group');
-      const compare = ctx.ui.button(t('对比','Compare'), { size:'sm'});
+      const compare = opButton(t('对比','Compare'), 'default', 'compare');
       compare.addEventListener('click', ()=>{ enterCompare(entry); });
-      const openFolder = ctx.ui.button(t('打开文件夹','Open folder'), { size:'sm'});
-      openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
-      g3.append(compare, openFolder);
 
-      const g4 = ctx.ui.h('div','coo-ops-group');
-      const fav = ctx.ui.button(t('收藏','Favorite'), { size:'sm'});
-      fav.addEventListener('click', ()=>{ ctx.ui.toast(t('已收藏（本地标记）','Favorited')); fav.textContent='★ '+t('已收藏','Favorited'); });
-      const del = ctx.ui.button(t('删除','Delete'), { size:'sm', variant:'plain'});
-      del.classList.add('btn-danger'); del.style.color='#e74c3c';
+      const openFolder = opButton(t('打开文件夹','Open folder'), 'default', 'folder');
+      openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
+
+      const fav = opButton(t('收藏','Favorite'), 'default', 'star');
+      fav.setAttribute('aria-pressed', 'false');
+      fav.addEventListener('click', ()=>{
+        const badge = (fav as unknown as { _label: HTMLElement })._label;
+        const on = fav.getAttribute('aria-pressed') === 'true';
+        fav.setAttribute('aria-pressed', String(!on));
+        fav.classList.toggle('is-active', !on);
+        badge.textContent = on ? t('收藏','Favorite') : t('已收藏','Favorited');
+        ctx.ui.toast(on ? t('已取消收藏（本地标记）','Unfavorited') : t('已收藏（本地标记）','Favorited'));
+      });
+
+      const del = opButton(t('删除','Delete'), 'danger', 'trash');
       del.addEventListener('click', async ()=>{
         const ok=await ctx.ui.confirm({ title: t('删除这张？','Delete this?'), body: t('确定删除这张作品吗？此操作不可恢复。','Delete this picture? This cannot be undone.'), danger:true }); if(!ok) return;
         allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; if (activeEntry?.id===entry.id) { activeEntry=allHistory[0]??null; if (activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } } renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
       });
-      g4.append(fav, del);
 
-      opsGroups.append(g1,g2,g3,g4);
+      opsPanel.append(redraw, tweak, useAll, copySeed, toPet, compare, openFolder, fav, del);
     };
 
     const enterCompare = (a: HistoryEntry): void => {
@@ -1697,8 +1504,9 @@ const worksPanel: WebUiPanel = {
       const promptB = ctx.ui.h('div','', b.positive.slice(0,120)+(b.positive.length>120?'…':'')); promptB.style.fontSize='12px'; promptB.style.lineHeight='1.5';
       paneA.append(imgA, infoA, promptA); paneB.append(imgB, infoB, promptB); wrap.append(paneA, paneB);
       const closeBtn = ctx.ui.button(t('关闭对比','Close'), { size:'sm' }); closeBtn.addEventListener('click', exitCompare);
+      closeBtn.classList.add('btn-action', 'default');
       metaGrid.append(wrap, closeBtn);
-      opsGroups.replaceChildren(closeBtn);
+      opsPanel.replaceChildren(closeBtn);
       // 加载图片
       try { const blob=await ctx.invokeBinary('image', [a.id]); const url=URL.createObjectURL(blob); imageUrls.push(url); imgA.src=url; } catch {}
       try { const blob=await ctx.invokeBinary('image', [b.id]); const url=URL.createObjectURL(blob); imageUrls.push(url); imgB.src=url; } catch {}
@@ -1717,17 +1525,13 @@ const worksPanel: WebUiPanel = {
         const url = URL.createObjectURL(blob);
         const oldUrl = activePreviewUrl;
         activePreviewUrl = url;
-        // 预加载后 150ms 淡入：旧图保留，新图从透明度0渐显
+        // 预加载
         previewNext.src = url; previewNext.style.display='block'; previewNext.style.opacity='0';
         await new Promise<void>((res, rej)=>{ previewNext.onload=()=>res(); previewNext.onerror=()=>rej(new Error('load failed')); setTimeout(()=>res(), 2000); });
         if (!alive) return;
-        // 触发过渡
-        void previewNext.getBoundingClientRect();
-        previewNext.style.opacity='1';
-        await new Promise<void>(res=> setTimeout(res, 160));
-        if (!alive) return;
         preview.src = url;
-        previewNext.style.display='none'; previewNext.style.opacity='0';
+        previewNext.style.display='none';
+        preview.style.opacity='1';
         previewWrap.classList.remove('is-loading');
         if (oldUrl) setTimeout(()=> URL.revokeObjectURL(oldUrl), 500);
       } catch(e){
@@ -1742,9 +1546,12 @@ const worksPanel: WebUiPanel = {
 
     const filtered = (): HistoryEntry[] => {
       const q = searchInput.value.trim().toLowerCase();
-      const from = dateFrom.value ? new Date(dateFrom.value).getTime() : 0;
-      const to = dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : Infinity;
-      const model = modelFilterValue;
+      const range = datePicker.getRange();
+      const fromDay = range.from ? parseDate(range.from) : null;
+      const toDay = range.to ? parseDate(range.to) : null;
+      const from = fromDay ? dayStartValue(fromDay) : 0;
+      const to = toDay ? dayEndExclusiveValue(toDay) : Infinity;
+      const model = modelDD.getValue();
       let list = allHistory.filter(h=>{
         if (q && !(`${h.positive} ${h.negative} ${String(h.seed)} ${h.filename}`.toLowerCase().includes(q))) return false;
         if (h.created_at < from || h.created_at > to) return false;
@@ -1753,8 +1560,8 @@ const worksPanel: WebUiPanel = {
         return true;
       });
       // 排序 - 元素 + 方向组合
-      const elem = sortElement.value;
-      const dir = sortDir.value;
+      const elem = sortElement.getValue();
+      const dir = sortDir.getValue();
       const mul = dir==='asc' ? 1 : -1;
       if (elem==='time') list = [...list].sort((a,b)=> (a.created_at - b.created_at)*mul);
       else if (elem==='size') list = [...list].sort((a,b)=> ((a.width*a.height) - (b.width*b.height))*mul);
@@ -1764,57 +1571,33 @@ const worksPanel: WebUiPanel = {
       return list;
     };
 
+    const clearFilters = (): void => {
+      searchInput.value = '';
+      datePicker.clear();
+      modelDD.setValue('');
+      sortElement.setValue('time');
+      sortDir.setValue('desc');
+      loraFilterSelected.clear();
+      updateLoraBtn();
+      closeLora();
+      renderGallery();
+    };
+
     const renderGallery = (): void => {
       const list = filtered();
       const total = allHistory.length;
-      // 差量更新：stable key=id，仅头部插入/删除，避免全量重排闪烁
-      const curIds = list.map(e=>e.id);
-      const prevIds = ((grid as any)._prevIds as string[] | undefined) ?? [];
-      if (prevIds.length && curIds.length && curIds.join(',')===prevIds.join(',')) {
+      // 差量更新：若ID完全一致则不重排DOM（避免闪烁）
+      const curIds = list.map(e=>e.id).join(',');
+      const prevIds = (grid as any)._prevIds as string | undefined;
+      if (prevIds === curIds && total) {
+        // 仅更新选中态
         for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) {
           const id = (el as HTMLElement).dataset.id!;
           (el as HTMLElement).classList.toggle('sel', id===activeEntry?.id || id===compareA?.id || id===compareB?.id);
         }
         return;
       }
-      // 增量：计算新增头部
-      const prevSet = new Set(prevIds);
-      const newHead = curIds.filter(id=> !prevSet.has(id));
-      const removed = prevIds.filter(id=> !curIds.includes(id));
       (grid as any)._prevIds = curIds;
-      if (prevIds.length && newHead.length && newHead.length < 10 && !removed.length) {
-        // 仅插入头部新图
-        // 更新统计
-        if (!total) {
-          statsText.textContent = t('共 0 张','0 pictures');
-        } else if (list.length===total) {
-          statsText.textContent = t(`共 ${total} 张`, `${total} pictures`);
-        } else {
-          statsText.textContent = t(`共 ${total} 张 | 筛选出 ${list.length} 张 / 共 ${total} 张`, `${total} | ${list.length} / ${total} pictures`);
-        }
-        const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelFilterValue || loraFilterSelected.size>0;
-        clearBtn.style.display = hasFilter ? '' : 'none';
-        // 构建新 tiles 并前插
-        for (let idx = newHead.length-1; idx>=0; idx--) {
-          const nid = newHead[idx]!;
-          const entry = list.find(e=>e.id===nid)!;
-          const tile = document.createElement('button'); tile.className='coo-works-tile'; (tile as HTMLButtonElement).type='button'; (tile as HTMLElement).dataset.id = entry.id;
-          if (activeEntry?.id===entry.id || (compareA && compareA.id===entry.id) || (compareB && compareB.id===entry.id)) tile.classList.add('sel');
-          const img = document.createElement('img'); img.alt = entry.filename; (img as HTMLImageElement).loading='lazy'; (img as any).dataset.id = entry.id;
-          const cached = thumbCache.get(entry.id); if (cached) img.src=cached; else { void ctx.invokeBinary('image', [entry.id]).then(blob=>{ if (!alive) return; const url=URL.createObjectURL(blob); thumbCache.set(entry.id, url); img.src=url; }).catch(()=>{ img.alt='×'; }); }
-          const label = document.createElement('span'); label.className='lab'; label.textContent = `${entry.width}×${entry.height}`;
-          tile.title = `${entry.filename}\n${t('种子','Seed')}: ${entry.seed}`;
-          tile.append(img, label);
-          tile.addEventListener('click', ()=> void showDetail(entry));
-          grid.prepend(tile);
-        }
-        // 更新选中态
-        for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) {
-          const id = (el as HTMLElement).dataset.id!;
-          (el as HTMLElement).classList.toggle('sel', id===activeEntry?.id || id===compareA?.id || id===compareB?.id);
-        }
-        dispatchUnread(); return;
-      }
       // 统计行
       if (!total) {
         statsText.textContent = t('共 0 张','0 pictures');
@@ -1824,7 +1607,8 @@ const worksPanel: WebUiPanel = {
         statsText.textContent = t(`共 ${total} 张 | 筛选出 ${list.length} 张 / 共 ${total} 张`, `${total} | ${list.length} / ${total} pictures`);
       }
       // 清除筛选按钮显隐
-      const hasFilter = !!searchInput.value.trim() || !!dateFrom.value || !!dateTo.value || !!modelFilterValue || loraFilterSelected.size>0;
+      const currentRange = datePicker.getRange();
+      const hasFilter = !!searchInput.value.trim() || !!currentRange.from || !!currentRange.to || !!modelDD.getValue() || loraFilterSelected.size>0;
       clearBtn.style.display = hasFilter ? '' : 'none';
 
       grid.replaceChildren();
@@ -1845,7 +1629,7 @@ const worksPanel: WebUiPanel = {
         emptyTitle.textContent = t('没有匹配的作品','No matches');
         emptySub.textContent = t('试试调整筛选条件','Try adjusting filters');
         emptyAction.replaceChildren();
-        const c = ctx.ui.button(t('清除筛选','Clear'), { size:'sm' }); c.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelFilterValue=''; modelBtnLabel.textContent=t('全部模型','All models'); loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; modelFilterPanel.style.display='none'; sortElement.value='time'; sortDir.value='desc'; renderGallery(); });
+        const c = ctx.ui.button(t('清除筛选','Clear'), { size:'sm' }); c.addEventListener('click', clearFilters);
         emptyAction.append(c);
         dispatchUnread(); return;
       }
@@ -1885,13 +1669,9 @@ const worksPanel: WebUiPanel = {
       dispatchUnread();
     };
 
-    // 筛选事件 - 规范一三：36px 控件
+    // 筛选事件（下拉/日期控件内部已各自派发 change）
     searchInput.addEventListener('input', renderGallery);
-    dateFrom.addEventListener('change', renderGallery);
-    dateTo.addEventListener('change', renderGallery);
-    sortElement.addEventListener('change', renderGallery);
-    sortDir.addEventListener('change', renderGallery);
-    clearBtn.addEventListener('click', ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; modelFilterValue=''; modelBtnLabel.textContent=t('全部模型','All models'); loraFilterSelected.clear(); updateLoraBtn(); loraFilterPanel.style.display='none'; modelFilterPanel.style.display='none'; sortElement.value='time'; sortDir.value='desc'; renderGallery(); });
+    clearBtn.addEventListener('click', clearFilters);
 
     loadMoreBtn.addEventListener('click', async ()=>{
       pageLimit += 50;
@@ -1900,17 +1680,18 @@ const worksPanel: WebUiPanel = {
       ctx.ui.toast(t(`已加载至 ${allHistory.length} 张`,`Loaded ${allHistory.length}`));
     });
 
-    // 批量模式 - 规范四：Indigo 工具类功能色
+    // 批量模式：切换 .is-active（靛紫描边/淡紫底由主题变量控制），并关闭所有弹层
     batchToggle.addEventListener('click', ()=>{
       batchMode=!batchMode;
+      closeAllPopovers();
+      batchToggle.classList.toggle('is-active', batchMode);
+      batchToggleIcon.innerHTML = batchMode ? '<path d="M20 6L9 17l-5-5"/>' : '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/>';
+      batchToggleLabel.textContent = batchMode ? t('退出批量模式','Exit batch') : t('批量模式','Batch');
+      batchToggle.setAttribute('aria-pressed', String(batchMode));
       if (batchMode) {
-        batchToggle.className='batch-toggle active';
-        batchIcon.textContent='✓'; batchLabel.textContent=t('退出批量模式','Exit batch');
         batchBar.style.display='flex'; previewWrap.style.display='none'; metaCard.style.display='none'; opsCard.style.display='none';
         batchCount.textContent = t('已选 0 张','0 selected');
       } else {
-        batchToggle.className='batch-toggle idle';
-        batchIcon.textContent='☑'; batchLabel.textContent=t('批量模式','Batch');
         batchBar.style.display='none'; metaCard.style.display=''; opsCard.style.display='';
         selected.clear();
         if (activeEntry) { previewWrap.style.display='block'; void showDetail(activeEntry); } else { previewWrap.style.display='none'; empty.style.display=''; }

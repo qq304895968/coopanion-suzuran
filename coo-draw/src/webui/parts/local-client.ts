@@ -664,7 +664,7 @@ const studioPanel: WebUiPanel = {
     connTitle.prepend(svgIcon('plug', 16));
     const connBadge = ctx.ui.h('span', 'pill coo-conn-badge', '');
     const dot = ctx.ui.h('span','coo-conn-dot '+(boot.health.ok?'on':'off')); connBadge.append(dot, document.createTextNode(boot.health.ok ? t('在线','Online') : t('离线','Offline')));
-    connBadge.style.background = boot.health.ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
+    connBadge.style.background = boot.health.ok ? 'var(--coo-success-soft)' : 'var(--coo-danger-soft)';
     connHead.append(connTitle, connBadge);
     const connMeta = ctx.ui.h('div', 'coo-conn-fields');
     let editingUrl = false;
@@ -708,7 +708,7 @@ const studioPanel: WebUiPanel = {
     const renderHealth = (health: CooGenBootstrap['health']): void => {
       const ok = health.ok;
       connBadge.replaceChildren(); const d=ctx.ui.h('span','coo-conn-dot '+(ok?'on':'off')); connBadge.append(d, document.createTextNode(ok ? t('在线','Online') : t('离线','Offline')));
-      connBadge.style.background = ok ? 'rgba(60,180,90,.14)' : 'rgba(220,60,60,.12)';
+      connBadge.style.background = ok ? 'var(--coo-success-soft)' : 'var(--coo-danger-soft)';
       healthLine.classList.toggle('bad', !ok);
       healthLine.textContent = ok ? t(`ComfyUI 在线：${health.system ?? health.url}`, `ComfyUI online: ${health.system ?? health.url}`) : t(`ComfyUI 离线：${health.error ?? health.url}`, `ComfyUI offline: ${health.error ?? health.url}`);
       renderConnMeta();
@@ -809,9 +809,8 @@ const studioPanel: WebUiPanel = {
     };
     const afterTask = async (task: GenerateTaskView): Promise<void> => {
       if (task.id === lastFinished) return; lastFinished = task.id; shared.lastFinished = lastFinished;
-      if (task.status==='done') { await refreshHistory(); const ent = history.find(h=> h.id===task.images[0]?.id); if (ent) { shared.resultEntry = ent; } say(t('画好了，已经保存。','Done and saved.')); ctx.ui.toast(t('画好了','Done')); // 自动在右栏显示预览已在 renderTask 处理
-      } else if (task.status==='error') { say(task.error ?? t('出图失败','Generation failed'), true); ctx.ui.toast(t('出图失败','Generation failed'),'bad'); }
-      else if (task.status==='cancelled') say(t('已取消。','Cancelled.'));
+      if (task.status==='done') { await refreshHistory(); const ent = history.find(h=> h.id===task.images[0]?.id); if (ent) { shared.resultEntry = ent; } ctx.ui.toast(t('画好了','Done')); 
+      } else if (task.status==='error') { ctx.ui.toast(task.error ?? t('出图失败','Generation failed'), 'bad'); }
     };
     const poll = async (): Promise<void> => {
       if (!current || !isActive(current)) return;

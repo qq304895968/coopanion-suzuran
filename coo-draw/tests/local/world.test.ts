@@ -341,4 +341,49 @@ describe('CooGenWorld', () => {
     });
     await world2.stop();
   });
+
+  it('作品页发送到桌宠时同步触发头顶气泡弹图与 coogen.shared 观看动作及感想事件', async () => {
+    const dir = tempDir();
+    dirs.push(dir);
+    const fake = new FakeComfy();
+    fake.historyEntry = {
+      outputs: { '7': { images: [{ filename: 'out_0001.png', type: 'output' }] } },
+      status: { status_str: 'success', completed: true },
+    };
+    const bubbleRequests: string[] = [];
+    const { host, events } = testHost();
+    const world = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'anything_v5.safetensors', popupEnabled: false }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: '铃兰',
+      secret: () => '',
+      clientFactory: () => fake,
+      fetchImpl: (async (input: string | URL | Request) => {
+        bubbleRequests.push(String(input));
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }) as typeof fetch,
+    });
+    await world.start(host);
+
+    const genTool = world.tools().find((t) => t.name === 'coo_gen')!;
+    await genTool.handler({ subject: '海边日落', wait: true }, { role: 'test' } as never);
+
+    const ui = world.webUi('zh');
+    const hist = await ui.invoke!('studio', 'history', [5]) as { history: Array<{ id: string }> };
+    expect(hist.history.length).toBeGreaterThanOrEqual(1);
+
+    const sent = await ui.invoke!('studio', 'sendToPet', [hist.history[0]!.id]) as { ok: boolean; message: string };
+    expect(sent.ok).toBe(true);
+    expect(sent.message).toContain('感想');
+    expect(bubbleRequests.some((u) => u.includes('/api/image-bubble'))).toBe(true);
+
+    const sharedEvent = events.find((e) => e.type === 'coogen.shared');
+    expect(sharedEvent).toBeTruthy();
+    expect(sharedEvent!.text).toContain('pet_act');
+    expect(sharedEvent!.text).toContain('pet_say');
+    expect((sharedEvent as unknown as { blobs?: unknown[] }).blobs?.length).toBe(1);
+    await world.stop();
+  });
 });

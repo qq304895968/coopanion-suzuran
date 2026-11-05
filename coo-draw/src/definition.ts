@@ -97,6 +97,13 @@ export const DRAW: WorldDefinition<DrawConfigSection> = {
           en: 'A local generation task failed (ComfyUI error, timeout or save failure); tells the pet to explain honestly without pretending the picture exists.',
         },
       },
+      {
+        type: 'coogen.shared',
+        description: {
+          zh: '用户在作品页点「发送到桌宠」把一张图递给桌宠看：提醒桌宠先用 pet_act 做看画/欣赏动作，再仔细看附件并用 pet_say 说出感想。',
+          en: 'The user sent a picture from Works to the pet; prompts the pet to perform a watching/appreciating action with pet_act and share its impression with pet_say.',
+        },
+      },
     ],
   },
 };

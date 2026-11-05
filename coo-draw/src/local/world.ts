@@ -1901,8 +1901,47 @@ export class CooGenWorld implements World {
   private async panelSendToPet(id: unknown): Promise<{ ok: boolean; message: string }> {
     const entry = this.outputStore().get(String(id ?? ''));
     if (!entry) return { ok: false, message: '找不到这张图' };
-    const ok = await this.showInPetBubble(entry.path);
-    return { ok, message: ok ? '已发到桌宠气泡。' : '桌宠没开或气泡接口不可用；可以点「打开文件夹」。' };
+    const bubbleOk = await this.showInPetBubble(entry.path);
+    let eventSent = false;
+    if (this.host) {
+      const blobs = this.blobsFor([entry.id]);
+      const promptHint = (entry.note || entry.positive || '').trim().slice(0, 200);
+      const text = [
+        `[coo-gen] 对方刚刚从作品页把一张画发给你看了（文件：${entry.filename}${promptHint ? `，画面提示：${promptHint}` : ''}）。`,
+        bubbleOk ? '这张图已经飘在你的头顶气泡里，事件附件里也附上了原图。' : '事件附件里附上了这张原图。',
+        '现在请立刻：1）先调用 pet_act 做一个凑近看画、认真端详或开心欣赏的动作；2）仔细观察附件里的画面内容、色彩与氛围，调用 pet_say 自然真诚地说出你对这张画的感想（一两句话即可，可搭配 <thinking> / <happy> / <love> 表情标签，不要机械念参数，也不要在正文里贴句柄）。',
+      ].join('\n');
+      try {
+        await this.host.pushEvent({
+          type: 'coogen.shared',
+          ts: nowIso(this.opts.timezone),
+          source: this.id,
+          origin: 'internal',
+          senderKey: this.id,
+          text,
+          meta: {
+            image_id: entry.id,
+            filename: entry.filename,
+            prompt: entry.positive,
+            bubble: bubbleOk,
+          },
+          ...(blobs.length ? { blobs } : {}),
+        }, { trigger: 'flush' });
+        eventSent = true;
+      } catch (error) {
+        this.warn('推送 coogen.shared 失败', safeMessage(error));
+      }
+    }
+    if (bubbleOk && eventSent) {
+      return { ok: true, message: '已发给桌宠，桌宠正在看图并准备说出感想。' };
+    }
+    if (eventSent) {
+      return { ok: true, message: '已把画递给桌宠，正在看图并准备说出感想。' };
+    }
+    if (bubbleOk) {
+      return { ok: true, message: '已发到桌宠头顶气泡。' };
+    }
+    return { ok: false, message: '桌宠没开或气泡接口不可用；可以点「打开文件夹」。' };
   }
 
   private async panelListLoras(): Promise<{ loras: LoRARecord[]; defaults: DefaultLoRA[]; aliases: Record<string, string[]>; lora_root: string }> {

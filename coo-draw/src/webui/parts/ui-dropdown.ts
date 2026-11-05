@@ -1,8 +1,9 @@
 /**
- * 作品页的自定义下拉（`button` 触发 + `ul/li` 弹层）。
+ * 画室通用自定义下拉（`button` 触发 + `ul/li` Portal 弹层）。
  *
- * 不使用原生 `<select>`，避免 Windows 下出现亮蓝色系统 Hover 态；
- * 选中/Hover 统一走 `.coo-dd-option:hover` 与 `.is-selected`（浅灰底）。
+ * 严禁使用原生 `<select>`，避免系统原生蓝底；
+ * 弹层挂载到 `document.body`（Portal），不受父容器 overflow 裁切；
+ * Hover 态统一走浅灰 `#F3F4F6`，选中态走主题主色变量。
  */
 import { closePopover, openPopover } from './popover-stack.ts';
 
@@ -18,7 +19,7 @@ export interface DropdownOptions {
   value?: string;
   ariaLabel?: string;
   searchPlaceholder?: string;
-  /** 弹层顶部加搜索框，用于过滤长选项（如采样器）。默认不开启，不影响现有调用。 */
+  /** 弹层顶部加搜索框，用于过滤长选项（如采样器）。默认不开启。 */
   searchable?: boolean;
   onChange?: (value: string, option: DropdownOption | undefined) => void;
 }
@@ -81,7 +82,7 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
 
   const trigger = document.createElement('button');
   trigger.type = 'button';
-  trigger.className = 'coo-dd-trigger';
+  trigger.className = 'coo-dd-trigger coo-dropdown-trigger';
   trigger.setAttribute('aria-haspopup', 'listbox');
   trigger.setAttribute('aria-expanded', 'false');
   if (init.ariaLabel) trigger.setAttribute('aria-label', init.ariaLabel);
@@ -92,12 +93,12 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
   trigger.append(valueEl, caretIcon());
 
   const list = document.createElement('ul');
-  list.className = 'coo-dd-list';
+  list.className = 'coo-dd-list coo-dd-portal';
   list.setAttribute('role', 'listbox');
   list.hidden = true;
   if (init.ariaLabel) list.setAttribute('aria-label', init.ariaLabel);
 
-  root.append(trigger, list);
+  root.append(trigger);
 
   let options: DropdownOption[] = [...(init.options ?? [])];
   let displayOptions = options;
@@ -111,11 +112,12 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
     searchInput.placeholder = init.searchPlaceholder ?? '';
     searchInput.className = 'coo-dd-search';
     searchInput.addEventListener('input', () => {
-      const q = searchInput!.value.toLowerCase();
-      displayOptions = options.filter(
-        (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
-      );
+      const q = searchInput!.value.trim().toLowerCase();
+      displayOptions = q
+        ? options.filter((o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
+        : options;
       renderList();
+      if (open) positionList();
     });
   }
 
@@ -126,7 +128,7 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
     if (searchable && searchInput) {
       const wrap = document.createElement('li');
       wrap.className = 'coo-dd-search-wrap';
-      wrap.append(searchInput!);
+      wrap.append(searchInput);
       list.append(wrap);
     }
     for (const option of displayOptions) {
@@ -155,19 +157,58 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
     valueEl.classList.toggle('is-placeholder', !current);
   };
 
+  const positionList = (): void => {
+    if (!open) return;
+    if (!trigger.isConnected) {
+      close();
+      return;
+    }
+    const doc = trigger.ownerDocument;
+    const win = doc.defaultView;
+    const rect = trigger.getBoundingClientRect();
+    const vw = win?.innerWidth || doc.documentElement.clientWidth || 1200;
+    const vh = win?.innerHeight || doc.documentElement.clientHeight || 800;
+    const minW = Math.max(rect.width, 110);
+    const maxW = Math.max(minW, Math.min(vw - 16, Math.max(rect.width, 360)));
+    const left = Math.max(8, Math.min(rect.left, vw - minW - 8));
+
+    list.style.position = 'fixed';
+    list.style.minWidth = `${minW}px`;
+    list.style.maxWidth = `${maxW}px`;
+    list.style.left = `${left}px`;
+    list.style.zIndex = '1000';
+
+    const maxH = 280;
+    const spaceBelow = vh - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    if (spaceBelow < 180 && spaceAbove > spaceBelow) {
+      list.style.top = 'auto';
+      list.style.bottom = `${Math.max(8, vh - rect.top + 4)}px`;
+      list.style.maxHeight = `${Math.min(maxH, Math.max(100, spaceAbove - 4))}px`;
+    } else {
+      list.style.bottom = 'auto';
+      list.style.top = `${rect.bottom + 4}px`;
+      list.style.maxHeight = `${Math.min(maxH, Math.max(100, spaceBelow - 4))}px`;
+    }
+  };
+
   const moveFocus = (delta: number): void => {
     const items = optionEls();
     if (!items.length) return;
-    const active = document.activeElement as HTMLElement | null;
+    const doc = trigger.ownerDocument;
+    const active = doc.activeElement as HTMLElement | null;
     let index = items.indexOf(active as HTMLLIElement);
     if (index < 0) index = items.findIndex((item) => item.dataset.value === value);
     if (index < 0) index = delta > 0 ? -1 : 0;
     const next = Math.min(items.length - 1, Math.max(0, index + delta));
-    items[next]?.focus();
+    items[next]?.focus({ preventScroll: true });
+    items[next]?.scrollIntoView({ block: 'nearest' });
   };
 
   const onDocumentPointerDown = (event: MouseEvent): void => {
-    if (!root.contains(event.target as Node)) close();
+    const target = event.target as Node | null;
+    if (target && (root.contains(target) || list.contains(target))) return;
+    close();
   };
 
   const onDocumentKeyDown = (event: KeyboardEvent): void => {
@@ -178,35 +219,53 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
     }
   };
 
+  const onDocumentScroll = (event: Event): void => {
+    if (event.target && list.contains(event.target as Node)) return;
+    positionList();
+  };
+
   function close(): void {
     if (!open) return;
     open = false;
+    const doc = trigger.ownerDocument;
     list.hidden = true;
+    list.remove();
     trigger.setAttribute('aria-expanded', 'false');
     root.classList.remove('is-open');
     closePopover(close);
-    document.removeEventListener('mousedown', onDocumentPointerDown, true);
-    document.removeEventListener('keydown', onDocumentKeyDown, true);
+    doc.removeEventListener('mousedown', onDocumentPointerDown, true);
+    doc.removeEventListener('keydown', onDocumentKeyDown, true);
+    doc.removeEventListener('scroll', onDocumentScroll, true);
+    doc.defaultView?.removeEventListener('resize', positionList);
   }
 
   function openList(focusSelected = true): void {
-    if (!options.length) return;
+    if (!options.length || open) return;
+    if (searchable && searchInput) {
+      searchInput.value = '';
+    }
     displayOptions = options;
-    if (open) return;
+    renderList();
+
     open = true;
     openPopover(close);
+    const doc = trigger.ownerDocument;
+    (doc.body ?? root).appendChild(list);
     list.hidden = false;
+    positionList();
     trigger.setAttribute('aria-expanded', 'true');
     root.classList.add('is-open');
-    document.addEventListener('mousedown', onDocumentPointerDown, true);
-    document.addEventListener('keydown', onDocumentKeyDown, true);
-    if (focusSelected) {
+    doc.addEventListener('mousedown', onDocumentPointerDown, true);
+    doc.addEventListener('keydown', onDocumentKeyDown, true);
+    doc.addEventListener('scroll', onDocumentScroll, true);
+    doc.defaultView?.addEventListener('resize', positionList);
+
+    if (searchable && searchInput) {
+      searchInput.focus({ preventScroll: true });
+    } else if (focusSelected) {
       const target = optionEls().find((item) => item.dataset.value === value) ?? optionEls()[0];
-      target?.focus();
+      target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'nearest' });
-    }
-    if (searchable) {
-      searchInput?.focus();
     }
   }
 
@@ -238,14 +297,17 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
   });
 
   list.addEventListener('keydown', (event) => {
+    const inSearch = searchable && event.target === searchInput;
     if (event.key === 'ArrowDown') { event.preventDefault(); moveFocus(1); }
     else if (event.key === 'ArrowUp') { event.preventDefault(); moveFocus(-1); }
-    else if (event.key === 'Home') { event.preventDefault(); optionEls()[0]?.focus(); }
-    else if (event.key === 'End') { event.preventDefault(); optionEls().at(-1)?.focus(); }
-    else if (event.key === 'Enter' || event.key === ' ') {
+    else if (event.key === 'Home' && !inSearch) { event.preventDefault(); optionEls()[0]?.focus(); }
+    else if (event.key === 'End' && !inSearch) { event.preventDefault(); optionEls().at(-1)?.focus(); }
+    else if (event.key === 'Enter' || (event.key === ' ' && !inSearch)) {
       event.preventDefault();
-      const focused = document.activeElement as HTMLElement | null;
-      const option = options.find((item) => item.value === focused?.dataset.value);
+      const doc = trigger.ownerDocument;
+      const focused = doc.activeElement as HTMLElement | null;
+      const option = options.find((item) => item.value === focused?.dataset.value)
+        ?? (inSearch ? displayOptions[0] : undefined);
       if (option) choose(option);
     } else if (event.key === 'Tab') {
       close();
@@ -274,8 +336,13 @@ export function createDropdown(init: DropdownOptions = {}): DropdownHandle {
     setOptions: (next: readonly DropdownOption[]) => {
       options = [...next];
       if (!options.some((option) => option.value === value)) value = options[0]?.value ?? '';
+      const q = searchInput?.value.trim().toLowerCase() ?? '';
+      displayOptions = q
+        ? options.filter((o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
+        : options;
       renderList();
       syncLabel();
+      if (open) positionList();
     },
     close,
     isOpen: () => open,

@@ -1018,26 +1018,33 @@ export class CooGenWorld implements World {
     const preset = this.presets.get(params.workflow ?? this.opts.cfg.defaultWorkflow);
     if (!preset) throw new Error(`工作流不存在：${params.workflow}`);
     const needsCheckpoint = preset.param_mapping.some((mapping) => mapping.param === 'checkpoint');
-    if (needsCheckpoint && !params.checkpoint) {
-      const list = await this.checkpoints();
-      if (list.length) params.checkpoint = list[0]!;
-      else throw new Error('没有选择 checkpoint，而且 ComfyUI 没有返回模型列表');
-    }
-    if (params.checkpoint) {
-      const checkpointList = await this.checkpoints();
-      if (checkpointList.length && !checkpointList.includes(params.checkpoint)) {
-        warnings.push(`ComfyUI 模型列表里没有「${params.checkpoint}」，提交可能失败`);
+    if (!needsCheckpoint) {
+      params.checkpoint = '';
+    } else {
+      if (!params.checkpoint) {
+        const list = await this.checkpoints();
+        if (list.length) params.checkpoint = list[0]!;
+        else throw new Error('没有选择 checkpoint，而且 ComfyUI 没有返回模型列表');
       }
-    }
-    if (this.checkpointWarnings.length) {
-      warnings.push(`这些本地模型还没被 ComfyUI 读取：${this.checkpointWarnings.join('、')}；请点「让 ComfyUI 读取模型目录」并重启 ComfyUI。`);
+      if (params.checkpoint) {
+        const checkpointList = await this.checkpoints();
+        if (checkpointList.length && !checkpointList.includes(params.checkpoint)) {
+          warnings.push(`ComfyUI 模型列表里没有「${params.checkpoint}」，提交可能失败`);
+        }
+      }
+      if (this.checkpointWarnings.length) {
+        warnings.push(`这些本地模型还没被 ComfyUI 读取：${this.checkpointWarnings.join('、')}；请点「让 ComfyUI 读取模型目录」并重启 ComfyUI。`);
+      }
     }
     if (preset.kind === 'img2img' && !params.inputImage) throw new Error('图生图需要输入图');
     if (preset.kind === 'controlnet' && (!params.inputImage || !params.controlImage)) throw new Error('ControlNet 需要输入图和控制图');
     await this.prepareInputImages(preset, params);
     const built = buildForPreset(preset, params, loras.map((lora) => ({ path: lora.path, weight: lora.weight })));
     const withCustom = applyCustomParams(built.workflow, preset.param_mapping, params.custom);
-    warnings.push(...built.warnings);
+    for (const warning of built.warnings) {
+      if (!needsCheckpoint && warning.includes('CheckpointLoader')) continue;
+      warnings.push(warning);
+    }
     const tasks = this.ensureTasks();
     return tasks.submit({
       params,
@@ -1668,6 +1675,7 @@ export class CooGenWorld implements World {
   private panelPresetDetail(id: unknown): { ok: boolean; preset?: Record<string, unknown>; error?: string } {
     const preset = this.presets.get(String(id ?? ''));
     if (!preset) return { ok: false, error: '找不到这个工作流' };
+    const summaryView = this.presets.summaries().find((item) => item.id === preset.id);
     return {
       ok: true,
       preset: {
@@ -1675,8 +1683,9 @@ export class CooGenWorld implements World {
         name: preset.name,
         builtin: preset.builtin,
         kind: preset.kind,
+        needs_checkpoint: summaryView?.needs_checkpoint ?? preset.param_mapping.some((item) => item.param === 'checkpoint'),
         mapping: preset.param_mapping,
-        warnings: preset.warnings ?? [],
+        warnings: summaryView?.warnings ?? preset.warnings ?? [],
       },
     };
   }
@@ -1723,6 +1732,7 @@ export class CooGenWorld implements World {
           name: preset.name,
           builtin: false,
           kind: 'imported',
+          needs_checkpoint: detected.mapping.some((item) => item.param === 'checkpoint'),
           created_at: preset.created_at,
           source: path,
           ...(warnings.length ? { warnings } : {}),

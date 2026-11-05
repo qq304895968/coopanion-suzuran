@@ -502,9 +502,11 @@ function makeBootstrap(checkpoints: string[] = []) {
     ],
     task: null,
     presets: [
-      { id: 'quick-txt2img', name: '快速文生图', builtin: true, kind: 'txt2img', mapping_count: 10 },
-      { id: 'quick-controlnet', name: 'ControlNet', builtin: true, kind: 'controlnet', mapping_count: 12 },
-      { id: 'lora-only', name: '纯 LoRA 流程', builtin: false, kind: 'custom', mapping_count: 4 },
+      { id: 'quick-txt2img', name: '快速文生图', builtin: true, kind: 'txt2img', needs_checkpoint: true, mapping_count: 10 },
+      { id: 'quick-controlnet', name: 'ControlNet', builtin: true, kind: 'controlnet', needs_checkpoint: true, mapping_count: 12 },
+      { id: 'imported-krea2', name: 'Krea2二次元图片（导入）', builtin: false, kind: 'imported', needs_checkpoint: false, mapping_count: 8 },
+      { id: 'imported-sdxl', name: 'SDXL流程（导入）', builtin: false, kind: 'imported', needs_checkpoint: true, mapping_count: 10 },
+      { id: 'lora-only', name: '纯 LoRA 流程', builtin: false, kind: 'custom', needs_checkpoint: false, mapping_count: 4 },
     ],
     workflow: 'quick-txt2img',
   };
@@ -629,6 +631,21 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       cnOpt.click();
       expect(doc.body.querySelector('.coo-dd-portal')).toBeNull();
       expect(localCtx.root.querySelector('.coo-gen-extra')?.textContent).toContain('ControlNet');
+
+      // 再切换到无需 Checkpoint 的导入工作流（如 Krea2），验证提示区显示「当前工作流无需 Checkpoint」且生成按钮可用、提交不带残留 checkpoint
+      ddTrigger.click();
+      doc.body.querySelector('.coo-dd-portal')!.querySelectorAll('.coo-dd-option').find((li) => li.dataset.value === 'imported-krea2')!.click();
+      expect(localCtx.root.textContent).toContain('当前工作流无需 Checkpoint');
+      const genBtn = localCtx.root.querySelector('.coo-action-bar')!.querySelector('.primary')!;
+      expect(genBtn.disabled).toBe(false);
+
+      // 切换到需要 Checkpoint 的导入工作流（imported-sdxl），验证空模型时正确弹出 Checkpoint 警告卡片且禁用生成
+      ddTrigger.click();
+      doc.body.querySelector('.coo-dd-portal')!.querySelectorAll('.coo-dd-option').find((li) => li.dataset.value === 'imported-sdxl')!.click();
+      if (checkpoints.length === 0) {
+        expect(localCtx.root.querySelector('.coo-checkpoint-alert')?.textContent).toContain('当前工作流需要 Checkpoint 模型');
+        expect(genBtn.disabled).toBe(true);
+      }
 
       // 再切换到无需 Checkpoint 的自定义工作流，再切回快速文生图
       ddTrigger.click();

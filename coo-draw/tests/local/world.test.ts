@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CooGenWorld } from '../../src/local/world.ts';
@@ -214,6 +214,54 @@ describe('CooGenWorld', () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     const status = await ui.invoke!('studio', 'status', []) as { task: GenerateTaskView };
     expect(status.task.status).toBe('done');
+    await world.stop();
+  });
+
+  it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
+    const { data, fake, world } = await setup();
+    fake.checkpointNames = [];
+    fake.makeDone(['krea.png']);
+    const kreaPath = join(data, 'krea2.json');
+    writeJson(kreaPath, {
+      '10': { class_type: 'UNETLoader', inputs: { unet_name: 'krea2.safetensors', weight_dtype: 'default' } },
+      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5.safetensors', type: 'krea2' } },
+      '12': { class_type: 'VAELoader', inputs: { vae_name: 'ae.safetensors' } },
+      '5': { class_type: 'EmptyLatentImage', inputs: { width: 768, height: 1152, batch_size: 1 } },
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['11', 0] } },
+      '7': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['11', 0] } },
+      '3': { class_type: 'KSampler', inputs: { seed: 1, steps: 8, cfg: 1, sampler_name: 'euler', scheduler: 'normal', denoise: 1, model: ['10', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0] } },
+      '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['12', 0] } },
+      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'krea', images: ['8', 0] } },
+    });
+
+    const ui = world.webUi('zh');
+    const imported = await ui.invoke!('workflows', 'importWorkflow', [kreaPath, 'Krea2二次元图片']) as {
+      ok: boolean;
+      preset?: { id: string; needs_checkpoint?: boolean };
+      warnings?: string[];
+    };
+    expect(imported.ok).toBe(true);
+    expect(imported.preset?.needs_checkpoint).toBe(false);
+    expect((imported.warnings ?? []).some((w) => w.includes('CheckpointLoader'))).toBe(false);
+
+    const res = await ui.invoke!('studio', 'generate', [{
+      workflow: imported.preset!.id,
+      positive: '大肥鱼，女仆装，可爱，kawaii',
+      negative: 'low quality, blurry',
+      checkpoint: '',
+      loras: [{ path: '角色/zelda_botw_style.safetensors', weight: 0.8 }],
+      steps: 8,
+      cfg: 1,
+      width: 768,
+      height: 1152,
+      batch: 1,
+      seed: 42,
+    }]) as { ok: boolean; warnings?: string[]; error?: string };
+
+    expect(res.ok).toBe(true);
+    expect(res.warnings ?? []).toEqual([]);
+    const submittedNodes = Object.values((fake.workflow ?? {}) as Record<string, { class_type: string }>);
+    expect(submittedNodes.some((n) => n.class_type === 'LoraLoader')).toBe(true);
     await world.stop();
   });
 });

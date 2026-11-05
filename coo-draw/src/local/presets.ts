@@ -4,15 +4,28 @@ import { ensureDir, readJson, writeJsonAtomic } from './fs-util.ts';
 import { builtinPresets, validateApiWorkflow } from './workflow.ts';
 import type { ParamMapping, WorkflowPreset, WorkflowSummary } from './types.ts';
 
+function hasSplitUnet(workflow: Record<string, unknown>): boolean {
+  for (const node of Object.values(workflow)) {
+    if (node && typeof node === 'object' && /^(UNETLoader|UnetLoaderGGUF)$/i.test(String((node as { class_type?: unknown }).class_type ?? ''))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function summary(preset: WorkflowPreset): WorkflowSummary {
+  const needsCheckpoint = preset.param_mapping.some((item) => item.param === 'checkpoint');
+  const splitUnet = hasSplitUnet(preset.workflow);
+  const warnings = preset.warnings?.filter((w) => !(splitUnet && w.includes('CheckpointLoader')));
   return {
     id: preset.id,
     name: preset.name,
     builtin: preset.builtin,
     kind: preset.kind,
+    needs_checkpoint: needsCheckpoint,
     created_at: preset.created_at,
     ...(preset.source ? { source: preset.source } : {}),
-    ...(preset.warnings?.length ? { warnings: preset.warnings } : {}),
+    ...(warnings?.length ? { warnings } : {}),
     mapping_count: preset.param_mapping.length,
   };
 }

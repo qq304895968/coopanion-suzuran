@@ -253,20 +253,22 @@ const studioPanel: WebUiPanel = {
     const say = (text: string, bad = false): void => { if (text) ctx.ui.toast(text, bad ? 'bad' : undefined); };
 
     const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
+    const workflowNeedsCheckpoint = (workflowId = state.workflow): boolean => {
+      const preset = presets.find((p) => p.id === workflowId);
+      if (!preset) {
+        return ['quick-txt2img', 'quick-img2img', 'quick-controlnet', 'img2img', 'controlnet'].includes(workflowId);
+      }
+      if (typeof preset.needs_checkpoint === 'boolean') return preset.needs_checkpoint;
+      return preset.kind === 'txt2img' || preset.kind === 'img2img' || preset.kind === 'controlnet';
+    };
     const updateGenerateEnabled = (): void => {
       let disable = false;
       let hint = '';
-      const preset = presets.find((p) => p.id === state.workflow);
-      if (checkpoints.length === 0) {
-        const needs = ['quick-txt2img', 'quick-img2img', 'quick-controlnet'].includes(state.workflow)
-          || preset?.kind === 'txt2img' || preset?.kind === 'img2img' || preset?.kind === 'controlnet';
-        if (needs) {
+      if (workflowNeedsCheckpoint()) {
+        if (checkpoints.length === 0 || !state.checkpoint) {
           disable = true;
           hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first');
         }
-      } else if (!state.checkpoint) {
-        disable = true;
-        hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first');
       }
       const running = isActive(current);
       generateBtn.classList.toggle('is-running', running);
@@ -369,12 +371,7 @@ const studioPanel: WebUiPanel = {
     paramSheet.body.append(checkpointWrap);
 
     const renderCheckpointEmpty = (): void => {
-      const needsCheckpoint = (() => {
-        const preset = presets.find(p => p.id === state.workflow);
-        // 若工作流类型为纯 LoRA 或映射中无 checkpoint，则不需要
-        if (preset?.kind && preset.kind !== 'txt2img' && preset.kind !== 'img2img' && preset.kind !== 'controlnet') return false;
-        return true;
-      })();
+      const needsCheckpoint = workflowNeedsCheckpoint();
       if (!needsCheckpoint) {
         checkpointDD.close();
         const neutral = ctx.ui.h('div', 'coo-empty-card coo-empty-card--neutral');
@@ -754,7 +751,9 @@ const studioPanel: WebUiPanel = {
     paramSheet.body.append(extraBox);
 
     const collect = () => ({
-      positive: state.positive, negative: state.negative, checkpoint: state.checkpoint,
+      positive: state.positive,
+      negative: state.negative,
+      checkpoint: workflowNeedsCheckpoint() ? state.checkpoint : '',
       loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
       sampler: state.sampler, scheduler: state.scheduler, steps: state.steps, cfg: state.cfg,
       width: state.width, height: state.height, batch: state.batch, seed: state.seed,
@@ -1012,12 +1011,16 @@ const studioPanel: WebUiPanel = {
       if (busy) return;
       if (isActive(current)) { say(t('上一张还在画，等它完成或点取消。','Previous picture still running; wait or cancel.')); return; }
       if (!state.positive.trim()) { say(t('先写正向提示词。','Write a positive prompt first.'), true); positive.focus(); return; }
-      // checkpoint 校验
-      if (!state.checkpoint && checkpoints.length>0) { say(t('请先选择 Checkpoint 模型','Select a checkpoint first'), true); return; }
-      if (checkpoints.length===0) {
-        const preset = presets.find(p=>p.id===state.workflow);
-        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
-        if (needs) { say(t('未检测到 Checkpoint，无法生成。请先放入模型并刷新。','No checkpoint detected; put model files and refresh.'), true); return; }
+      // checkpoint 校验：严格对齐当前工作流是否需要 Checkpoint
+      if (workflowNeedsCheckpoint()) {
+        if (checkpoints.length === 0) {
+          say(t('未检测到 Checkpoint，无法生成。请先放入模型并刷新。', 'No checkpoint detected; put model files and refresh.'), true);
+          return;
+        }
+        if (!state.checkpoint) {
+          say(t('请先选择 Checkpoint 模型', 'Select a checkpoint first'), true);
+          return;
+        }
       }
       busy=true; generateBtn.disabled=true; say(t('正在提交…','Submitting…'));
       try {

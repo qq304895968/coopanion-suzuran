@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   applyCustomParams, applyParams, buildForPreset, builtinPresets, convertUiWorkflow, detectParamMapping,
   injectLoRAs, validateApiWorkflow, type Workflow,
@@ -61,6 +61,36 @@ describe('内置工作流与参数', () => {
   it('没有 checkpoint 时 LoRA 注入返回提醒而不是抛错', () => {
     const result = injectLoRAs({ '1': { class_type: 'SaveImage', inputs: {} } }, [{ path: 'a', weight: 1 }]);
     expect(result.warnings[0]).toContain('CheckpointLoader');
+  });
+
+  it('Krea2 等 UNETLoader + CLIPLoader 分离式工作流无需 CheckpointLoader 也能正常挂载 LoRA 且不报警告', () => {
+    const kreaWorkflow: Workflow = {
+      '10': { class_type: 'UNETLoader', inputs: { unet_name: 'krea2.safetensors', weight_dtype: 'default' } },
+      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5.safetensors', type: 'krea2' } },
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: 'girl', clip: ['11', 0] } },
+      '7': { class_type: 'CLIPTextEncode', inputs: { text: 'bad', clip: ['11', 0] } },
+      '3': { class_type: 'KSampler', inputs: { model: ['10', 0], positive: ['6', 0], negative: ['7', 0], steps: 8, cfg: 1, seed: 1 } },
+      '9': { class_type: 'SaveImage', inputs: { images: ['3', 0] } },
+    };
+    const detected = detectParamMapping(kreaWorkflow);
+    expect(detected.mapping.some((m) => m.param === 'checkpoint')).toBe(false);
+    expect(detected.warnings.some((w) => w.includes('CheckpointLoader'))).toBe(false);
+
+    const injected = injectLoRAs(kreaWorkflow, [
+      { path: '角色/suzuran.safetensors', weight: 0.8 },
+      { path: '风格/soft.safetensors', weight: 0.5 },
+    ]);
+    expect(injected.warnings).toEqual([]);
+    const loraNodes = Object.entries(injected.workflow).filter(([, n]) => n.class_type === 'LoraLoader');
+    expect(loraNodes).toHaveLength(2);
+    const [firstId, firstNode] = loraNodes[0]!;
+    const [secondId, secondNode] = loraNodes[1]!;
+    expect(firstNode.inputs.model).toEqual(['10', 0]);
+    expect(firstNode.inputs.clip).toEqual(['11', 0]);
+    expect(secondNode.inputs.model).toEqual([firstId, 0]);
+    expect(secondNode.inputs.clip).toEqual([firstId, 1]);
+    expect(injected.workflow['3']!.inputs.model).toEqual([secondId, 0]);
+    expect(injected.workflow['6']!.inputs.clip).toEqual([secondId, 1]);
   });
 
   it('自定义参数按映射写入节点', () => {

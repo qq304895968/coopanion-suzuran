@@ -178,6 +178,8 @@ export interface WorkflowSummary {
   name: string;
   builtin: boolean;
   kind?: WorkflowPreset['kind'];
+  /** 当前工作流是否包含需要选择的 Checkpoint 参数映射。 */
+  needs_checkpoint?: boolean;
   created_at: number;
   source?: string;
   warnings?: string[];

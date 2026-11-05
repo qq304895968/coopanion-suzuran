@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 「画室」World：一个入口，两套画法。
  *
  * - API 引擎（`./api`，从 pet-draw 搬来）负责人设笔触的小画：画夹、评价、弹图、额度；
@@ -220,7 +220,6 @@ export class DrawWorld implements World {
     const zh = language.startsWith('zh');
     const apiUi = this.api.webUi(language);
     const localUi = this.local.webUi(language);
-    const cfg = this.opts.cfg;
     return {
       label: zh ? '画室' : 'Drawing studio',
       config: DRAW_GROUPS,
@@ -254,11 +253,6 @@ export class DrawWorld implements World {
       lamps: [
         ...(apiUi.lamps ?? []),
         ...(localUi.lamps ?? []),
-      ],
-      badges: [
-        ...(apiUi.badges ?? []),
-        { label: zh ? '主动画' : 'Pet', value: routeLabel(cfg.routePet), tone: 'plain' },
-        { label: zh ? '日记' : 'Diary', value: routeLabel(cfg.routeDiary), tone: 'plain' },
       ],
       promptDocs: [
         {

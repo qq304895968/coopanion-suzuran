@@ -14,48 +14,10 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface QuotaOutcome {
-  text: string;
-  failed?: boolean;
-}
-
-interface ApiSettings {
-  style: string;
-  customStyle: string;
-  dailyLimit: number;
-  maxImagesPerCall: number;
-  routePet: string;
-  routeDiary: string;
-}
-
-const STYLE_LABELS: ReadonlyArray<{ value: string; zh: string; en: string }> = [
-  { value: 'crayon', zh: '蜡笔涂鸦', en: 'Crayon doodle' },
-  { value: 'pencil', zh: '铅笔速写', en: 'Pencil sketch' },
-  { value: 'marker', zh: '马克笔小插画', en: 'Marker sketch' },
-  { value: 'ink', zh: '水墨小品', en: 'Ink wash' },
-  { value: 'charcoal', zh: '炭笔速写', en: 'Charcoal sketch' },
-  { value: 'pen', zh: '钢笔淡彩', en: 'Pen and wash' },
-  { value: 'pixel', zh: '像素画', en: 'Pixel art' },
-  { value: 'custom', zh: '自定义画风', en: 'Custom style' },
-];
-
-// 精简后的 API 面板：只保留画夹与必要说明，去除旧的顶部状态标签
+// 精简后的 API 面板：只保留画夹与必要说明，不挂载任何顶部状态标签栏
 const apiPanel: WebUiPanel = {
   async mount(ctx: WebUiPanelContext): Promise<void> {
-    const zh = ctx.language.startsWith('zh');
-    const t = (z: string, e: string): string => (zh ? z : e);
-
     await folderPanel.mount(ctx);
-
-    // 轻量诊断入口（📊 图标按钮）—— 状态信息移至配置或按需查看
-    let settings: ApiSettings | null = null;
-    try {
-      settings = await ctx.invoke<ApiSettings>('settings');
-    } catch {
-      // 读不到也不阻塞画夹
-    }
-
-    // 顶部第一层标签栏已按需求完全移除（不保留、不迁移）
   },
 };
 

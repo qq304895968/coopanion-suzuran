@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 合并层的行为测试：路由、人设本地出图、参考图 describe 流程、配置迁移与工作流约束。
  * 用假的 ComfyUI 客户端，不碰真网络。
  */
@@ -272,6 +272,7 @@ describe('local sub-panels', () => {
     const loras = await ui.invoke!('local', 'loras.listLoras', []) as { loras?: unknown[] };
     expect(Array.isArray(loras.loras)).toBe(true);
     expect(ui.panels?.filter((panel) => !(panel as { slot?: string }).slot).map((panel) => panel.id)).toEqual(['api', 'local']);
+    expect(ui.badges).toBeUndefined();
   });
 });
 

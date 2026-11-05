@@ -125,6 +125,19 @@ function iconWithText(iconName: string, text: string, size=16): HTMLElement {
   return wrap;
 }
 const PARAM_LABELS: Record<string,string> = { positive: '正向提示词', negative: '反向提示词', checkpoint: '模型', steps: '步数', cfg: 'CFG', seed: '种子', sampler: '采样器', scheduler: '调度器', width: '宽', height: '高', batch: '批次' };
+const PARAM_DESC: Record<string,string> = {
+  positive: '描述你想要生成的画面内容。',
+  negative: '描述你不希望出现在画面中的内容。',
+  checkpoint: '主模型，决定画面的整体风格基础。',
+  steps: '采样迭代次数，一般 20-30 即可，过高会显著增加等待时间。',
+  cfg: '提示词遵循度，建议 5-8，过高会导致画面僵硬。',
+  seed: '控制画面随机性，相同种子+相同参数会生成相同画面。',
+  sampler: '影响画面细节与风格，建议使用工作流默认值。',
+  scheduler: '与采样器配合影响噪声调度，建议使用工作流默认值。',
+  width: '生成图片的宽度（像素）。',
+  height: '生成图片的高度（像素）。',
+  batch: '一次性生成的图片张数。',
+};
 
 
 // 共享内存：跨子 Tab 保持生成状态，避免切换后进度丢失
@@ -272,10 +285,11 @@ const studioPanel: WebUiPanel = {
         const body = document.createElement('div');
         const intro = ctx.ui.msgline(t(`当前工作流支持通过画室调整以下 ${res.preset.mapping.length} 个参数`, `This workflow exposes ${res.preset.mapping.length} adjustable parameters`));
         body.append(intro);
-        const tbl = ctx.ui.table({ head: [t('参数','Param'), t('类型','Type')] });
+        const tbl = ctx.ui.table({ head: [t('参数','Param'), t('说明','Description')] });
         for (const m of res.preset.mapping) {
           const label = (PARAM_LABELS[m.param] || m.param);
-          tbl.addRow([label, m.ui_type]);
+          const desc = PARAM_DESC[m.param] || t('该参数由工作流控制，建议保持默认值。','This parameter is controlled by the workflow; keep the default value.');
+          tbl.addRow([label, desc]);
         }
         body.append(tbl.el);
         // 已按要求移除底部 CheckpointLoader 告警
@@ -418,7 +432,7 @@ const studioPanel: WebUiPanel = {
         const sub = document.createElement('div'); sub.className = 'coo-gen-sub';
         // 隐藏 .safetensors 扩展名，hover 显示完整路径
         const displayPath = stripExt(record.path);
-        sub.textContent = [displayPath, record.category || t('未分类', 'uncategorized'), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
+        sub.textContent = [displayPath, ...(record.category ? [record.category] : []), ...(record.trigger_words.length ? [record.trigger_words.slice(0, 4).join('/')] : [])].join(' · ');
         sub.title = record.path;
         nameCell.append(title, sub);
         // 已去掉预设标签，勾选状态即启用
@@ -466,18 +480,22 @@ const studioPanel: WebUiPanel = {
     const basicGroup = ctx.ui.h('div', 'coo-group');
     const basicTitle = ctx.ui.h('div', 'coo-group-title', t('基本采样', 'Sampler'));
     const basicGrid = ctx.ui.h('div', 'coo-sampler-grid');
-    const samplerSelect = ctx.ui.select({ options: [] }); setOptions(samplerSelect as unknown as HTMLSelectElement, boot.samplers, state.sampler);
-    samplerSelect.addEventListener('change', () => { state.sampler = samplerSelect.value; });
-    const schedulerSelect = ctx.ui.select({ options: [] }); setOptions(schedulerSelect as unknown as HTMLSelectElement, boot.schedulers, state.scheduler);
-    schedulerSelect.addEventListener('change', () => { state.scheduler = schedulerSelect.value; });
+    const samplerDD = createDropdown({
+      ariaLabel: t('采样器','Sampler'),
+      options: boot.samplers.map(v => ({ value: v, label: v })),
+      value: state.sampler,
+      onChange: (v) => { state.sampler = v; },
+    });
+    const schedulerDD = createDropdown({
+      ariaLabel: t('调度器','Scheduler'),
+      options: boot.schedulers.map(v => ({ value: v, label: v })),
+      value: state.scheduler,
+      onChange: (v) => { state.scheduler = v; },
+    });
     const stepsInput = ctx.ui.input({ type: 'number', value: String(state.steps), cls: 'mono' }); stepsInput.min='1'; stepsInput.max='100'; stepsInput.step='1';
     stepsInput.addEventListener('change', () => { state.steps = Math.max(1, Math.min(100, Math.round(num(stepsInput.value, state.steps)))); stepsInput.value = String(state.steps); updateProgressMax(); });
     const cfgInput = ctx.ui.input({ type: 'number', value: String(state.cfg), cls: 'mono' }); cfgInput.min='1'; cfgInput.max='30'; cfgInput.step='0.5';
     cfgInput.addEventListener('change', () => { state.cfg = Math.min(30, Math.max(1, num(cfgInput.value, state.cfg))); cfgInput.value = String(state.cfg); });
-    basicGrid.append(ctx.ui.field(t('采样器', 'Sampler'), samplerSelect), ctx.ui.field(t('调度器', 'Scheduler'), schedulerSelect), ctx.ui.field(t('步数', 'Steps'), stepsInput), ctx.ui.field('CFG', cfgInput));
-    basicGroup.append(basicTitle, basicGrid);
-    paramSheet.body.append(basicGroup);
-
     // 尺寸设置
     const sizeGroup = ctx.ui.h('div', 'coo-group');
     const sizeTitle = ctx.ui.h('div', 'coo-group-title', t('尺寸设置', 'Size'));
@@ -495,11 +513,13 @@ const studioPanel: WebUiPanel = {
 
     // 高级折叠
     const advGroup = ctx.ui.h('div', 'coo-group');
-    const advToggle = document.createElement('button'); advToggle.className = 'coo-adv-toggle'; advToggle.setAttribute('aria-expanded','false');
+    const ADV_KEY = 'coo-draw-adv-collapsed';
+    const advCollapsed = localStorage.getItem(ADV_KEY) !== 'false';
+    const advToggle = document.createElement('button'); advToggle.className = 'coo-adv-toggle'; advToggle.setAttribute('aria-expanded', advCollapsed? 'false':'true');
     const advLabel = ctx.ui.h('span','', t('高级','Advanced')); advLabel.style.fontWeight='600';
     const advArrow = svgIcon('chevronRight',14); advArrow.classList.add('coo-adv-arrow');
     advToggle.append(advLabel, advArrow);
-    const advBody = ctx.ui.h('div', 'coo-adv-body hidden');
+    const advBody = ctx.ui.h('div', 'coo-adv-body', advCollapsed ? 'hidden' : '');
     const batchInput = ctx.ui.input({ type: 'number', value: String(state.batch), cls: 'mono coo-gen-num' }); batchInput.min='1'; batchInput.max='8'; batchInput.step='1';
     batchInput.addEventListener('change', () => { state.batch = Math.max(1, Math.min(8, Math.round(num(batchInput.value, state.batch)))); batchInput.value = String(state.batch); });
     const seedInput = ctx.ui.input({ type: 'number', value: String(state.seed), cls: 'mono coo-gen-num' }); seedInput.min='-1'; seedInput.max='9007199254740991'; seedInput.step='1';
@@ -517,8 +537,15 @@ const studioPanel: WebUiPanel = {
     seedWrap.append(seedInput, randBtn);
     const batchField = ctx.ui.field(t('批次', 'Batch'), batchInput);
     const seedField = ctx.ui.field(t('种子', 'Seed'), seedWrap);
-    advBody.append(batchField, seedField);
-    advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.setAttribute('aria-expanded', hidden? 'false':'true'); advArrow.style.transform = hidden ? 'rotate(0deg)' : 'rotate(90deg)'; });
+    advBody.append(
+      ctx.ui.field(t('采样器', 'Sampler'), samplerDD.el),
+      ctx.ui.field(t('调度器', 'Scheduler'), schedulerDD.el),
+      ctx.ui.field(t('步数', 'Steps'), stepsInput),
+      ctx.ui.field('CFG', cfgInput),
+      batchField,
+      seedField,
+    );
+    advToggle.addEventListener('click', () => { const hidden = advBody.classList.toggle('hidden'); advToggle.setAttribute('aria-expanded', hidden? 'false':'true'); localStorage.setItem(ADV_KEY, String(hidden)); advArrow.style.transform = hidden ? 'rotate(0deg)' : 'rotate(90deg)'; });
     advGroup.append(advToggle, advBody);
     paramSheet.body.append(advGroup);
 
@@ -724,8 +751,10 @@ const studioPanel: WebUiPanel = {
       setOptions(checkpointSelect, checkpoints, state.checkpoint);
       if (!checkpoints.includes(state.checkpoint)) state.checkpoint = checkpoints[0] ?? state.checkpoint;
       if (checkpoints.length) checkpointSelect.value = state.checkpoint;
-      setOptions(samplerSelect as unknown as HTMLSelectElement, res.samplers, state.sampler);
-      setOptions(schedulerSelect as unknown as HTMLSelectElement, res.schedulers, state.scheduler);
+      samplerDD.setOptions(res.samplers.map(v => ({ value: v, label: v })));
+      samplerDD.setValue(state.sampler);
+      schedulerDD.setOptions(res.schedulers.map(v => ({ value: v, label: v })));
+      schedulerDD.setValue(state.scheduler);
       renderHealth(res.health); renderLoraTable(); renderCheckpointEmpty();
     };
     const doRefreshModels = async (): Promise<void> => {

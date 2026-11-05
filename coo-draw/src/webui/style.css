@@ -975,3 +975,12 @@
 .coo-conn-row .inline-action:disabled { opacity: .5; cursor: not-allowed; }
 .coo-conn-row .addr-input { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--coo-accent); border-radius: 4px; font-size: 13px; box-sizing: border-box; }
 .coo-conn-actions { gap: 12px; padding: 12px 16px; margin: 0; border-top: 1px solid var(--coo-line); }
+
+.coo-action-bar { display: flex; gap: 12px; padding: 12px 0; background: transparent; }
+.coo-action-bar .btn { flex: 1; min-width: 0; height: 40px; border-radius: 6px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; transition: opacity .2s, background .2s, border-color .2s; }
+.coo-action-bar .btn-generate { background: var(--coo-accent); border: 1px solid var(--coo-accent); color: #fff; }
+.coo-action-bar .btn-generate:hover { filter: brightness(.9); }
+.coo-action-bar .btn-generate.is-running { opacity: .7; }
+.coo-action-bar .btn-cancel { background: var(--coo-surface); color: var(--coo-muted); border: 1px solid var(--coo-line); cursor: not-allowed; }
+.coo-action-bar .btn-cancel.is-active { background: var(--coo-danger-soft); color: var(--coo-danger); border-color: var(--coo-danger); cursor: pointer; }
+.coo-action-bar .btn-cancel.is-active:hover { filter: brightness(.95); }

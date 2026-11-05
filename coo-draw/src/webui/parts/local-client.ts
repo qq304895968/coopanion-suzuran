@@ -549,25 +549,15 @@ const studioPanel: WebUiPanel = {
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
 
-    // 右栏操作区：生成/取消/打开目录（位于 连接卡片 与 进度卡片 之间）
-    const genLine = ctx.ui.msgline(''); left.append(genLine);
-    const actionFloat = ctx.ui.h('div', 'coo-action-float');
-    const actionHint = ctx.ui.h('div', 'hint', ''); actionHint.style.display='none';
-    const actionRow = ctx.ui.h('div', 'coo-action-row');
+    // 右栏操作区仅保留生成和取消，反馈通过 toast 展示。
+    const actionFloat = ctx.ui.h('div', 'coo-action-bar');
     const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
-    generateBtn.className += ' btn-generate';
-    generateBtn.style.flex = '1';
+    generateBtn.classList.add('btn-generate');
     const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
-    cancelBtn.className += ' btn-cancel-idle';
+    cancelBtn.classList.add('btn-cancel');
     cancelBtn.disabled = true;
-    cancelBtn.style.flex = '1';
-    const openFolderBtn = ctx.ui.button(t('打开目录', 'Open folder'), { variant: 'plain', size: 'sm' });
-    openFolderBtn.className += ' btn-open';
-    openFolderBtn.style.flex = '1';
-    openFolderBtn.addEventListener('click', ()=>{ void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad')); });
-    actionRow.append(generateBtn, cancelBtn, openFolderBtn);
-    actionFloat.append(actionHint, actionRow);
-    const say = (text: string, bad = false): void => { genLine.textContent = text; genLine.classList.toggle('bad', bad); actionHint.textContent = text; actionHint.style.display = text ? 'block' : 'none'; };
+    actionFloat.append(generateBtn, cancelBtn);
+    const say = (text: string, bad = false): void => { if (text) ctx.ui.toast(text, bad ? 'bad' : undefined); };
 
     const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
     const updateGenerateEnabled = (): void => {
@@ -577,17 +567,12 @@ const studioPanel: WebUiPanel = {
         const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
         if (needs) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
       } else if (!state.checkpoint) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
-      // 生成中：生成按钮 60% opacity 仍可点击（不禁用），取消按钮 red fill
-      if (isActive(current)) {
-        generateBtn.disabled = false; generateBtn.style.opacity = '0.6'; generateBtn.classList.add('is-generating');
-        cancelBtn.disabled = false; cancelBtn.className = cancelBtn.className.replace('btn-cancel-idle','').replace('  ',' ').trim() + ' btn-cancel-active'; cancelBtn.style.background='var(--coo-danger)'; cancelBtn.style.color='#fff'; cancelBtn.style.borderColor='var(--coo-danger)';
-      } else {
-        generateBtn.style.opacity = ''; generateBtn.classList.remove('is-generating');
-        cancelBtn.className = cancelBtn.className.replace('btn-cancel-active','').replace('  ',' ').trim() + ' btn-cancel-idle'; cancelBtn.style.background='#fff'; cancelBtn.style.color='#6b7280'; cancelBtn.style.borderColor='rgba(127,127,127,.3)'; cancelBtn.disabled = true;
-        generateBtn.disabled = disable || busy;
-      }
-      if (disable && hint) actionHint.textContent = hint;
-      generateBtn.title = disable ? hint : '';
+      const running = isActive(current);
+      generateBtn.classList.toggle('is-running', running);
+      generateBtn.disabled = running ? false : disable || busy;
+      cancelBtn.classList.toggle('is-active', running);
+      cancelBtn.disabled = !running;
+      generateBtn.title = disable && !running ? hint : '';
     };
 
     const collect = () => ({

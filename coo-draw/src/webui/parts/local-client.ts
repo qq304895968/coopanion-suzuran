@@ -242,6 +242,43 @@ const studioPanel: WebUiPanel = {
     // 参数区：无冗余标题，左栏即参数区
     const paramSheet = { el: left, body: left } as unknown as ReturnType<typeof ctx.ui.sheet>;
 
+    // 右栏主操作按钮与启用状态计算（提前初始化，避免下方控件同步渲染时触发 TDZ）
+    const actionFloat = ctx.ui.h('div', 'coo-action-bar');
+    const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
+    generateBtn.classList.add('btn-generate');
+    const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
+    cancelBtn.classList.add('btn-cancel');
+    cancelBtn.disabled = true;
+    actionFloat.append(generateBtn, cancelBtn);
+    const say = (text: string, bad = false): void => { if (text) ctx.ui.toast(text, bad ? 'bad' : undefined); };
+
+    const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
+    const updateGenerateEnabled = (): void => {
+      let disable = false;
+      let hint = '';
+      const preset = presets.find((p) => p.id === state.workflow);
+      if (checkpoints.length === 0) {
+        const needs = ['quick-txt2img', 'quick-img2img', 'quick-controlnet'].includes(state.workflow)
+          || preset?.kind === 'txt2img' || preset?.kind === 'img2img' || preset?.kind === 'controlnet';
+        if (needs) {
+          disable = true;
+          hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first');
+        }
+      } else if (!state.checkpoint) {
+        disable = true;
+        hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first');
+      }
+      const running = isActive(current);
+      generateBtn.classList.toggle('is-running', running);
+      generateBtn.disabled = running ? false : disable || busy;
+      cancelBtn.classList.toggle('is-active', running);
+      cancelBtn.disabled = !running;
+      generateBtn.title = disable && !running ? hint : '';
+    };
+    const updateProgressMax = (): void => {
+      if (!current || isActive(current)) { /* reserved */ }
+    };
+
     // 工作流（自定义 Dropdown，杜绝原生 select）
     const workflowWrap = ctx.ui.h('div', '');
     const workflowLabel = ctx.ui.h('div', 'coo-group-title', t('工作流', 'Workflow'));
@@ -716,32 +753,6 @@ const studioPanel: WebUiPanel = {
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
 
-    // 右栏操作区仅保留生成和取消，反馈通过 toast 展示。
-    const actionFloat = ctx.ui.h('div', 'coo-action-bar');
-    const generateBtn = ctx.ui.button(t('生成', 'Generate'), { variant: 'primary' });
-    generateBtn.classList.add('btn-generate');
-    const cancelBtn = ctx.ui.button(t('取消', 'Cancel'));
-    cancelBtn.classList.add('btn-cancel');
-    cancelBtn.disabled = true;
-    actionFloat.append(generateBtn, cancelBtn);
-    const say = (text: string, bad = false): void => { if (text) ctx.ui.toast(text, bad ? 'bad' : undefined); };
-
-    const isActive = (task: GenerateTaskView | null): boolean => !!task && (task.status === 'queued' || task.status === 'running');
-    const updateGenerateEnabled = (): void => {
-      let disable = false; let hint = '';
-      const preset = presets.find(p=>p.id===state.workflow);
-      if (checkpoints.length === 0) {
-        const needs = ['quick-txt2img','quick-img2img','quick-controlnet'].includes(state.workflow) || preset?.kind==='txt2img' || preset?.kind==='img2img' || preset?.kind==='controlnet';
-        if (needs) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
-      } else if (!state.checkpoint) { disable = true; hint = t('请先选择 Checkpoint 模型', 'Select a checkpoint first'); }
-      const running = isActive(current);
-      generateBtn.classList.toggle('is-running', running);
-      generateBtn.disabled = running ? false : disable || busy;
-      cancelBtn.classList.toggle('is-active', running);
-      cancelBtn.disabled = !running;
-      generateBtn.title = disable && !running ? hint : '';
-    };
-
     const collect = () => ({
       positive: state.positive, negative: state.negative, checkpoint: state.checkpoint,
       loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
@@ -972,7 +983,6 @@ const studioPanel: WebUiPanel = {
       }
       updateGenerateEnabled();
     };
-    const updateProgressMax = (): void => { if (!current || isActive(current)) {} }; // reserved
 
     // 历史刷新（供后续完成时调用）
     const refreshHistory = async (): Promise<void> => {

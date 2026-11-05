@@ -1888,10 +1888,6 @@ const worksPanel: WebUiPanel = {
         (window as any).__coo_draw_repaint = { entry, mode: 'randomSeed' }; ctx.root.dispatchEvent(new CustomEvent('coo-switch-tab', { detail:'studio', bubbles:true })); const m=ctx as unknown as {switchTab?:(v:string)=>void}; if(m.switchTab) m.switchTab('studio'); ctx.ui.toast(t('已切换到出图页，种子将随机','Switched to Studio; seed randomized'));
       });
 
-      const copySeed = ctx.ui.copyButton(()=>String(entry.seed), { label: t('复制种子','Copy seed'), size:'sm' });
-      copySeed.classList.add('btn-action', 'default');
-      copySeed.prepend(svgIcon('copy', 14));
-
       const toPet = opButton(t('发送到桌宠','Send to pet'), 'default', 'send');
       toPet.addEventListener('click', ()=>{ void ctx.invoke('sendToPet', [entry.id]).then(res=>ctx.ui.toast((res as any).message, (res as any).ok?'ok':'bad')).catch(e=>ctx.ui.toast(errText(e),'bad')); });
 
@@ -1918,7 +1914,7 @@ const worksPanel: WebUiPanel = {
         allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; if (activeEntry?.id===entry.id) { activeEntry=allHistory[0]??null; if (activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } } renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
       });
 
-      opsPanel.append(redraw, tweak, copySeed, toPet, compare, openFolder, fav, del);
+      opsPanel.append(redraw, tweak, toPet, compare, openFolder, fav, del);
     };
 
     const enterCompare = (a: HistoryEntry): void => {

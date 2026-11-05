@@ -359,9 +359,15 @@ export class DiaryWorld implements World {
     try {
       const root = diaryRoot(this.options.cfg.dir);
       if (!existsSync(root)) mkdirSync(root, { recursive: true });
+      
+      // 参考画室 coo-draw 的实现，在打开目录的同时支持可选的选中文件
+      // 日记模块目前只打开根目录，但保留了扩展性接口
       (this.options.openPath ?? openInFileManager)(root);
+      
+      this.host?.log.info('diary: opening folder', { path: root });
       return { ok: true, path: root };
     } catch (error) {
+      this.host?.log.warn('diary: open folder failed', error);
       return { ok: false, path: info.path, error: reasonOf(error) };
     }
   }

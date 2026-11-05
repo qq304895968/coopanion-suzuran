@@ -358,21 +358,19 @@ export class DiaryWorld implements World {
 
     try {
       const root = diaryRoot(this.options.cfg.dir);
-      if (!existsSync(root)) mkdirSync(root, { recursive: true });
       
-      // 参考画室 coo-draw/src/api/world.ts 的 openFolder 实现
-      // 1. 记录打开请求日志
+      // 1. 记录打开请求日志（参考画室 coo-draw/src/api/world.ts）
       this.host?.log.info('diary: opening folder', { path: root });
       
-      // 2. 执行打开命令（支持注入测试）
+      // 2. 执行打开命令（支持注入测试，参考画室 coo-draw/src/api/world.ts）
       (this.options.openPath ?? openInFileManager)(root);
       
-      // 3. 记录请求已发送日志（与画室保持一致）
+      // 3. 记录请求已发送日志（参考画室 coo-draw/src/api/world.ts）
       this.host?.log.info('diary: folder open requested', { path: root });
       
       return { ok: true, path: root };
     } catch (error) {
-      // 4. 记录失败警告（与画室保持一致）
+      // 4. 记录失败警告（参考画室 coo-draw/src/api/world.ts）
       this.host?.log.warn('diary: open folder failed', error);
       return { ok: false, path: info.path, error: reasonOf(error) };
     }

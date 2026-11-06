@@ -171,4 +171,15 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(cssContent).toMatch(/\.coo-dialog\s*\{[\s\S]*?background/);
   });
 
+  it('批量模式磁贴必须使用自定义勾选徽标与选中高亮，禁用原生复选框', () => {
+    expect(localClient).toContain('coo-works-check');
+    expect(localClient).toContain('syncTileBatchState');
+    expect(localClient).toContain("toggle('is-selected'");
+    expect(localClient).not.toContain("className='chk'");
+    expect(localClient).not.toContain("chk.type='checkbox'");
+    expect(cssContent).toMatch(/\.coo-works-tile\.is-selected\s*\{[\s\S]*?border-color:\s*var\(--coo-accent\)/);
+    expect(cssContent).toMatch(/\.coo-works-tile\.is-selected::after\s*\{[\s\S]*?background:\s*var\(--coo-accent-soft\)/);
+    expect(cssContent).toMatch(/\.coo-works-tile\s+\.coo-works-check\.is-checked\s*\{[\s\S]*?background:\s*var\(--coo-accent\)/);
+  });
+
 });

@@ -2367,6 +2367,26 @@ const worksPanel: WebUiPanel = {
       renderGallery();
     };
 
+    // 批量选中态同步（增量更新与全量渲染共用）：边框/遮罩经 .is-selected，对勾徽标经 .coo-works-check
+    const syncTileBatchState = (tileEl: HTMLElement, id: string): void => {
+      const isSel = batchMode && selected.has(id);
+      tileEl.classList.toggle('is-selected', isSel);
+      const badge = tileEl.querySelector('.coo-works-check');
+      if (!batchMode) {
+        tileEl.removeAttribute('aria-pressed');
+        badge?.remove();
+        return;
+      }
+      tileEl.setAttribute('aria-pressed', String(isSel));
+      const dot = badge ?? document.createElement('span');
+      if (!badge) {
+        dot.className = 'coo-works-check';
+        dot.setAttribute('aria-hidden', 'true');
+        tileEl.prepend(dot);
+      }
+      dot.classList.toggle('is-checked', isSel);
+    };
+
     const renderGallery = (): void => {
       const list = filtered();
       const total = allHistory.length;
@@ -2374,10 +2394,11 @@ const worksPanel: WebUiPanel = {
       const curIds = list.map((e) => `${e.id}:${e.is_favorite ? 1 : 0}`).join(',');
       const prevIds = (grid as any)._prevIds as string | undefined;
       if (prevIds === curIds && total) {
-        // 仅更新选中态
+        // 仅更新选中态（含批量高亮与徽标，不重排 DOM）
         for (const el of Array.from(grid.querySelectorAll('.coo-works-tile'))) {
           const id = (el as HTMLElement).dataset.id!;
           (el as HTMLElement).classList.toggle('sel', id===activeEntry?.id || id===compareA?.id || id===compareB?.id);
+          syncTileBatchState(el as HTMLElement, id);
         }
         return;
       }
@@ -2424,17 +2445,13 @@ const worksPanel: WebUiPanel = {
       for (const entry of visible) {
         const tile = ctx.ui.h('button', 'coo-works-tile'); tile.type='button'; (tile as HTMLElement).dataset.id = entry.id;
         if (activeEntry?.id===entry.id || (compareA && compareA.id===entry.id) || (compareB && compareB.id===entry.id)) tile.classList.add('sel');
+        syncTileBatchState(tile as HTMLElement, entry.id);
         const img = ctx.ui.h('img',''); img.alt = entry.filename; img.loading='lazy'; (img as any).dataset.id = entry.id;
         // 使用稳定 key：dataset.id，已缓存则复用，不触发请求
         const cached = thumbCache.get(entry.id);
         if (cached) { img.src = cached; } else { img.dataset.needLoad='1'; }
         const label = ctx.ui.h('span','lab', `${entry.width}×${entry.height}`);
         tile.title = `${entry.filename}\n${t('种子','Seed')}: ${entry.seed}\n${t('尺寸','Size')}: ${entry.width}×${entry.height}\n${t('时间','Time')}: ${shortDate(entry.created_at)}`;
-        if (batchMode) {
-          const chk = document.createElement('input'); chk.type='checkbox'; chk.className='chk'; chk.checked = selected.has(entry.id);
-          chk.addEventListener('click', (e)=>{ e.stopPropagation(); if (chk.checked) selected.add(entry.id); else selected.delete(entry.id); batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张','0 selected'); });
-          tile.append(chk);
-        }
         // 红点：未查看且不在已查看集合
         if (!viewed.has(entry.id)) {
           const dot = ctx.ui.h('span','coo-works-dot'); tile.append(dot);

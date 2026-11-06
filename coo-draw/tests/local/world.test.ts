@@ -318,6 +318,18 @@ describe('CooGenWorld', () => {
     await world.stop();
   });
 
+  it('面板只读本地连接配置快照（写入走宿主 setConfig）', async () => {
+    const { data, world } = await setup();
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('studio', 'localConfig', []) as { url: string; outputDir: string; modelsDir: string; defaultWorkflow: string; launchScript: string };
+    expect(res.url).toBe('http://127.0.0.1:8188');
+    expect(res.outputDir).toBe(join(data, 'out'));
+    expect(res.modelsDir).toBe('');
+    expect(res.defaultWorkflow).toBe('quick-txt2img');
+    expect(res.launchScript).toBe('');
+    await world.stop();
+  });
+
   it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
     const { data, fake, world } = await setup();
     fake.checkpointNames = [];

@@ -184,6 +184,27 @@ describe('config', () => {
     const api = groups.find((group) => group.id === 'world:draw')!;
     expect(Object.keys(api.schema.properties)).toContain('worlds.draw.routeDiary');
   });
+
+  it('drawConfig 一次取齐 API 设置、画夹、本地配置与工作流列表', async () => {
+    const { world } = makeDraw({ routePet: 'local', style: 'pencil', dailyLimit: 20 });
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('local', 'studio.drawConfig', []) as {
+      api: { style: string; routePet: string; routeDiary: string; dailyLimit: number; maxImagesPerCall: number };
+      folder: { path: string; fallback: boolean };
+      presets: { presets: Array<{ id: string; name: string }>; default_workflow: string };
+      local: { url: string; outputDir: string; modelsDir: string; defaultWorkflow: string; launchScript: string };
+    };
+    expect(res.api.routePet).toBe('local');
+    expect(res.api.routeDiary).toBe('api');
+    expect(res.api.style).toBe('pencil');
+    expect(res.api.dailyLimit).toBe(20);
+    expect(res.api.maxImagesPerCall).toBe(1);
+    expect(res.folder.fallback).toBe(true);
+    expect(res.local.url).toBe('http://127.0.0.1:8188');
+    expect(res.local.defaultWorkflow).toBe('quick-txt2img');
+    expect(res.presets.presets.length).toBeGreaterThan(0);
+    expect(res.presets.presets.map((p) => p.id)).toContain(res.local.defaultWorkflow);
+  });
 });
 
 describe('routing', () => {

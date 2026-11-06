@@ -25,6 +25,7 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
   const localClient = readFileSync(join(WEBUI_ROOT, 'parts/local-client.ts'), 'utf8');
   const dropdownSrc = readFileSync(join(WEBUI_ROOT, 'parts/ui-dropdown.ts'), 'utf8');
   const clientEntry = readFileSync(join(WEBUI_ROOT, 'client.ts'), 'utf8');
+  const configPanelSrc = readFileSync(join(WEBUI_ROOT, 'parts/config-panel.ts'), 'utf8');
 
   it('铁律 1：禁止在 WebUI 代码与样式中硬编码 #2ecc71、#5b8def、#4F46E5', () => {
     for (const file of files) {
@@ -191,5 +192,20 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(localClient).toContain('readAsDataURL');
     expect(cssContent).toMatch(/\.coo-upload-row\s*\{[\s\S]*?display:\s*flex/);
     expect(cssContent).toMatch(/\.coo-upload-thumb\s*\{[\s\S]*?width:\s*44px/);
+  });
+
+  it('配置子页必须一次取齐快照且写入全部走宿主 setConfig', () => {
+    expect(clientEntry).toContain("value: 'config'");
+    expect(configPanelSrc).toContain("'drawConfig'");
+    expect(configPanelSrc).toContain('ctx.setConfig');
+    expect(configPanelSrc).toContain("save('world:draw'");
+    expect(configPanelSrc).toContain("save('world:draw-local'");
+    expect(configPanelSrc).toContain("'routePet'");
+    expect(configPanelSrc).toContain("'routeDiary'");
+    expect(configPanelSrc).toContain('worlds.draw.style');
+    expect(configPanelSrc).toContain('worlds.draw.localUrl');
+    expect(configPanelSrc).toContain('worlds.draw.localDefaultWorkflow');
+    expect(configPanelSrc).toContain('createDropdown');
+    expect(cssContent).toContain('.coo-config');
   });
 });

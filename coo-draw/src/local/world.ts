@@ -1632,6 +1632,7 @@ export class CooGenWorld implements World {
       case 'setFavorite': return this.panelSetFavorite(args[0], args[1]);
       case 'deleteWorks': return this.panelDeleteWorks(args[0], args[1]);
       case 'uploadImage': return this.panelUploadImage(args[0], args[1]);
+      case 'localConfig': return this.panelLocalConfig();
       case 'clearHistory': return { ok: true, message: this.outputStore().clear() };
       case 'listLoras': return this.panelListLoras();
       case 'setDefaults': return this.panelSetDefaults(args[0]);
@@ -1953,6 +1954,18 @@ export class CooGenWorld implements World {
     const target = join(dir, filename);
     writeFileSync(target, bytes);
     return { ok: true, path: target, filename, size: bytes.length };
+  }
+
+  /** 配置子页：只读返回连接与目录快照，写入统一走宿主 setConfig。 */
+  private panelLocalConfig(): { url: string; outputDir: string; modelsDir: string; defaultWorkflow: string; launchScript: string } {
+    const cfg = this.opts.cfg;
+    return {
+      url: cfg.url ?? '',
+      outputDir: cfg.outputDir ?? '',
+      modelsDir: cfg.modelsDir ?? '',
+      defaultWorkflow: cfg.defaultWorkflow ?? '',
+      launchScript: cfg.launchScript ?? '',
+    };
   }
 
   private panelSetFavorite(id: unknown, favorite: unknown): { ok: boolean; entry?: HistoryEntry; error?: string } {

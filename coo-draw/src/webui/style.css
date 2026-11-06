@@ -1543,3 +1543,6 @@
   box-sizing: border-box;
 }
 .coo-dd-search:focus { outline: none; border-color: var(--coo-accent); }
+
+/* 配置子页：两段式纵向表单。 */
+.coo-config { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }

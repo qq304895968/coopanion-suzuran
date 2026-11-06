@@ -9,6 +9,7 @@ import type {
 import './style.css';
 import { folderPanel } from './parts/api-client.ts';
 import { studioPanel, lorasPanel, workflowsPanel, worksPanel } from './parts/local-client.ts';
+import { configPanel } from './parts/config-panel.ts';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -26,6 +27,7 @@ const LOCAL_SUBS = [
   { value: 'works', label: ['作品', 'Works'], panel: worksPanel, backend: 'studio' as const },
   { value: 'loras', label: ['LoRA 管理', 'LoRAs'], panel: lorasPanel, backend: 'loras' as const },
   { value: 'workflows', label: ['工作流', 'Workflows'], panel: workflowsPanel, backend: 'workflows' as const },
+  { value: 'config', label: ['配置', 'Settings'], panel: configPanel, backend: 'studio' as const },
 ] as const;
 
 const localPanel: WebUiPanel = {

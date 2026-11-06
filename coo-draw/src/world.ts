@@ -243,8 +243,18 @@ export class DrawWorld implements World {
       ],
       invoke: async (panel, method, args) => {
         if (panel === 'api') return apiUi.invoke!('folder', method, args);
-        // 本地页签内用「studio.xxx / loras.xxx / workflows.xxx」前缀把子面板的方法转发给原实现。
         if (panel === 'local') {
+          // 配置子页：一次取齐 API 侧设置、画夹信息、本地配置与工作流列表。
+          if (method === 'studio.drawConfig') {
+            const [settings, folder, presets, local] = await Promise.all([
+              apiUi.invoke!('folder', 'settings', []),
+              apiUi.invoke!('folder', 'info', []),
+              localUi.invoke!('studio', 'presets', []),
+              localUi.invoke!('studio', 'localConfig', []),
+            ]);
+            return { api: settings, folder, presets, local };
+          }
+          // 本地页签内用「studio.xxx / loras.xxx / workflows.xxx」前缀把子面板的方法转发给原实现。
           const dot = method.indexOf('.');
           if (dot > 0) return localUi.invoke!(method.slice(0, dot), method.slice(dot + 1), args);
           return localUi.invoke!('studio', method, args);

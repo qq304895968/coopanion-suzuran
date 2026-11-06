@@ -801,6 +801,34 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
         expect(localCtx.root.textContent, `tab=${tabValue}`).not.toContain('Panel failed');
       }
 
+      // 5. 批量模式：自定义勾选徽标 + 选中高亮（边框/遮罩/对勾），无原生复选框
+      segButtons.find((b) => b.dataset.value === 'works')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      const tiles = () => localCtx.root.querySelectorAll('.coo-works-tile');
+      const selectedTiles = () => tiles().filter((e) => e.classList.contains('is-selected'));
+      localCtx.root.querySelector('.btn-batch-mode')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(tiles().length).toBeGreaterThan(0);
+      expect(localCtx.root.querySelectorAll('.coo-works-check')).toHaveLength(tiles().length);
+      expect(localCtx.root.querySelector('.coo-works-grid input')).toBeNull();
+      expect(selectedTiles()).toHaveLength(0);
+      tiles()[0]!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(selectedTiles()).toHaveLength(1);
+      expect(localCtx.root.querySelectorAll('.coo-works-check').filter((e) => e.classList.contains('is-checked'))).toHaveLength(1);
+      const batchBar = localCtx.root.querySelector('.coo-works-batch-actions')!;
+      expect(batchBar.textContent).toContain('已选 1 张');
+      batchBar.querySelectorAll('button').find((b) => b.textContent.includes('反选'))!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(selectedTiles()).toHaveLength(0);
+      expect(batchBar.textContent).toContain('已选 0 张');
+      batchBar.querySelectorAll('button').find((b) => b.textContent.includes('全选'))!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(selectedTiles()).toHaveLength(tiles().length);
+      localCtx.root.querySelector('.btn-batch-mode')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(localCtx.root.querySelector('.coo-works-check')).toBeNull();
+
       // 6. 删除确认弹窗：操作区删除键打开弹窗，勾选本地文件后确认删除
       segButtons.find((b) => b.dataset.value === 'works')!.click();
       await new Promise((r) => setTimeout(r, 25));

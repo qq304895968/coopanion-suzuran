@@ -1059,14 +1059,34 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.coo-works-tile .chk {
+.coo-works-tile.is-selected { border-color: var(--coo-accent); box-shadow: 0 0 0 2px var(--coo-accent-soft); }
+.coo-works-tile.is-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--coo-accent-soft);
+  opacity: .38;
+  pointer-events: none;
+}
+.coo-works-tile .coo-works-check {
   position: absolute;
   top: 6px;
   left: 6px;
-  background: rgba(255,255,255,.9);
-  border-radius: 4px;
-  padding: 1px;
   width: 18px; height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid #D1D5DB;
+  background: #FFFFFF;
+  z-index: 1;
+}
+.coo-works-tile .coo-works-check.is-checked {
+  background: var(--coo-accent);
+  border-color: var(--coo-accent);
+}
+.coo-works-tile .coo-works-check.is-checked::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M6.5 11.5L3 8l1-1 2.5 2.5L12 4l1 1z'/></svg>") center/contain no-repeat;
 }
 .coo-works-dot {
   position: absolute;

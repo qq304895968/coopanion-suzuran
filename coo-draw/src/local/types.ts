@@ -190,6 +190,9 @@ export interface HistoryEntry {
   seed: number;
   batch: number;
   created_at: number;
+  /** 是否收藏；缺省（旧数据）视为未收藏。 */
+  is_favorite?: boolean;
+  favorite_at?: number;
   workflow: string;
   workflow_id?: string;
   prompt_id: string;

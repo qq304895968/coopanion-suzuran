@@ -128,6 +128,15 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
       removeDir(dir);
     }
   });
+
+  it('作品收藏持久化：面板经 setFavorite 读写同一字段，并提供已收藏筛选', () => {
+    expect(localClient).toContain("ctx.invoke('setFavorite'");
+    expect(localClient).toContain('is_favorite');
+    expect(localClient).toContain("t('已收藏', 'Favorites')");
+    expect(localClient).toContain('coo-work-fav');
+    expect(localClient).not.toContain('本地标记');
+  });
+
   it('作品元信息必须包含主模型 / 文本编码器 / VAE，空值显示未记录', () => {
     expect(localClient).toContain("addRow('model', t('主模型','Model')");
     expect(localClient).toContain("addRow('textEncoder', t('文本编码器','Text encoder')");

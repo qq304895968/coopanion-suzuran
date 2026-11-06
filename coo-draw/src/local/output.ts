@@ -119,6 +119,17 @@ export class OutputStore {
     return this.entries.find((entry) => entry.id === id) ?? null;
   }
 
+  /** 设置收藏：写入 history.json，返回更新后的条目；找不到返回 null。 */
+  setFavorite(id: string, favorite: boolean): HistoryEntry | null {
+    const entry = this.get(id);
+    if (!entry) return null;
+    entry.is_favorite = favorite;
+    if (favorite) entry.favorite_at = this.now().getTime();
+    else delete entry.favorite_at;
+    this.persist();
+    return entry;
+  }
+
   private trim(): void {
     if (this.entries.length > this.limit) this.entries = this.entries.slice(0, this.limit);
     this.persist();

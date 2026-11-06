@@ -1077,6 +1077,21 @@
   background: #FF4D4F;
   box-shadow: 0 0 0 2px rgba(255,255,255,.9);
 }
+.coo-work-fav {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  color: var(--coo-warn, #D97706);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
 
 .coo-batch-stats { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: #8a8f98; padding: 8px 0; }
 .coo-batch-stats .primary { background: var(--coo-accent); color: #fff; border-color: var(--coo-accent); }

@@ -592,6 +592,16 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
             if (method.endsWith('presetDetail')) return { ok: true, preset: { name: '快速文生图', mapping: [], warnings: [] } };
             if (method.endsWith('listLoras')) return { loras: boot.loras, defaults: boot.defaults, aliases: boot.aliases, lora_root: boot.lora_root };
             if (method.endsWith('history')) return { history: boot.history, task: null };
+            if (method.endsWith('setFavorite')) {
+              const [favId, favNext] = (args ?? []) as [string, boolean];
+              const target = (boot.history as Array<Record<string, any>>).find((h) => h.id === favId);
+              if (target) {
+                target.is_favorite = favNext;
+                if (favNext) target.favorite_at = Date.now();
+                else delete target.favorite_at;
+              }
+              return { ok: true };
+            }
             if (method.endsWith('status')) return { task: null };
             if (method.endsWith('health')) return { health: boot.health };
             if (method.endsWith('refreshModels')) {
@@ -720,6 +730,24 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       expect(metaGrid.textContent).toContain('clip_g');
       expect(metaGrid.textContent).toContain('VAE');
       expect(metaGrid.textContent).toContain('sdxl_vae');
+
+      // 收藏持久化：点击收藏后按钮变为已收藏，卡片出现星标
+      const favBtn = opsPanel.querySelectorAll('.btn-action').find((b) => b.textContent.includes('收藏'))!;
+      expect(favBtn.textContent).not.toContain('已收藏');
+      favBtn.click();
+      await new Promise((r) => setTimeout(r, 15));
+      expect(opsPanel.textContent).toContain('已收藏');
+      expect(localCtx.root.querySelector('.coo-work-fav')).not.toBeNull();
+
+      // 已收藏筛选：切到已收藏仍可见；取消收藏后切已收藏显示空状态
+      const favSegBtns = localCtx.root.querySelectorAll('.seg-btn');
+      favSegBtns.find((b) => b.dataset.value === 'favorite')!.click();
+      expect(localCtx.root.querySelectorAll('.coo-works-tile').length).toBe(1);
+      opsPanel.querySelectorAll('.btn-action').find((b) => b.textContent.includes('已收藏'))!.click();
+      await new Promise((r) => setTimeout(r, 15));
+      expect(localCtx.root.querySelectorAll('.coo-works-tile').length).toBe(0);
+      favSegBtns.find((b) => b.dataset.value === 'all')!.click();
+      expect(localCtx.root.querySelectorAll('.coo-works-tile').length).toBe(1);
 
       // 验证「微调」按钮：跳转出图页、回填全部参数与原种子（42），且不自动触发生成
       const tweakBtn = opsPanel.querySelectorAll('.btn-action').find((b) => b.textContent.includes('微调'))!;

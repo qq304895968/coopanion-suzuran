@@ -286,9 +286,53 @@ function isLink(value: unknown): value is [string | number, number] {
     && typeof value[1] === 'number';
 }
 
+export interface WorkflowLoRA {
+  node_id: string;
+  /** 工作流里写的 lora_name（可能带目录和扩展名） */
+  path: string;
+  /** 去掉目录和扩展名后的名字，用于和面板里的 LoRA 比对 */
+  name: string;
+  weight: number;
+  clip_weight?: number;
+}
+
+function isLoraLoader(node: WorkflowNode | undefined): boolean {
+  return !!node && /^LoraLoader(ModelOnly)?$/.test(node.class_type);
+}
+
+/** 归一化 LoRA 名：去目录、去扩展名、转小写，用来判断是不是同一份 LoRA。 */
+export function loraBasename(value: string): string {
+  const file = value.replace(/\\/g, '/').split('/').pop() ?? value;
+  return file.replace(/\.(safetensors|ckpt|pt|bin)$/i, '').toLowerCase();
+}
+
+export function loraKey(lora: { path?: string; name?: string }): string {
+  return loraBasename(lora.path || lora.name || '');
+}
+
+/** 列出工作流里已经存在的 LoRA，导入/切换 preset 时用来回填面板。 */
+export function listWorkflowLoRAs(workflow: Workflow): WorkflowLoRA[] {
+  const result: WorkflowLoRA[] = [];
+  for (const [id, node] of Object.entries(workflow)) {
+    if (!isLoraLoader(node)) continue;
+    const raw = node.inputs.lora_name;
+    if (typeof raw !== 'string' || !raw) continue;
+    const weight = Number(node.inputs.strength_model ?? 1);
+    const clip = node.inputs.strength_clip === undefined ? undefined : Number(node.inputs.strength_clip);
+    result.push({
+      node_id: id,
+      path: raw,
+      name: loraBasename(raw),
+      weight: Number.isFinite(weight) ? weight : 1,
+      ...(clip !== undefined && Number.isFinite(clip) ? { clip_weight: clip } : {}),
+    });
+  }
+  return result;
+}
+
 /**
  * 在 CheckpointLoader 或分离式 UNETLoader（+ CLIPLoader）输出后插入 LoRA 链，
- * 并把所有下游引用改到链尾。已存在的 LoraLoader 会被自然叠在我们后面。
+ * 并把所有下游引用改到链尾。工作流里已有同名 LoRA 时只更新权重，不再叠加一份。
  */
 export function injectLoRAs(
   workflow: Workflow,
@@ -297,13 +341,36 @@ export function injectLoRAs(
   const out = clone(workflow);
   const warnings: string[] = [];
   if (!loras.length) return { workflow: out, warnings };
+
+  // 工作流本身已带的 LoRA：只更新 model 强度，CLIP 强度保持工作流原值；
+  // 剩余没出现过的 LoRA 才插入新节点，避免同一组 LoRA 被应用两遍。
+  const existing = new Map<string, string>();
+  for (const [id, node] of Object.entries(out)) {
+    if (!isLoraLoader(node)) continue;
+    const raw = node.inputs.lora_name;
+    if (typeof raw === 'string' && raw) existing.set(loraBasename(raw), id);
+  }
+  const pending: Array<{ path: string; weight: number }> = [];
+  const seen = new Set<string>();
+  for (const lora of loras) {
+    const key = loraKey(lora);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const existingId = existing.get(key);
+    if (existingId) {
+      out[existingId]!.inputs.strength_model = lora.weight;
+      continue;
+    }
+    pending.push(lora);
+  }
+  if (!pending.length) return { workflow: out, warnings };
   const ckpt = checkpointNode(out);
   if (ckpt) {
     let next = maxNodeId(out) + 1;
     let model: [string, number] = [ckpt, 0];
     let clip: [string, number] = [ckpt, 1];
     const inserted: string[] = [];
-    for (const lora of loras) {
+    for (const lora of pending) {
       const id = String(next++);
       out[id] = {
         class_type: 'LoraLoader',
@@ -341,7 +408,7 @@ export function injectLoRAs(
     let modelLink: [string, number] = [unetId, 0];
     let clipLink: [string, number] | null = clipId ? [clipId, 0] : null;
     const inserted: string[] = [];
-    for (const lora of loras) {
+    for (const lora of pending) {
       const id = String(next++);
       if (clipLink) {
         out[id] = {

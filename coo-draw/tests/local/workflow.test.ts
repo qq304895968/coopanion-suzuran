@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyCustomParams, applyParams, buildForPreset, builtinPresets, convertUiWorkflow, detectParamMapping,
-  injectLoRAs, validateApiWorkflow, type Workflow,
+  injectLoRAs, listWorkflowLoRAs, validateApiWorkflow, type Workflow,
 } from '../../src/local/workflow.ts';
 
 const quick = () => builtinPresets().find((preset) => preset.id === 'quick-txt2img')!;
@@ -102,6 +102,41 @@ describe('内置工作流与参数', () => {
     expect(out['6']!.inputs.text).toBe('hello');
     expect(out['3']!.inputs.cfg).toBe(9);
     expect(workflow['6']!.inputs.text).toBe('');
+  });
+
+  it('工作流自带 LoRA 会被识别，生成时复用原节点而不是重复叠加', () => {
+    const workflow: Workflow = {
+      '10': { class_type: 'UNETLoader', inputs: { unet_name: 'krea2.safetensors', weight_dtype: 'default' } },
+      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5.safetensors', type: 'krea2' } },
+      '20': {
+        class_type: 'LoraLoader',
+        inputs: { lora_name: '风格/krea2-masterpieces-v51.safetensors', strength_model: 0.7, strength_clip: 1, model: ['10', 0], clip: ['11', 0] },
+      },
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: 'girl', clip: ['20', 1] } },
+      '3': { class_type: 'KSampler', inputs: { model: ['20', 0], positive: ['6', 0], steps: 8 } },
+      '9': { class_type: 'SaveImage', inputs: { images: ['3', 0] } },
+    };
+    const listed = listWorkflowLoRAs(workflow);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ node_id: '20', name: 'krea2-masterpieces-v51', weight: 0.7, clip_weight: 1 });
+
+    const result = injectLoRAs(workflow, [
+      { path: 'krea2-masterpieces-v51.safetensors', weight: 0.5 },
+      { path: 'extra/new.safetensors', weight: 0.6 },
+      { path: 'extra/new.safetensors', weight: 0.6 },
+    ]);
+    const loraNodes = Object.entries(result.workflow).filter(([, node]) => node.class_type === 'LoraLoader');
+    // 已有的 1 个 + 新增 1 个；同一 LoRA 不会被叠两遍
+    expect(loraNodes).toHaveLength(2);
+    // 已有节点只改 strength_model，CLIP 强度保持工作流原样
+    expect(result.workflow['20']!.inputs.strength_model).toBe(0.5);
+    expect(result.workflow['20']!.inputs.strength_clip).toBe(1);
+    const added = loraNodes.find(([id]) => id !== '20')!;
+    expect(added[1].inputs.model).toEqual(['10', 0]);
+    expect(added[1].inputs.clip).toEqual(['11', 0]);
+    // 原有 LoRA 节点被串到新链尾，整条链仍然只应用一次
+    expect(result.workflow['20']!.inputs.model).toEqual([added[0], 0]);
+    expect(result.workflow['3']!.inputs.model).toEqual(['20', 0]);
   });
 
   it('buildForPreset 同时应用参数和 LoRA', () => {

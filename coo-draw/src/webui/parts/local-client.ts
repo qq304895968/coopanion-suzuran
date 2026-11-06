@@ -29,6 +29,7 @@ interface PresetDetail {
     builtin: boolean;
     kind?: string;
     mapping: ParamMapping[];
+    workflow_loras?: Array<{ path: string; name?: string; weight: number }>;
     warnings: string[];
   };
   error?: string;
@@ -138,6 +139,8 @@ interface SharedDrawState {
   resultUrl: string;
   savedParams: SavedStudioParams | null;
   pendingStudioAction: { entry: HistoryEntry; mode: 'tweak' | 'repaint' } | null;
+  /** 「工作流」页刚导入的 preset：出图页挂载时自动选中并回填。 */
+  pendingWorkflow: string | null;
 }
 const shared: SharedDrawState = {
   boot: null,
@@ -152,6 +155,7 @@ const shared: SharedDrawState = {
   resultUrl: '',
   savedParams: null,
   pendingStudioAction: null,
+  pendingWorkflow: null,
 };
 
 const LAST_PARAMS_KEY = 'coo-draw-last-params';
@@ -398,6 +402,11 @@ const studioPanel: WebUiPanel = {
       onChange: (val) => {
         state.workflow = val;
         state.custom = {};
+        // 切工作流时把自带的 LoRA 与参数回填到面板（生成时复用工作流里的节点，不再叠加）
+        const preset = presets.find((item) => item.id === val);
+        const added = applyWorkflowLoras(preset?.workflow_loras, true);
+        if (added) ctx.ui.toast(t(`已按工作流自动勾选 ${added} 个 LoRA`, `Auto-selected ${added} workflow LoRAs`));
+        void applyPresetParams(val);
         renderCheckpointEmpty();
         renderExtra();
         updateGenerateEnabled();
@@ -692,8 +701,49 @@ const studioPanel: WebUiPanel = {
       state.loras = next; persistLora(); renderLoraTable();
     });
     btnClear.addEventListener('click', () => { state.loras.clear(); persistLora(); renderLoraTable(); });
+
+    const loraKeyOf = (value: string): string => (value.split(/[\\/]/).pop() ?? value).replace(/\.(safetensors|pt|ckpt|bin)$/i, '').toLowerCase();
+    const findLoraRecord = (item: { path: string; name?: string }): LoRARecord | undefined => {
+      const wanted = item.path.replace(/\\/g, '/').toLowerCase();
+      return loras.find((l) => l.path.replace(/\\/g, '/').toLowerCase() === wanted)
+        ?? loras.find((l) => loraKeyOf(l.path) === loraKeyOf(item.path))
+        ?? (item.name ? loras.find((l) => l.name.toLowerCase() === item.name!.toLowerCase()) : undefined);
+    };
+    /**
+     * 把工作流自带 LoRA 回填到面板。replace=true 时整个替换当前选择，
+     * 这样「选工作流 = 选它自带的 LoRA」，生成时直接复用工作流里的节点。
+     */
+    const applyWorkflowLoras = (
+      list: Array<{ path: string; name?: string; weight: number }> | undefined,
+      replace = false,
+    ): number => {
+      if (!list?.length) return 0;
+      const next = new Map<string, number>();
+      if (!replace) for (const [path, weight] of state.loras) next.set(path, weight);
+      let added = 0;
+      for (const item of list) {
+        const record = findLoraRecord(item);
+        if (!record) continue;
+        if (!next.has(record.path)) added += 1;
+        next.set(record.path, Number.isFinite(Number(item.weight)) ? Number(item.weight) : (record.weight ?? 0.75));
+      }
+      if (!next.size) return 0;
+      state.loras = next;
+      persistLora();
+      renderLoraTable();
+      renderLoraCount();
+      return added;
+    };
+
     // 首次加载时若无上次生成保存的 LoRA 快照，尝试恢复上次手动选择（覆盖 defaults）
     if (!hasSavedLoras) restoreLora();
+    // 工作流自带 LoRA 优先：打开时自动勾选，避免面板再叠一遍（重复注入）
+    {
+      const savedWorkflow = initialSaved && typeof initialSaved.workflow === 'string' ? initialSaved.workflow : '';
+      if (!hasSavedLoras || savedWorkflow !== state.workflow) {
+        applyWorkflowLoras(presets.find((item) => item.id === state.workflow)?.workflow_loras, true);
+      }
+    }
     loraSearch.addEventListener('input', renderLoraTable);
     renderLoraTable();
 
@@ -848,6 +898,55 @@ const studioPanel: WebUiPanel = {
       markCustom();
     });
 
+    /**
+     * 把工作流识别到的参数默认值回填到面板。
+     * 生成时 applyParams 会用面板值覆盖工作流节点，所以面板若停留在全局默认
+     * （20 步 / 768×1152 / euler_ancestral），工作流里标好的 10 步 / 1080×1920 / er_sde
+     * 就会被冲掉——回填后「选哪个工作流就跑哪个工作流」。
+     */
+    const applyPresetParams = async (presetId: string): Promise<void> => {
+      if (!presetId) return;
+      let detail: PresetDetail['preset'] | null = null;
+      try {
+        const res = await ctx.invoke<PresetDetail>('presetDetail', [presetId]);
+        detail = res.ok ? (res.preset ?? null) : null;
+      } catch {
+        detail = null;
+      }
+      if (!alive || !detail || state.workflow !== presetId) return;
+      const mapping = detail.mapping ?? [];
+      const find = (param: string): ParamMapping | undefined => mapping.find((item) => item.param === param);
+      const numDefault = (param: string): number | undefined => {
+        const value = find(param)?.default;
+        return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+      };
+      const textDefault = (param: string): string | undefined => {
+        const value = find(param)?.default;
+        return typeof value === 'string' ? value : undefined;
+      };
+      const steps = numDefault('steps');
+      if (steps !== undefined) { state.steps = Math.max(1, Math.min(100, Math.round(steps))); stepsInput.value = String(state.steps); }
+      const cfg = numDefault('cfg');
+      if (cfg !== undefined) { state.cfg = Math.min(30, Math.max(1, cfg)); cfgInput.value = String(state.cfg); }
+      const width = numDefault('width');
+      if (width !== undefined) { state.width = Math.max(64, Math.min(4096, Math.round(width / 8) * 8)); widthInput.value = String(state.width); }
+      const height = numDefault('height');
+      if (height !== undefined) { state.height = Math.max(64, Math.min(4096, Math.round(height / 8) * 8)); heightInput.value = String(state.height); }
+      const batch = numDefault('batch');
+      if (batch !== undefined) { state.batch = Math.max(1, Math.min(8, Math.round(batch))); batchInput.value = String(state.batch); }
+      const sampler = textDefault('sampler');
+      if (sampler) { state.sampler = sampler; samplerDD.setValue(sampler, false); }
+      const scheduler = textDefault('scheduler');
+      if (scheduler) { state.scheduler = scheduler; schedulerDD.setValue(scheduler, false); }
+      // 正/负向提示词只在面板为空时回填，避免覆盖用户已经写好的内容。
+      const positiveText = textDefault('positive');
+      if (positiveText !== undefined && !positive.value.trim()) { state.positive = positiveText; positive.value = positiveText; }
+      const negativeText = textDefault('negative');
+      if (negativeText !== undefined && !negative.value.trim()) { state.negative = negativeText; negative.value = negativeText; }
+      markCustom();
+      updateGenerateEnabled();
+    };
+
     // 额外输入（img2img / controlnet / custom）
     const extraBox = ctx.ui.h('div', 'coo-gen-extra');
     paramSheet.body.append(extraBox);
@@ -944,6 +1043,24 @@ const studioPanel: WebUiPanel = {
     };
     void presets.find((item) => item.id === state.workflow);
     renderExtra();
+
+    // 刚从「工作流」页导入：自动选中新工作流，并回填它自带的 LoRA 与参数
+    if (shared.pendingWorkflow) {
+      const pending = shared.pendingWorkflow;
+      shared.pendingWorkflow = null;
+      const preset = presets.find((item) => item.id === pending);
+      if (preset) {
+        state.workflow = pending;
+        state.custom = {};
+        workflowDD.setValue(pending, false);
+        const added = applyWorkflowLoras(preset.workflow_loras, true);
+        if (added) ctx.ui.toast(t(`已按工作流自动勾选 ${added} 个 LoRA`, `Auto-selected ${added} workflow LoRAs`));
+        void applyPresetParams(pending);
+        renderCheckpointEmpty();
+        renderExtra();
+        updateGenerateEnabled();
+      }
+    }
 
     /* --------------------------- 右栏：连接 + 进度 --------------------------- */
     // 连接卡片化
@@ -2723,9 +2840,12 @@ const workflowsPanel: WebUiPanel = {
           if (!res.ok || !res.preset) throw new Error(res.error ?? '导入失败');
           presets = [res.preset, ...presets];
           render();
+          // 导入后让「出图」页自动切到这个工作流，并回填它自带的 LoRA 与参数
+          shared.pendingWorkflow = res.preset.id;
+          const addedLoras = res.preset.workflow_loras?.length ?? 0;
           line.textContent = t(
-            `已导入「${res.preset.name}」，识别到 ${res.preset.mapping_count} 个参数${res.warnings?.length ? `；${res.warnings.join('；')}` : ''}`,
-            `Imported “${res.preset.name}” with ${res.preset.mapping_count} parameters${res.warnings?.length ? `; ${res.warnings.join('; ')}` : ''}`,
+            `已导入「${res.preset.name}」，识别到 ${res.preset.mapping_count} 个参数${addedLoras ? `，已自动勾选 ${addedLoras} 个 LoRA` : ''}${res.warnings?.length ? `；${res.warnings.join('；')}` : ''}`,
+            `Imported “${res.preset.name}” with ${res.preset.mapping_count} parameters${addedLoras ? `; auto-selected ${addedLoras} LoRAs` : ''}${res.warnings?.length ? `; ${res.warnings.join('; ')}` : ''}`,
           );
           line.classList.toggle('bad', Boolean(res.warnings?.length));
           ctx.ui.toast(t('工作流已导入', 'Workflow imported'));

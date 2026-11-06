@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ensureDir, readJson, writeJsonAtomic } from './fs-util.ts';
-import { builtinPresets, validateApiWorkflow } from './workflow.ts';
+import { builtinPresets, listWorkflowLoRAs, validateApiWorkflow, type Workflow } from './workflow.ts';
 import type { ParamMapping, WorkflowPreset, WorkflowSummary } from './types.ts';
 
 function hasSplitUnet(workflow: Record<string, unknown>): boolean {
@@ -17,6 +17,8 @@ function summary(preset: WorkflowPreset): WorkflowSummary {
   const needsCheckpoint = preset.param_mapping.some((item) => item.param === 'checkpoint');
   const splitUnet = hasSplitUnet(preset.workflow);
   const warnings = preset.warnings?.filter((w) => !(splitUnet && w.includes('CheckpointLoader')));
+  const workflowLoras = listWorkflowLoRAs(preset.workflow as unknown as Workflow)
+    .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight }));
   return {
     id: preset.id,
     name: preset.name,
@@ -26,6 +28,7 @@ function summary(preset: WorkflowPreset): WorkflowSummary {
     created_at: preset.created_at,
     ...(preset.source ? { source: preset.source } : {}),
     ...(warnings?.length ? { warnings } : {}),
+    ...(workflowLoras.length ? { workflow_loras: workflowLoras } : {}),
     mapping_count: preset.param_mapping.length,
   };
 }

@@ -35,8 +35,9 @@ import type {
   HistoryEntry, LoRARecord, SavedStudioParams, StatusResponse, WorkflowSummary,
 } from './types.ts';
 import {
-  applyCustomParams, buildForPreset, convertUiWorkflow, detectParamMapping, injectLoRAs, looksLikeUiWorkflow, validateApiWorkflow,
-  type ObjectInfo,
+  applyCustomParams, buildForPreset, convertUiWorkflow, detectParamMapping, injectLoRAs, listWorkflowLoRAs,
+  looksLikeUiWorkflow, validateApiWorkflow,
+  type ObjectInfo, type Workflow,
 } from './workflow.ts';
 import type { LocalPersonaRequest, LocalPersonaResult, PersonaRenderConfig, RenderedImage } from '../render-types.ts';
 import { buildLocalPersonaPrompt, parsePersonaLoras } from '../persona-local.ts';
@@ -2017,6 +2018,9 @@ export class CooGenWorld implements World {
     const preset = this.presets.get(String(id ?? ''));
     if (!preset) return { ok: false, error: '找不到这个工作流' };
     const summaryView = this.presets.summaries().find((item) => item.id === preset.id);
+    const workflowLoras = summaryView?.workflow_loras
+      ?? listWorkflowLoRAs(preset.workflow as unknown as Workflow)
+        .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight }));
     return {
       ok: true,
       preset: {
@@ -2026,6 +2030,7 @@ export class CooGenWorld implements World {
         kind: preset.kind,
         needs_checkpoint: summaryView?.needs_checkpoint ?? preset.param_mapping.some((item) => item.param === 'checkpoint'),
         mapping: preset.param_mapping,
+        workflow_loras: workflowLoras,
         warnings: summaryView?.warnings ?? preset.warnings ?? [],
       },
     };
@@ -2077,6 +2082,8 @@ export class CooGenWorld implements World {
           created_at: preset.created_at,
           source: path,
           ...(warnings.length ? { warnings } : {}),
+          workflow_loras: listWorkflowLoRAs(workflow as unknown as Workflow)
+            .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight })),
           mapping_count: detected.mapping.length,
         },
         warnings,

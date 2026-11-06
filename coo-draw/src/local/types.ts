@@ -198,6 +198,8 @@ export interface WorkflowSummary {
   source?: string;
   warnings?: string[];
   mapping_count: number;
+  /** 工作流自身携带的 LoRA（导入后回填到面板，生成时不再重复叠加）。 */
+  workflow_loras?: Array<{ path: string; name: string; weight: number }>;
 }
 
 export interface ComfyHealth {

@@ -538,6 +538,7 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
 
       const generatedPayloads: Array<Record<string, any>> = [];
       let savedLastParams: Record<string, any> | undefined;
+      const setConfigCalls: Array<[string, Record<string, unknown>]> = [];
 
       const makeCtx = (panelId: string) => {
         const root = doc.createElement('div');
@@ -559,7 +560,10 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
           mountSlot: async () => ({ dispose() {} }),
           refresh: async () => {},
           pickPath: async () => null,
-          setConfig: async () => '已保存',
+          setConfig: async (group: string, values: Record<string, unknown>) => {
+            setConfigCalls.push([group, values]);
+            return '已保存';
+          },
           stream: () => ({ close() {} }),
           invokeBinary: async () => new Blob([new Uint8Array([137, 80, 78, 71])]),
           invoke: async (method: string, args?: unknown[]) => {
@@ -589,6 +593,14 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
               };
             }
             if (method.endsWith('presets')) return { presets: boot.presets, default_workflow: boot.workflow };
+            if (method.endsWith('drawConfig')) {
+              return {
+                api: { style: 'pencil', customStyle: '', dailyLimit: 20, maxImagesPerCall: 1, routePet: 'api', routeDiary: 'local' },
+                folder: { path: 'D:\\\\draw', fallback: false },
+                presets: { presets: [{ id: 'quick-txt2img', name: '快速文生图' }], default_workflow: 'quick-txt2img' },
+                local: { url: 'http://127.0.0.1:8188', outputDir: '', modelsDir: '', defaultWorkflow: 'quick-txt2img', launchScript: '' },
+              };
+            }
             if (method.endsWith('presetDetail')) return { ok: true, preset: { name: '快速文生图', mapping: [{ param: 'inputImage', node_id: '10', field: 'image', ui_label: '输入图', ui_type: 'image', default: '' }], warnings: [] } };
             if (method.endsWith('listLoras')) return { loras: boot.loras, defaults: boot.defaults, aliases: boot.aliases, lora_root: boot.lora_root };
             if (method.endsWith('history')) return { history: boot.history, task: null };
@@ -806,15 +818,29 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
         expect(generatedPayloads[0]!.seed).not.toBe(42);
       }
 
-      // 4. 依次切换到「LoRA 管理」「工作流」「作品」再切回「出图」，全程零报错
+      // 4. 依次切换各子页（含配置）再切回「出图」，全程零报错
       const segButtons = localCtx.root.querySelectorAll('.seg-btn');
-      for (const tabValue of ['loras', 'workflows', 'works', 'studio']) {
+      for (const tabValue of ['loras', 'workflows', 'works', 'studio', 'config']) {
         const btn = segButtons.find((b) => b.dataset.value === tabValue)!;
         btn.click();
         await new Promise((r) => setTimeout(r, 15));
         expect(localCtx.root.textContent, `tab=${tabValue}`).not.toContain('面板加载失败');
         expect(localCtx.root.textContent, `tab=${tabValue}`).not.toContain('Panel failed');
       }
+
+      // 4b. 配置子页：两段表单渲染 + 路由切换走 setConfig
+      segButtons.find((b) => b.dataset.value === 'config')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      const configBox = localCtx.root.querySelector('.coo-config')!;
+      expect(configBox).not.toBeNull();
+      expect(configBox.textContent).toContain('API 绘画');
+      expect(configBox.textContent).toContain('本地出图');
+      expect(configBox.textContent).toContain('宠物画像路由');
+      expect(configBox.querySelectorAll('.coo-dd-trigger')).toHaveLength(2);
+      expect(configBox.querySelectorAll('input').some((i) => i.value === 'http://127.0.0.1:8188')).toBe(true);
+      configBox.querySelectorAll('.seg-btn').find((b) => b.dataset.value === 'local')!.click();
+      await new Promise((r) => setTimeout(r, 15));
+      expect(setConfigCalls).toContainEqual(['world:draw', { 'worlds.draw.routePet': 'local' }]);
 
       // 5. 批量模式：自定义勾选徽标 + 选中高亮（边框/遮罩/对勾），无原生复选框
       segButtons.find((b) => b.dataset.value === 'works')!.click();

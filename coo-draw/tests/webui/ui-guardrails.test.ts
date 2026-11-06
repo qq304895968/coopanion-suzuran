@@ -208,4 +208,13 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(configPanelSrc).toContain('createDropdown');
     expect(cssContent).toContain('.coo-config');
   });
+
+  it('分段标题与段间距必须统一（section-title + 18px）', () => {
+    expect(cssContent).toMatch(/\.coo-section-title\s*\{[\s\S]*?font-size:\s*13px/);
+    expect(cssContent).toMatch(/\.coo-config\s*\{[\s\S]*?gap:\s*18px/);
+    expect(cssContent).toMatch(/\.coo-draw-left\s*\{[\s\S]*?gap:\s*18px/);
+    expect(configPanelSrc).toContain('coo-section-title');
+    expect(configPanelSrc).not.toContain('ctx.ui.section');
+    expect(localClient).not.toContain('ctx.ui.section');
+  });
 });

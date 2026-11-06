@@ -1085,7 +1085,9 @@ const studioPanel: WebUiPanel = {
         const custom = res.preset.mapping.filter((item) => !KNOWN_PARAMS.has(item.param));
         if (!custom.length) return;
         const box = ctx.ui.h('div', 'coo-gen-extra');
-        box.append(ctx.ui.section(t('自定义参数', 'Custom parameters'), t('从导入工作流里自动识别的参数。', 'Auto-detected from imported workflow.')));
+        const customHead = ctx.ui.h('div', 'coo-section-title', t('自定义参数', 'Custom parameters'));
+        customHead.append(ctx.ui.h('span', 'coo-section-desc', t('从导入工作流里自动识别的参数。', 'Auto-detected from imported workflow.')));
+        box.append(customHead);
         for (const map of custom) {
           const currentVal = state.custom[map.param] ?? (typeof map.default === 'number' || typeof map.default === 'string' ? map.default : '');
           const control = map.ui_type === 'number' || map.ui_type === 'slider' || map.ui_type === 'seed' ? ctx.ui.input({ type: 'number', value: String(currentVal), cls: 'mono coo-gen-num' }) : ctx.ui.input({ value: String(currentVal), cls: 'mono' });

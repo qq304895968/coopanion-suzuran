@@ -74,7 +74,14 @@ const configPanel: WebUiPanel = {
     loading.remove();
 
     const box = ctx.ui.h('div', 'coo-config');
-    box.append(ctx.ui.section(
+    const sectionHead = (title: string, desc: string) => {
+      const head = ctx.ui.h('div', 'coo-section-title', title);
+      head.append(ctx.ui.h('span', 'coo-section-desc', desc));
+      return head;
+    };
+    const apiSection = ctx.ui.h('div', 'coo-section');
+    const localSection = ctx.ui.h('div', 'coo-section');
+    apiSection.append(sectionHead(
       t('API 绘画', 'API drawing'),
       t('路由、画风、配额与画夹目录。', 'Routes, style, quota and gallery folder.'),
     ));
@@ -91,8 +98,8 @@ const configPanel: WebUiPanel = {
       );
       return ctx.ui.field(label, seg.el);
     };
-    box.append(routeRow(t('宠物画像路由', 'Pet portrait route'), 'routePet'));
-    box.append(routeRow(t('手帐路由', 'Diary route'), 'routeDiary'));
+    apiSection.append(routeRow(t('宠物画像路由', 'Pet portrait route'), 'routePet'));
+    apiSection.append(routeRow(t('手帐路由', 'Diary route'), 'routeDiary'));
 
     const styleDropdown = createDropdown({
       ariaLabel: t('默认画风', 'Default style'),
@@ -101,7 +108,7 @@ const configPanel: WebUiPanel = {
       onChange: (picked) => { void save('world:draw', { 'worlds.draw.style': picked }); },
     });
     ctx.own({ dispose: () => { styleDropdown.close(); } });
-    box.append(ctx.ui.field(t('默认画风', 'Default style'), styleDropdown.el));
+    apiSection.append(ctx.ui.field(t('默认画风', 'Default style'), styleDropdown.el));
 
     const numberRow = (label: string, key: 'dailyLimit' | 'maxImagesPerCall', min: number, max: number) => {
       const input = ctx.ui.input({ type: 'number', value: String(snapshot.api[key]) });
@@ -114,8 +121,8 @@ const configPanel: WebUiPanel = {
       });
       return ctx.ui.field(label, input);
     };
-    box.append(numberRow(t('每日上限', 'Daily limit'), 'dailyLimit', 0, 200));
-    box.append(numberRow(t('单次成图', 'Images per call'), 'maxImagesPerCall', 1, 4));
+    apiSection.append(numberRow(t('每日上限', 'Daily limit'), 'dailyLimit', 0, 200));
+    apiSection.append(numberRow(t('单次成图', 'Images per call'), 'maxImagesPerCall', 1, 4));
 
     const pathRow = (label: string, value: string, group: string, key: string, dirsOnly: boolean) => {
       const input = ctx.ui.input({ value });
@@ -137,9 +144,9 @@ const configPanel: WebUiPanel = {
       row.append(ctx.ui.field(label, input), choose);
       return row;
     };
-    box.append(pathRow(t('画夹目录', 'Gallery folder'), snapshot.folder.path, 'world:draw', 'worlds.draw.saveDir', true));
+    apiSection.append(pathRow(t('画夹目录', 'Gallery folder'), snapshot.folder.path, 'world:draw', 'worlds.draw.saveDir', true));
 
-    box.append(ctx.ui.section(
+    localSection.append(sectionHead(
       t('本地出图', 'Local generation'),
       t('连接、目录、默认工作流与一键启动。', 'Connection, folders, default workflow and one-click launch.'),
     ));
@@ -148,9 +155,9 @@ const configPanel: WebUiPanel = {
       if (!alive) return;
       void save('world:draw-local', { 'worlds.draw.localUrl': urlInput.value });
     });
-    box.append(ctx.ui.field(t('服务地址', 'Server URL'), urlInput));
-    box.append(pathRow(t('输出目录', 'Output folder'), snapshot.local.outputDir, 'world:draw-local', 'worlds.draw.localOutputDir', true));
-    box.append(pathRow(t('模型目录', 'Models folder'), snapshot.local.modelsDir, 'world:draw-local', 'worlds.draw.localModelsDir', true));
+    localSection.append(ctx.ui.field(t('服务地址', 'Server URL'), urlInput));
+    localSection.append(pathRow(t('输出目录', 'Output folder'), snapshot.local.outputDir, 'world:draw-local', 'worlds.draw.localOutputDir', true));
+    localSection.append(pathRow(t('模型目录', 'Models folder'), snapshot.local.modelsDir, 'world:draw-local', 'worlds.draw.localModelsDir', true));
 
     const workflowDropdown = createDropdown({
       ariaLabel: t('默认工作流', 'Default workflow'),
@@ -159,9 +166,10 @@ const configPanel: WebUiPanel = {
       onChange: (picked) => { void save('world:draw-local', { 'worlds.draw.localDefaultWorkflow': picked }); },
     });
     ctx.own({ dispose: () => { workflowDropdown.close(); } });
-    box.append(ctx.ui.field(t('默认工作流', 'Default workflow'), workflowDropdown.el));
-    box.append(pathRow(t('启动脚本', 'Launch script'), snapshot.local.launchScript, 'world:draw-local', 'worlds.draw.localLaunchScript', false));
+    localSection.append(ctx.ui.field(t('默认工作流', 'Default workflow'), workflowDropdown.el));
+    localSection.append(pathRow(t('启动脚本', 'Launch script'), snapshot.local.launchScript, 'world:draw-local', 'worlds.draw.localLaunchScript', false));
 
+    box.append(apiSection, localSection);
     sheet.body.append(box);
   },
 };

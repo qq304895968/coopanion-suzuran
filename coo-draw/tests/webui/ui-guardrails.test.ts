@@ -128,6 +128,16 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
       removeDir(dir);
     }
   });
+  it('作品元信息必须包含主模型 / 文本编码器 / VAE，空值显示未记录', () => {
+    expect(localClient).toContain("addRow('model', t('主模型','Model')");
+    expect(localClient).toContain("addRow('textEncoder', t('文本编码器','Text encoder')");
+    expect(localClient).toContain("addRow('vae', 'VAE'");
+    expect(localClient).toContain("t('未记录','Not recorded')");
+    // LoRA 芯片：clip 与 model 不一致时展示「model/clip」
+    expect(localClient).toContain('clip !== l.weight');
+    expect(localClient).toContain('model ${l.weight} / clip ${clip}');
+  });
+
   it('出图页 LoRA 行内必须同时渲染 Model 与 CLIP 两个 32px 步进器', () => {
     // 表头双列 + 行内双步进器 + 提交载荷携带 clip_weight
     expect(localClient).toContain('makeLoraStepper');

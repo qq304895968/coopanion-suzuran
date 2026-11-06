@@ -1,5 +1,5 @@
 /** ComfyUI API 格式工作流：内置模板、参数映射、LoRA 注入，以及 UI 格式导入。 */
-import type { GenerateParams, ParamMapping, WorkflowPreset } from './types.ts';
+import type { GenerateParams, ParamMapping, WorkflowModels, WorkflowPreset } from './types.ts';
 
 export type WorkflowNode = {
   class_type: string;
@@ -328,6 +328,29 @@ export function listWorkflowLoRAs(workflow: Workflow): WorkflowLoRA[] {
     });
   }
   return result;
+}
+
+/**
+ * 从已构建的工作流里解析模型三件，供作品元信息展示。
+ * fallbackCheckpoint 用于节点里没写死模型名的模板（applyParams 已把面板值写入节点，通常与它一致）。
+ */
+export function extractWorkflowModels(workflow: Workflow, fallbackCheckpoint = ''): WorkflowModels {
+  let checkpoint = '';
+  let textEncoder = '';
+  let vae = '';
+  for (const node of Object.values(workflow)) {
+    if (node.class_type.startsWith('CheckpointLoader')) {
+      if (!checkpoint) checkpoint = text(node.inputs.ckpt_name ?? node.inputs.config_name);
+    } else if (/^(UNETLoader|UnetLoaderGGUF)$/i.test(node.class_type)) {
+      if (!checkpoint) checkpoint = text(node.inputs.unet_name);
+    } else if (/^(CLIPLoader|DualCLIPLoader|TripleCLIPLoader|CLIPLoaderGGUF)$/i.test(node.class_type)) {
+      if (!textEncoder) textEncoder = text(node.inputs.clip_name);
+    } else if (/^VAELoader/i.test(node.class_type)) {
+      if (!vae) vae = text(node.inputs.vae_name);
+    }
+    if (checkpoint && textEncoder && vae) break;
+  }
+  return { checkpoint: checkpoint || fallbackCheckpoint, textEncoder, vae };
 }
 
 /**

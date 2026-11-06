@@ -490,6 +490,8 @@ function makeBootstrap(checkpoints: string[] = []) {
         positive: 'suzuran',
         negative: 'lowres',
         checkpoint: 'sdxl.safetensors',
+        text_encoder: 'clip_g.safetensors',
+        vae: 'sdxl_vae.safetensors',
         loras: [{ name: 'suzuran.safetensors', path: '角色/suzuran.safetensors', weight: 0.8 }],
         sampler: 'euler',
         scheduler: 'normal',
@@ -709,6 +711,15 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       const loraChip = localCtx.root.querySelector('.coo-lora-chip')!;
       expect(loraChip.querySelector('.lora-name')?.textContent).toBe('suzuran');
       expect(loraChip.querySelectorAll('.weight').map((el) => el.textContent).join('')).toBe('·0.8');
+
+      // 元信息区展示主模型 / 文本编码器 / VAE
+      const metaGrid = localCtx.root.querySelector('.coo-meta-grid')!;
+      expect(metaGrid.textContent).toContain('主模型');
+      expect(metaGrid.textContent).toContain('sdxl');
+      expect(metaGrid.textContent).toContain('文本编码器');
+      expect(metaGrid.textContent).toContain('clip_g');
+      expect(metaGrid.textContent).toContain('VAE');
+      expect(metaGrid.textContent).toContain('sdxl_vae');
 
       // 验证「微调」按钮：跳转出图页、回填全部参数与原种子（42），且不自动触发生成
       const tweakBtn = opsPanel.querySelectorAll('.btn-action').find((b) => b.textContent.includes('微调'))!;

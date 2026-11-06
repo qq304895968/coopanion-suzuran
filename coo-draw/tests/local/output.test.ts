@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OutputStore } from '../../src/local/output.ts';
@@ -87,4 +87,38 @@ describe('OutputStore', () => {
     expect(a.filename).toContain('_1.png');
     expect(b.filename).toContain('_2.png');
   });
+
+  it('保存时写入解析到的模型三件，缺省回退到 params', () => {
+    const { store: instance } = store();
+    const entry = instance.save({
+      bytes: pngBytes(),
+      mime: 'image/png',
+      params: { ...params, checkpoint: '' },
+      loras: [],
+      models: { checkpoint: 'krea2_turbo_nvfp4.safetensors', textEncoder: 'qwen3vl_4b_fp8_scaled.safetensors', vae: 'qwen_image_vae.safetensors' },
+      promptId: 'p1',
+      taskId: 't1',
+      workflow: 'Krea2',
+      index: 0,
+      batch: 1,
+      seed: 42,
+    });
+    expect(entry.checkpoint).toBe('krea2_turbo_nvfp4.safetensors');
+    expect(entry.text_encoder).toBe('qwen3vl_4b_fp8_scaled.safetensors');
+    expect(entry.vae).toBe('qwen_image_vae.safetensors');
+    const text = readPngText(readFileSync(entry.path));
+    const meta = JSON.parse(text.find((item) => item.keyword === 'coo-gen')!.text);
+    expect(meta.checkpoint).toBe('krea2_turbo_nvfp4.safetensors');
+    expect(meta.text_encoder).toBe('qwen3vl_4b_fp8_scaled.safetensors');
+    expect(meta.vae).toBe('qwen_image_vae.safetensors');
+
+    const fallback = instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: 'p2', taskId: 't2',
+      workflow: 'w', index: 0, batch: 1, seed: 7,
+    });
+    expect(fallback.checkpoint).toBe('anything_v5.safetensors');
+    expect(fallback.text_encoder).toBeUndefined();
+    expect(fallback.vae).toBeUndefined();
+  });
+
 });

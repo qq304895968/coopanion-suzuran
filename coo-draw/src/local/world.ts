@@ -35,8 +35,8 @@ import type {
   HistoryEntry, LoRARecord, SavedStudioParams, StatusResponse, WorkflowSummary,
 } from './types.ts';
 import {
-  applyCustomParams, buildForPreset, convertUiWorkflow, detectParamMapping, injectLoRAs, listWorkflowLoRAs,
-  looksLikeUiWorkflow, validateApiWorkflow,
+  applyCustomParams, buildForPreset, convertUiWorkflow, detectParamMapping, extractWorkflowModels, injectLoRAs,
+  listWorkflowLoRAs, looksLikeUiWorkflow, validateApiWorkflow,
   type ObjectInfo, type Workflow,
 } from './workflow.ts';
 import type { LocalPersonaRequest, LocalPersonaResult, PersonaRenderConfig, RenderedImage } from '../render-types.ts';
@@ -1325,6 +1325,7 @@ export class CooGenWorld implements World {
       warnings.push(warning);
     }
     const tasks = this.ensureTasks();
+    const models = extractWorkflowModels(withCustom, params.checkpoint ?? '');
     return tasks.submit({
       params,
       loras,
@@ -1332,6 +1333,7 @@ export class CooGenWorld implements World {
       workflowName: preset.name,
       seed: params.seed ?? -1,
       batch: params.batch ?? 1,
+      models,
     } satisfies SubmitInput);
   }
 

@@ -1590,13 +1590,15 @@ const worksPanel: WebUiPanel = {
     };
 
     // 字段配置
-    type FieldId = 'filename'|'seed'|'size'|'lora'|'model'|'time'|'sampler'|'prompt'|'negative';
+    type FieldId = 'filename'|'seed'|'size'|'lora'|'model'|'textEncoder'|'vae'|'time'|'sampler'|'prompt'|'negative';
     const DEFAULT_FIELDS: Array<{ id: FieldId; labelZh: string; labelEn: string }> = [
       { id:'prompt', labelZh:'提示词', labelEn:'Prompt' },
       { id:'negative', labelZh:'反向', labelEn:'Negative' },
       { id:'seed', labelZh:'种子', labelEn:'Seed' },
       { id:'lora', labelZh:'LoRA', labelEn:'LoRA' },
-      { id:'model', labelZh:'模型', labelEn:'Model' },
+      { id:'model', labelZh:'主模型', labelEn:'Model' },
+      { id:'textEncoder', labelZh:'文本编码器', labelEn:'Text encoder' },
+      { id:'vae', labelZh:'VAE', labelEn:'VAE' },
       { id:'size', labelZh:'尺寸', labelEn:'Size' },
       { id:'sampler', labelZh:'采样参数', labelEn:'Sampler' },
       { id:'time', labelZh:'时间', labelEn:'Time' },
@@ -1998,6 +2000,8 @@ const worksPanel: WebUiPanel = {
             for (const l of entry.loras) {
               const chip = ctx.ui.h('div', 'coo-lora-chip');
               const name = stripExt(l.name);
+              const clip = l.clip_weight ?? l.weight;
+              const weightText = clip !== l.weight ? `${l.weight}/${clip}` : String(l.weight);
               const txt = document.createElement('span');
               txt.className = 'lora-name';
               txt.textContent = name;
@@ -2006,10 +2010,10 @@ const worksPanel: WebUiPanel = {
               dot.textContent = '·';
               dot.className = 'weight';
               const w = document.createElement('span');
-              w.textContent = String(l.weight);
+              w.textContent = weightText;
               w.className = 'weight';
               chip.append(txt, dot, w);
-              chip.title = `${l.path} · ${l.weight}`;
+              chip.title = `${l.path} · model ${l.weight} / clip ${clip}`;
               chips.append(chip);
             }
             vv.append(chips);
@@ -2018,8 +2022,10 @@ const worksPanel: WebUiPanel = {
           metaGrid.append(row);
         }
       }
-      // 模型（空占位）
-      addRow('model', t('模型','Model'), entry.checkpoint ? stripExt(entry.checkpoint) : '', entry.checkpoint || undefined, t('未使用','Not used'));
+      // 主模型 / 文本编码器 / VAE（空占位统一显示「未记录」）
+      addRow('model', t('主模型','Model'), entry.checkpoint ? stripExt(entry.checkpoint) : '', entry.checkpoint || undefined, t('未记录','Not recorded'));
+      addRow('textEncoder', t('文本编码器','Text encoder'), entry.text_encoder ? stripExt(entry.text_encoder) : '', entry.text_encoder || undefined, t('未记录','Not recorded'));
+      addRow('vae', 'VAE', entry.vae ? stripExt(entry.vae) : '', entry.vae || undefined, t('未记录','Not recorded'));
       // 时间
       addRow('time', t('时间','Time'), shortDate(entry.created_at));
       // 采样参数
@@ -2063,7 +2069,7 @@ const worksPanel: WebUiPanel = {
       const labelMap: Record<string, HTMLElement> = {};
       for (const r of rows) { const kEl = r.querySelector('.k'); if (kEl) labelMap[kEl.textContent?.trim() ?? ''] = r; }
       // 由于标签可能本地化，直接按 desired 的标签顺序重排
-      const idToLabel: Record<FieldId,string> = { filename: t('文件名','File'), seed: t('种子','Seed'), size: t('尺寸','Size'), lora:'LoRA', model: t('模型','Model'), time: t('时间','Time'), sampler: t('采样参数','Sampler'), prompt: t('提示词','Prompt'), negative: t('反向','Negative') };
+      const idToLabel: Record<FieldId,string> = { filename: t('文件名','File'), seed: t('种子','Seed'), size: t('尺寸','Size'), lora:'LoRA', model: t('主模型','Model'), textEncoder: t('文本编码器','Text encoder'), vae:'VAE', time: t('时间','Time'), sampler: t('采样参数','Sampler'), prompt: t('提示词','Prompt'), negative: t('反向','Negative') };
       const ordered: HTMLElement[] = [];
       for (const id of desired) { const lbl = idToLabel[id]; const el = labelMap[lbl]; if (el) ordered.push(el); }
       // 追加未匹配（防止遗漏）

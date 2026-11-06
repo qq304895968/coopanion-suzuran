@@ -217,4 +217,14 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(configPanelSrc).not.toContain('ctx.ui.section');
     expect(localClient).not.toContain('ctx.ui.section');
   });
+
+  it('作品右键菜单必须复用详情动作并读取同一收藏字段', () => {
+    expect(localClient).toContain("addEventListener('contextmenu'");
+    expect(localClient).toContain('openWorksMenu');
+    expect(localClient).toContain('() => onToggleFavorite(entry)');
+    expect(localClient).toContain('() => openDeleteDialog([entry.id])');
+    expect(localClient).toContain('() => revealEntry(entry)');
+    expect(cssContent).toMatch(/\.coo-works-menu\s*\{[\s\S]*?position:\s*fixed/);
+    expect(cssContent).toContain('.coo-works-menu-item');
+  });
 });

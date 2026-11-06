@@ -844,6 +844,36 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       await new Promise((r) => setTimeout(r, 15));
       expect(setConfigCalls).toContainEqual(['world:draw', { 'worlds.draw.routePet': 'local' }]);
 
+      // 4c. 作品右键菜单：定位开启 + 四项动作 + 收藏/删除可用
+      segButtons.find((b) => b.dataset.value === 'works')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      const fireContextMenu = (el: FakeElement) => el.dispatchEvent({
+        type: 'contextmenu', bubbles: true, button: 2, clientX: 120, clientY: 90,
+        preventDefault() {}, stopPropagation() {},
+      });
+      fireContextMenu(localCtx.root.querySelectorAll('.coo-works-tile')[0]!);
+      await new Promise((r) => setTimeout(r, 15));
+      const worksMenu = doc.body.querySelector('.coo-works-menu')!;
+      expect(worksMenu).not.toBeNull();
+      expect(worksMenu.style.position).toBe('fixed');
+      expect(worksMenu.style.left).toBe('120px');
+      expect(worksMenu.style.top).toBe('90px');
+      const menuItems = worksMenu.querySelectorAll('.coo-works-menu-item');
+      expect(menuItems.map((i) => i.textContent)).toEqual(['收藏', '对比', '打开文件夹', '删除']);
+      menuItems[0]!.click();
+      await new Promise((r) => setTimeout(r, 15));
+      expect(doc.body.querySelector('.coo-works-menu')).toBeNull();
+      expect((boot.history as Array<Record<string, any>>)[0]!.is_favorite).toBe(true);
+      fireContextMenu(localCtx.root.querySelectorAll('.coo-works-tile')[0]!);
+      await new Promise((r) => setTimeout(r, 15));
+      doc.body.querySelectorAll('.coo-works-menu-item').find((i) => i.textContent === '删除')!.click();
+      await new Promise((r) => setTimeout(r, 15));
+      const menuOverlay = doc.body.querySelector('.coo-dialog-overlay')!;
+      expect(menuOverlay.textContent).toContain('删除当前作品');
+      menuOverlay.querySelectorAll('button').find((b) => b.textContent.includes('取消'))!.click();
+      await new Promise((r) => setTimeout(r, 15));
+      expect(doc.body.querySelector('.coo-dialog-overlay')).toBeNull();
+
       // 5. 批量模式：自定义勾选徽标 + 选中高亮（边框/遮罩/对勾），无原生复选框
       segButtons.find((b) => b.dataset.value === 'works')!.click();
       await new Promise((r) => setTimeout(r, 25));

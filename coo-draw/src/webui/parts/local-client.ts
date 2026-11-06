@@ -2281,6 +2281,11 @@ const worksPanel: WebUiPanel = {
       ctx.own({ dispose });
     };
 
+    // 在文件管理器中定位作品：优先精确揭示，失败时退回打开画夹目录（详情按钮与右键菜单共用）。
+    const revealEntry = (target: HistoryEntry): void => {
+      void ctx.invoke('revealImage', [target.id]).then(() => ctx.ui.toast(t('已请求在文件管理器中显示', 'Revealing in file manager'))).catch(() => void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开文件夹', 'Opening folder'))).catch((e) => ctx.ui.toast(errText(e), 'bad')));
+    };
+
     const buildOps = (entry: HistoryEntry | null): void => {
       opsPanel.replaceChildren();
       if (!entry) { opsPanel.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
@@ -2309,7 +2314,7 @@ const worksPanel: WebUiPanel = {
       compare.addEventListener('click', ()=>{ enterCompare(entry); });
 
       const openFolder = opButton(t('打开文件夹','Open folder'), 'default', 'folder');
-      openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
+      openFolder.addEventListener('click', () => revealEntry(entry));
 
       const isFav = entry.is_favorite === true;
       const fav = opButton(isFav ? t('已收藏','Favorited') : t('收藏','Favorite'), 'default', 'star');
@@ -2438,6 +2443,52 @@ const worksPanel: WebUiPanel = {
       renderGallery();
     };
 
+    // 作品右键菜单：与详情操作区共享同一批动作（收藏/对比/打开文件夹/删除），收藏态读取同一字段。
+    const openWorksMenu = (ev: { clientX: number; clientY: number }, entry: HistoryEntry): void => {
+      closeAllPopovers();
+      const doc = ctx.root.ownerDocument;
+      const menu = ctx.ui.h('div', 'coo-works-menu');
+      menu.setAttribute('role', 'menu');
+      const item = (label: string, icon: string, danger: boolean, run: () => void): void => {
+        const btn = ctx.ui.h('button', 'coo-works-menu-item');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.classList.toggle('is-danger', danger);
+        btn.append(svgIcon(icon, 14));
+        btn.append(ctx.ui.h('span', '', label));
+        btn.addEventListener('click', () => { close(); run(); });
+        menu.append(btn);
+      };
+      item(entry.is_favorite === true ? t('取消收藏', 'Unfavorite') : t('收藏', 'Favorite'), 'star', false, () => onToggleFavorite(entry));
+      item(t('对比', 'Compare'), 'compare', false, () => enterCompare(entry));
+      item(t('打开文件夹', 'Open folder'), 'folder', false, () => revealEntry(entry));
+      item(t('删除', 'Delete'), 'trash', true, () => openDeleteDialog([entry.id]));
+      const close = (): void => {
+        closePopover(close);
+        doc.removeEventListener('pointerdown', onOutside);
+        doc.removeEventListener('keydown', onKey, true);
+        menu.remove();
+      };
+      const onOutside = (e: Event): void => {
+        if (e.target && menu.contains(e.target as unknown as Node)) return;
+        close();
+      };
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      };
+      // 跟随光标并钳制在视口内（菜单约 170×150）。
+      const vw = window.innerWidth || 1280;
+      const vh = window.innerHeight || 800;
+      menu.style.position = 'fixed';
+      menu.style.left = `${Math.min(Math.max(0, ev.clientX), vw - 180)}px`;
+      menu.style.top = `${Math.min(Math.max(0, ev.clientY), vh - 160)}px`;
+      (doc.body ?? ctx.root).append(menu);
+      doc.addEventListener('pointerdown', onOutside);
+      doc.addEventListener('keydown', onKey, true);
+      openPopover(close);
+      ctx.own({ dispose: close });
+    };
+
     // 批量选中态同步（增量更新与全量渲染共用）：边框/遮罩经 .is-selected，对勾徽标经 .coo-works-check
     const syncTileBatchState = (tileEl: HTMLElement, id: string): void => {
       const isSel = batchMode && selected.has(id);
@@ -2539,6 +2590,12 @@ const worksPanel: WebUiPanel = {
           if (batchMode) { if (selected.has(entry.id)) selected.delete(entry.id); else selected.add(entry.id); batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张','0 selected'); renderGallery(); return; }
           // 点击只更新选中ID，不触发列表请求（满足 1.1）
           void showDetail(entry);
+        });
+        tile.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          if (batchMode) return;
+          void showDetail(entry);
+          openWorksMenu(ev, entry);
         });
         grid.append(tile);
         if (!cached) {

@@ -219,3 +219,50 @@ describe('UI 格式导入', () => {
     expect(converted.workflow['3']!.inputs.model).toEqual(['1', 0]);
   });
 });
+
+describe('LoRA 双强度（strength_model / strength_clip）', () => {
+  it('injectLoRAs 把 clip_weight 写入 strength_clip，缺省跟随 weight', () => {
+    const preset = quick();
+    const out = injectLoRAs(preset.workflow as unknown as Workflow, [
+      { path: '风格/a.safetensors', weight: 0.6, clip_weight: 0.9 },
+      { path: '角色/b.safetensors', weight: 0.8 },
+    ]);
+    expect(out.warnings).toEqual([]);
+    const loras = Object.entries(out.workflow).filter(([, node]) => node.class_type === 'LoraLoader');
+    expect(loras).toHaveLength(2);
+    expect(loras[0]![1].inputs.strength_model).toBe(0.6);
+    expect(loras[0]![1].inputs.strength_clip).toBe(0.9);
+    expect(loras[1]![1].inputs.strength_model).toBe(0.8);
+    expect(loras[1]![1].inputs.strength_clip).toBe(0.8);
+  });
+
+  it('工作流自带 LoRA：只在显式给出 clip_weight 时才改 strength_clip', () => {
+    const workflow: Workflow = {
+      '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'm.safetensors' } },
+      '20': {
+        class_type: 'LoraLoader',
+        inputs: { lora_name: 'a.safetensors', strength_model: 0.7, strength_clip: 1, model: ['4', 0], clip: ['4', 1] },
+      },
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: 'girl', clip: ['20', 1] } },
+      '3': { class_type: 'KSampler', inputs: { model: ['20', 0], positive: ['6', 0], steps: 8 } },
+      '9': { class_type: 'SaveImage', inputs: { images: ['3', 0] } },
+    };
+    const keep = injectLoRAs(workflow, [{ path: 'a.safetensors', weight: 0.5 }]);
+    expect(keep.workflow['20']!.inputs.strength_model).toBe(0.5);
+    expect(keep.workflow['20']!.inputs.strength_clip).toBe(1);
+    const override = injectLoRAs(workflow, [{ path: 'a.safetensors', weight: 0.5, clip_weight: 0.3 }]);
+    expect(override.workflow['20']!.inputs.strength_model).toBe(0.5);
+    expect(override.workflow['20']!.inputs.strength_clip).toBe(0.3);
+  });
+
+  it('buildForPreset 透传 clip_weight', () => {
+    const built = buildForPreset(quick(), {
+      positive: 'cat', negative: 'bad', steps: 12, cfg: 5, width: 512, height: 512,
+      batch: 1, seed: 7, checkpoint: 'm.safetensors', sampler: 'euler', scheduler: 'normal',
+    }, [{ path: '风格/a.safetensors', weight: 0.6, clip_weight: 0.4 }]);
+    const node = Object.values(built.workflow).find((item) => item.class_type === 'LoraLoader')!;
+    expect(node.inputs.strength_model).toBe(0.6);
+    expect(node.inputs.strength_clip).toBe(0.4);
+  });
+});
+

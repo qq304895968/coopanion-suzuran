@@ -9,7 +9,7 @@ export interface SaveImageInput {
   bytes: Uint8Array;
   mime: string;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
   promptId: string;
   taskId: string;
   workflow: string;
@@ -150,7 +150,13 @@ export class OutputStore {
         positive: input.params.positive,
         negative: input.params.negative ?? '',
         checkpoint: input.params.checkpoint ?? '',
-        loras: input.loras.map((lora) => ({ name: lora.name, path: lora.path, weight: lora.weight, source: lora.source })),
+        loras: input.loras.map((lora) => ({
+          name: lora.name,
+          path: lora.path,
+          weight: lora.weight,
+          clip_weight: lora.clip_weight ?? lora.weight,
+          source: lora.source,
+        })),
         sampler: input.params.sampler ?? 'euler_ancestral',
         scheduler: input.params.scheduler ?? 'normal',
         steps: input.params.steps ?? 20,
@@ -190,7 +196,13 @@ export class OutputStore {
       positive: input.params.positive,
       negative: input.params.negative ?? '',
       checkpoint: input.params.checkpoint ?? '',
-      loras: input.loras.map(({ name, path, weight, source }) => ({ name, path, weight, source })),
+      loras: input.loras.map(({ name, path, weight, clip_weight, source }) => ({
+        name,
+        path,
+        weight,
+        ...(clip_weight !== undefined ? { clip_weight } : {}),
+        source,
+      })),
       sampler: input.params.sampler ?? 'euler_ancestral',
       scheduler: input.params.scheduler ?? 'normal',
       steps: input.params.steps ?? 20,

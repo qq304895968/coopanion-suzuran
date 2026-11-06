@@ -407,10 +407,14 @@ export function resolveDefaults(records: LoRARecord[], defaults: DefaultLoRA[]):
     }
     if (seen.has(item.path)) continue;
     seen.add(item.path);
+    const modelWeight = weightFor(item, def.weight);
     loras.push({
       path: item.path,
       name: item.name,
-      weight: weightFor(item, def.weight),
+      weight: modelWeight,
+      ...(def.clip_weight !== undefined && Number.isFinite(def.clip_weight)
+        ? { clip_weight: Math.round(Math.min(2, Math.max(-2, def.clip_weight)) * 100) / 100 }
+        : {}),
       source: 'default',
       reason: '默认 LoRA',
       confidence: 0,
@@ -442,9 +446,12 @@ export function mergeLoRAs(
       continue;
     }
     const weight = Math.max(old.weight, entry.weight);
+    // clip 取权重胜出方的显式值；都没给则保持缺省（下游跟随 weight）。
+    const winner = entry.weight >= old.weight ? entry : old;
+    const clip = winner.clip_weight ?? winner.weight;
     const source = priority[entry.source] > priority[old.source] ? entry.source : old.source;
     const reason = old.reason === entry.reason ? old.reason : `${old.reason} / ${entry.reason}`;
-    map.set(key, { ...old, weight, source, reason });
+    map.set(key, { ...old, weight, clip_weight: clip, source, reason });
   }
 
   let list = [...map.values()];

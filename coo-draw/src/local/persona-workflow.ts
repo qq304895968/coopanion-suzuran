@@ -143,7 +143,7 @@ function findVaeLink(workflow: Workflow): [string, number] | null {
  */
 export function injectSplitLoRAs(
   workflow: Workflow,
-  loras: Array<{ path: string; weight: number }>,
+  loras: Array<{ path: string; weight: number; clip_weight?: number }>,
 ): { workflow: Workflow; warnings: string[] } {
   const out = JSON.parse(JSON.stringify(workflow)) as Workflow;
   const warnings: string[] = [];
@@ -161,12 +161,13 @@ export function injectSplitLoRAs(
   for (const lora of loras) {
     const id = String(next++);
     skip.add(id);
+    const clipWeight = lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight) ? lora.clip_weight : lora.weight;
     out[id] = {
       class_type: 'LoraLoader',
       inputs: {
         lora_name: lora.path,
         strength_model: lora.weight,
-        strength_clip: lora.weight,
+        strength_clip: clipWeight,
         model: [...modelLink],
         clip: [...clipLink],
       },

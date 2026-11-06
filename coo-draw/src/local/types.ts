@@ -11,6 +11,8 @@ export interface DefaultLoRA {
   /** 相对 ComfyUI `models/loras` 的路径，统一用 `/`。 */
   path: string;
   weight: number;
+  /** CLIP 强度（strength_clip）；缺省跟随 weight。 */
+  clip_weight?: number;
   trigger_words: string[];
 }
 
@@ -37,6 +39,8 @@ export interface MatchedLoRA {
   path: string;
   name: string;
   weight: number;
+  /** CLIP 强度（strength_clip）；缺省跟随 weight。 */
+  clip_weight?: number;
   source: LoRASource;
   /** 命中原因，给回执和面板看。 */
   reason: string;
@@ -97,8 +101,8 @@ export interface GenerateParams {
   positive: string;
   negative?: string;
   checkpoint?: string;
-  /** 选中的 LoRA；source 由服务端补齐，面板传 manual。 */
-  loras?: Array<{ path: string; weight: number; source?: LoRASource }>;
+  /** 选中的 LoRA；source 由服务端补齐，面板传 manual。weight 即 strength_model，clip_weight 即 strength_clip（缺省跟随 weight）。 */
+  loras?: Array<{ path: string; weight: number; clip_weight?: number; source?: LoRASource }>;
   sampler?: string;
   scheduler?: string;
   steps?: number;
@@ -147,7 +151,7 @@ export interface GenerateTaskView {
   source?: TaskSource;
   progress: TaskProgress;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
   images: TaskImage[];
   error?: string;
   created_at: number;
@@ -163,7 +167,7 @@ export interface HistoryEntry {
   positive: string;
   negative: string;
   checkpoint: string;
-  loras: Array<{ name: string; path: string; weight: number; source?: LoRASource }>;
+  loras: Array<{ name: string; path: string; weight: number; clip_weight?: number; source?: LoRASource }>;
   sampler: string;
   scheduler: string;
   steps: number;
@@ -199,7 +203,7 @@ export interface WorkflowSummary {
   warnings?: string[];
   mapping_count: number;
   /** 工作流自身携带的 LoRA（导入后回填到面板，生成时不再重复叠加）。 */
-  workflow_loras?: Array<{ path: string; name: string; weight: number }>;
+  workflow_loras?: Array<{ path: string; name: string; weight: number; clip_weight?: number }>;
 }
 
 export interface ComfyHealth {
@@ -236,7 +240,7 @@ export interface SavedStudioParams {
   positive?: string;
   negative?: string;
   checkpoint?: string;
-  loras?: Array<{ path: string; weight: number }>;
+  loras?: Array<{ path: string; weight: number; clip_weight?: number }>;
   sampler?: string;
   scheduler?: string;
   steps?: number;

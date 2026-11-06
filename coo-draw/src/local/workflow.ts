@@ -336,21 +336,22 @@ export function listWorkflowLoRAs(workflow: Workflow): WorkflowLoRA[] {
  */
 export function injectLoRAs(
   workflow: Workflow,
-  loras: Array<{ path: string; weight: number }>,
+  loras: Array<{ path: string; weight: number; clip_weight?: number }>,
 ): BuildWorkflowResult {
   const out = clone(workflow);
   const warnings: string[] = [];
   if (!loras.length) return { workflow: out, warnings };
 
-  // 工作流本身已带的 LoRA：只更新 model 强度，CLIP 强度保持工作流原值；
-  // 剩余没出现过的 LoRA 才插入新节点，避免同一组 LoRA 被应用两遍。
+  // 工作流本身已带的 LoRA：更新 model 强度；只有调用方显式给了 clip_weight
+  // 才更新 CLIP 强度，否则保持工作流原值。剩余没出现过的 LoRA 才插入新节点，
+  // 避免同一组 LoRA 被应用两遍。
   const existing = new Map<string, string>();
   for (const [id, node] of Object.entries(out)) {
     if (!isLoraLoader(node)) continue;
     const raw = node.inputs.lora_name;
     if (typeof raw === 'string' && raw) existing.set(loraBasename(raw), id);
   }
-  const pending: Array<{ path: string; weight: number }> = [];
+  const pending: Array<{ path: string; weight: number; clip_weight?: number }> = [];
   const seen = new Set<string>();
   for (const lora of loras) {
     const key = loraKey(lora);
@@ -359,6 +360,9 @@ export function injectLoRAs(
     const existingId = existing.get(key);
     if (existingId) {
       out[existingId]!.inputs.strength_model = lora.weight;
+      if (lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight)) {
+        out[existingId]!.inputs.strength_clip = lora.clip_weight;
+      }
       continue;
     }
     pending.push(lora);
@@ -372,12 +376,13 @@ export function injectLoRAs(
     const inserted: string[] = [];
     for (const lora of pending) {
       const id = String(next++);
+      const clipWeight = lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight) ? lora.clip_weight : lora.weight;
       out[id] = {
         class_type: 'LoraLoader',
         inputs: {
           lora_name: lora.path,
           strength_model: lora.weight,
-          strength_clip: lora.weight,
+          strength_clip: clipWeight,
           model,
           clip,
         },
@@ -410,13 +415,14 @@ export function injectLoRAs(
     const inserted: string[] = [];
     for (const lora of pending) {
       const id = String(next++);
+      const clipWeight = lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight) ? lora.clip_weight : lora.weight;
       if (clipLink) {
         out[id] = {
           class_type: 'LoraLoader',
           inputs: {
             lora_name: lora.path,
             strength_model: lora.weight,
-            strength_clip: lora.weight,
+            strength_clip: clipWeight,
             model: [...modelLink],
             clip: [...clipLink],
           },
@@ -458,7 +464,7 @@ export function injectLoRAs(
 export function buildForPreset(
   preset: WorkflowPreset,
   params: GenerateParams,
-  loras: Array<{ path: string; weight: number }>,
+  loras: Array<{ path: string; weight: number; clip_weight?: number }>,
 ): BuildWorkflowResult {
   const applied = applyParams(preset.workflow as unknown as Workflow, preset.param_mapping, params);
   const injected = injectLoRAs(applied, loras);

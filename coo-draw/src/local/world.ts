@@ -1116,7 +1116,12 @@ export class CooGenWorld implements World {
         positive,
         negative: str(args, 'negative') ?? this.opts.cfg.negativePrompt,
         checkpoint: str(args, 'checkpoint') ?? this.opts.cfg.defaultCheckpoint,
-        loras: loras.loras.map((lora) => ({ path: lora.path, weight: lora.weight, source: lora.source })),
+        loras: loras.loras.map((lora) => ({
+          path: lora.path,
+          weight: lora.weight,
+          ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+          source: lora.source,
+        })),
         sampler: str(args, 'sampler') ?? this.opts.cfg.sampler,
         scheduler: str(args, 'scheduler') ?? this.opts.cfg.scheduler,
         steps: int(args, 'steps') ?? this.opts.cfg.steps,
@@ -1278,7 +1283,7 @@ export class CooGenWorld implements World {
   /** 面板和工具共用的提交入口。 */
   private async submit(
     input: GenerateParams,
-    loras: Array<{ path: string; name: string; weight: number; source: 'default' | 'auto' | 'manual' }>,
+    loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: 'default' | 'auto' | 'manual' }>,
     warnings: string[],
   ): Promise<GenerateTaskView> {
     const params = this.normalizeParams(input);
@@ -1309,7 +1314,11 @@ export class CooGenWorld implements World {
     if (preset.kind === 'img2img' && !params.inputImage) throw new Error('图生图需要输入图');
     if (preset.kind === 'controlnet' && (!params.inputImage || !params.controlImage)) throw new Error('ControlNet 需要输入图和控制图');
     await this.prepareInputImages(preset, params);
-    const built = buildForPreset(preset, params, loras.map((lora) => ({ path: lora.path, weight: lora.weight })));
+    const built = buildForPreset(preset, params, loras.map((lora) => ({
+      path: lora.path,
+      weight: lora.weight,
+      ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+    })));
     const withCustom = applyCustomParams(built.workflow, preset.param_mapping, params.custom);
     for (const warning of built.warnings) {
       if (!needsCheckpoint && warning.includes('CheckpointLoader')) continue;
@@ -1772,17 +1781,31 @@ export class CooGenWorld implements World {
       if (!health.ok) return { ok: false, error: `ComfyUI 没有连上：${health.error ?? health.url}。点「一键启动」或检查地址。` };
       const records = await this.getLoRAs();
       const byPath = new Map(records.map((record) => [record.path.toLowerCase(), record]));
-      const chosen: Array<{ path: string; name: string; weight: number; source: 'manual' }> = [];
+      const chosen: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: 'manual' }> = [];
       for (const item of params.loras ?? []) {
         const record = byPath.get(String(item.path).toLowerCase());
         if (!record) continue;
-        chosen.push({ path: record.path, name: record.name, weight: clamp(Number(item.weight) || 0.75, 0.05, 2), source: 'manual' });
+        const modelWeight = clamp(Number(item.weight) || 0.75, -2, 2);
+        const clipRaw = Number(item.clip_weight);
+        chosen.push({
+          path: record.path,
+          name: record.name,
+          weight: modelWeight,
+          clip_weight: Number.isFinite(clipRaw) ? clamp(clipRaw, -2, 2) : modelWeight,
+          source: 'manual',
+        });
       }
       if (!lorasProvided) {
         const settings = this.settings.get();
         const defaults = resolveDefaults(records, settings.default_loras);
         for (const lora of defaults.loras.slice(0, this.opts.cfg.loraMaxCount)) {
-          chosen.push({ path: lora.path, name: lora.name, weight: lora.weight, source: 'manual' });
+          chosen.push({
+            path: lora.path,
+            name: lora.name,
+            weight: lora.weight,
+            ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+            source: 'manual',
+          });
         }
       }
       const warnings: string[] = [];
@@ -1958,16 +1981,24 @@ export class CooGenWorld implements World {
   private panelSetDefaults(raw: unknown): { ok: boolean; defaults?: DefaultLoRA[]; error?: string } {
     try {
       if (!Array.isArray(raw)) return { ok: false, error: '默认 LoRA 必须是数组' };
+      const previous = new Map(this.settings.get().default_loras.map((item) => [item.path.toLowerCase(), item]));
       const defaults: DefaultLoRA[] = [];
       for (const item of raw.slice(0, 20)) {
         if (!item || typeof item !== 'object') continue;
         const entry = item as Record<string, unknown>;
         const path = String(entry.path ?? '').replace(/\\/g, '/');
         if (!path) continue;
+        const modelWeight = clamp(Number(entry.weight) || 0.8, -2, 2);
+        const clipRaw = Number(entry.clip_weight);
+        // 常驻管理页暂不编辑 CLIP 强度：调用方没给时沿用旧值，避免存盘丢数据。
+        const keepClip = Number.isFinite(clipRaw)
+          ? clamp(clipRaw, -2, 2)
+          : previous.get(path.toLowerCase())?.clip_weight;
         defaults.push({
           name: String(entry.name ?? path.split('/').pop() ?? path),
           path,
-          weight: clamp(Number(entry.weight) || 0.8, 0.05, 2),
+          weight: modelWeight,
+          ...(keepClip !== undefined ? { clip_weight: keepClip } : {}),
           trigger_words: Array.isArray(entry.trigger_words) ? strings(entry.trigger_words) : [],
         });
       }
@@ -2020,7 +2051,12 @@ export class CooGenWorld implements World {
     const summaryView = this.presets.summaries().find((item) => item.id === preset.id);
     const workflowLoras = summaryView?.workflow_loras
       ?? listWorkflowLoRAs(preset.workflow as unknown as Workflow)
-        .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight }));
+        .map((lora) => ({
+          path: lora.path,
+          name: lora.name,
+          weight: lora.weight,
+          ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+        }));
     return {
       ok: true,
       preset: {
@@ -2083,7 +2119,12 @@ export class CooGenWorld implements World {
           source: path,
           ...(warnings.length ? { warnings } : {}),
           workflow_loras: listWorkflowLoRAs(workflow as unknown as Workflow)
-            .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight })),
+            .map((lora) => ({
+              path: lora.path,
+              name: lora.name,
+              weight: lora.weight,
+              ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+            })),
           mapping_count: detected.mapping.length,
         },
         warnings,

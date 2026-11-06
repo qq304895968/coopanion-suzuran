@@ -14,13 +14,13 @@
 .coo-draw-left {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   min-width: 0;
 }
 .coo-draw-right {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   position: sticky;
   top: 12px;
   min-width: 0;
@@ -1544,5 +1544,9 @@
 }
 .coo-dd-search:focus { outline: none; border-color: var(--coo-accent); }
 
-/* 配置子页：两段式纵向表单。 */
-.coo-config { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+/* 分段体系：段落容器段间距 18px；段内行距 12px；段标题 13px 半粗全色（卡片内分组仍用 12px 暗色 coo-group-title）。 */
+.coo-config { display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
+.coo-section { display: flex; flex-direction: column; gap: 12px; }
+.coo-section-title { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.coo-section-desc { font-size: 12px; font-weight: 400; opacity: .65; }
+.coo-gen-extra > .coo-section-title { margin-bottom: 8px; }

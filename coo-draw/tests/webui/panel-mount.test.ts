@@ -836,6 +836,8 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       expect(configBox.textContent).toContain('API 绘画');
       expect(configBox.textContent).toContain('本地出图');
       expect(configBox.textContent).toContain('宠物画像路由');
+      expect(configBox.querySelectorAll('.coo-section')).toHaveLength(2);
+      expect(configBox.querySelectorAll('.coo-section-title')).toHaveLength(2);
       expect(configBox.querySelectorAll('.coo-dd-trigger')).toHaveLength(2);
       expect(configBox.querySelectorAll('input').some((i) => i.value === 'http://127.0.0.1:8188')).toBe(true);
       configBox.querySelectorAll('.seg-btn').find((b) => b.dataset.value === 'local')!.click();

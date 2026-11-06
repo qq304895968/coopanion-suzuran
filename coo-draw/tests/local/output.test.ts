@@ -121,4 +121,21 @@ describe('OutputStore', () => {
     expect(fallback.vae).toBeUndefined();
   });
 
+  it('收藏状态持久化到 history.json，跨实例可读', () => {
+    const { data, store: instance } = store();
+    const entry = instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: 'p', taskId: 't',
+      workflow: 'w', index: 0, batch: 1, seed: 7,
+    });
+    expect(entry.is_favorite).toBeUndefined();
+    const updated = instance.setFavorite(entry.id, true);
+    expect(updated?.is_favorite).toBe(true);
+    expect(updated?.favorite_at).toBeGreaterThan(0);
+    const reopened = new OutputStore({ dataDir: data, outputDir: join(data, 'output'), timezone: 'Asia/Shanghai', historyLimit: 50 });
+    expect(reopened.get(entry.id)?.is_favorite).toBe(true);
+    expect(instance.setFavorite(entry.id, false)?.is_favorite).toBe(false);
+    expect(instance.get(entry.id)?.favorite_at).toBeUndefined();
+    expect(instance.setFavorite('missing', true)).toBeNull();
+  });
+
 });

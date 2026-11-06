@@ -1829,13 +1829,24 @@ const worksPanel: WebUiPanel = {
     const statsRow = ctx.ui.h('div','coo-works-stats');
     const statsText = ctx.ui.h('span','', '');
     const statsActions = ctx.ui.h('div','coo-batch-bar');
+    let favoriteFilter: 'all' | 'favorite' = 'all';
+    const favoriteSeg = ctx.ui.segmented([
+      { value: 'all', label: t('全部', 'All') },
+      { value: 'favorite', label: t('已收藏', 'Favorites') },
+    ], {
+      value: 'all',
+      onSelect: (value: string) => {
+        favoriteFilter = value === 'favorite' ? 'favorite' : 'all';
+        renderGallery();
+      },
+    });
     const batchToggle = document.createElement('button');
     batchToggle.type = 'button';
     batchToggle.className = 'btn-batch-mode';
     const batchToggleIcon = svgIcon('checkbox', 14);
     const batchToggleLabel = ctx.ui.h('span','', t('批量模式','Batch'));
     batchToggle.append(batchToggleIcon, batchToggleLabel);
-    statsActions.append(batchToggle);
+    statsActions.append(favoriteSeg.el, batchToggle);
     statsRow.append(statsText, statsActions);
     left.append(statsRow);
 
@@ -2089,6 +2100,33 @@ const worksPanel: WebUiPanel = {
       return button;
     };
 
+    /** 收藏切换：乐观更新本地列表 + 失败回滚，持久化以服务端 history.json 为准。 */
+    const onToggleFavorite = (entry: HistoryEntry): void => {
+      const target = allHistory.find((h) => h.id === entry.id);
+      if (!target) return;
+      const previous = target.is_favorite === true;
+      const prevAt = target.favorite_at;
+      const next = !previous;
+      target.is_favorite = next;
+      if (next) target.favorite_at = Date.now();
+      else delete target.favorite_at;
+      renderGallery();
+      if (activeEntry?.id === target.id) buildOps(target);
+      void ctx.invoke('setFavorite', [target.id, next]).then((res) => {
+        const out = res as { ok?: boolean; error?: string };
+        if (out.ok === false) throw new Error(out.error || t('收藏失败', 'Favorite failed'));
+        ctx.ui.toast(next ? t('已收藏', 'Favorited') : t('已取消收藏', 'Unfavorited'));
+      }).catch((error) => {
+        target.is_favorite = previous;
+        if (prevAt !== undefined) target.favorite_at = prevAt;
+        else delete target.favorite_at;
+        if (!alive) return;
+        renderGallery();
+        if (activeEntry?.id === target.id) buildOps(target);
+        ctx.ui.toast(`${t('收藏失败', 'Favorite failed')}：${errText(error)}`, 'bad');
+      });
+    };
+
     const buildOps = (entry: HistoryEntry | null): void => {
       opsPanel.replaceChildren();
       if (!entry) { opsPanel.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
@@ -2119,16 +2157,11 @@ const worksPanel: WebUiPanel = {
       const openFolder = opButton(t('打开文件夹','Open folder'), 'default', 'folder');
       openFolder.addEventListener('click', ()=>{ void ctx.invoke('revealImage', [entry.id]).then(()=>ctx.ui.toast(t('已请求在文件管理器中显示','Revealing in file manager'))).catch(()=> void ctx.invoke('openFolder').then(()=>ctx.ui.toast(t('已请求打开文件夹','Opening folder'))).catch(e=>ctx.ui.toast(errText(e),'bad'))); });
 
-      const fav = opButton(t('收藏','Favorite'), 'default', 'star');
-      fav.setAttribute('aria-pressed', 'false');
-      fav.addEventListener('click', ()=>{
-        const badge = (fav as unknown as { _label: HTMLElement })._label;
-        const on = fav.getAttribute('aria-pressed') === 'true';
-        fav.setAttribute('aria-pressed', String(!on));
-        fav.classList.toggle('is-active', !on);
-        badge.textContent = on ? t('收藏','Favorite') : t('已收藏','Favorited');
-        ctx.ui.toast(on ? t('已取消收藏（本地标记）','Unfavorited') : t('已收藏（本地标记）','Favorited'));
-      });
+      const isFav = entry.is_favorite === true;
+      const fav = opButton(isFav ? t('已收藏','Favorited') : t('收藏','Favorite'), 'default', 'star');
+      fav.setAttribute('aria-pressed', String(isFav));
+      fav.classList.toggle('is-active', isFav);
+      fav.addEventListener('click', ()=> onToggleFavorite(entry));
 
       const del = opButton(t('删除','Delete'), 'danger', 'trash');
       del.addEventListener('click', async ()=>{
@@ -2224,6 +2257,7 @@ const worksPanel: WebUiPanel = {
         if (q && !(`${h.positive} ${h.negative} ${String(h.seed)} ${h.filename}`.toLowerCase().includes(q))) return false;
         if (h.created_at < from || h.created_at > to) return false;
         if (model && h.checkpoint !== model) return false;
+        if (favoriteFilter === 'favorite' && !h.is_favorite) return false;
         if (loraFilterSelected.size) { const has = h.loras.some(l=> loraFilterSelected.has(l.path)); if (!has) return false; }
         return true;
       });
@@ -2246,6 +2280,8 @@ const worksPanel: WebUiPanel = {
       sortElement.setValue('time');
       sortDir.setValue('desc');
       loraFilterSelected.clear();
+      favoriteFilter = 'all';
+      favoriteSeg.setValue('all');
       updateLoraBtn();
       closeLora();
       renderGallery();
@@ -2255,7 +2291,7 @@ const worksPanel: WebUiPanel = {
       const list = filtered();
       const total = allHistory.length;
       // 差量更新：若ID完全一致则不重排DOM（避免闪烁）
-      const curIds = list.map(e=>e.id).join(',');
+      const curIds = list.map((e) => `${e.id}:${e.is_favorite ? 1 : 0}`).join(',');
       const prevIds = (grid as any)._prevIds as string | undefined;
       if (prevIds === curIds && total) {
         // 仅更新选中态
@@ -2276,7 +2312,7 @@ const worksPanel: WebUiPanel = {
       }
       // 清除筛选按钮显隐
       const currentRange = datePicker.getRange();
-      const hasFilter = !!searchInput.value.trim() || !!currentRange.from || !!currentRange.to || !!modelDD.getValue() || loraFilterSelected.size>0;
+      const hasFilter = !!searchInput.value.trim() || !!currentRange.from || !!currentRange.to || !!modelDD.getValue() || loraFilterSelected.size>0 || favoriteFilter !== 'all';
       clearBtn.style.display = hasFilter ? '' : 'none';
 
       grid.replaceChildren();
@@ -2322,6 +2358,13 @@ const worksPanel: WebUiPanel = {
         // 红点：未查看且不在已查看集合
         if (!viewed.has(entry.id)) {
           const dot = ctx.ui.h('span','coo-works-dot'); tile.append(dot);
+        }
+        // 收藏星标：与详情按钮、右键菜单读取同一字段
+        if (entry.is_favorite) {
+          const star = ctx.ui.h('span', 'coo-work-fav');
+          if (batchMode) star.style.left = '28px';
+          star.append(svgIcon('star', 12));
+          tile.append(star);
         }
         tile.append(img, label);
         tile.addEventListener('click', ()=>{

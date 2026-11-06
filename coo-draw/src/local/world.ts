@@ -1629,6 +1629,7 @@ export class CooGenWorld implements World {
       }
       case 'revealImage': return this.panelReveal(args[0]);
       case 'sendToPet': return this.panelSendToPet(args[0]);
+      case 'setFavorite': return this.panelSetFavorite(args[0], args[1]);
       case 'clearHistory': return { ok: true, message: this.outputStore().clear() };
       case 'listLoras': return this.panelListLoras();
       case 'setDefaults': return this.panelSetDefaults(args[0]);
@@ -1922,6 +1923,15 @@ export class CooGenWorld implements World {
     if (!entry) throw new Error('找不到这张图');
     openInFileManager(this.outputDir(), entry.path);
     return { ok: true, path: entry.path };
+  }
+
+  private panelSetFavorite(id: unknown, favorite: unknown): { ok: boolean; entry?: HistoryEntry; error?: string } {
+    const key = String(id ?? '').trim();
+    if (!key) return { ok: false, error: '缺少作品 id' };
+    const next = favorite === true || favorite === 'true';
+    const entry = this.outputStore().setFavorite(key, next);
+    if (!entry) return { ok: false, error: '找不到这张作品' };
+    return { ok: true, entry };
   }
 
   private async panelSendToPet(id: unknown): Promise<{ ok: boolean; message: string }> {

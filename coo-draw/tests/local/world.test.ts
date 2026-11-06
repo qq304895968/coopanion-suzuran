@@ -242,6 +242,30 @@ describe('CooGenWorld', () => {
     await world.stop();
   });
 
+  it('作品收藏经面板接口持久化', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['fav.png']);
+    const ui = world.webUi('zh');
+    const gen = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat', negative: 'bad', checkpoint: 'anything_v5.safetensors',
+      loras: [], steps: 20, cfg: 7, width: 512, height: 512, batch: 1, seed: 9,
+    }]) as { ok: boolean };
+    expect(gen.ok).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const before = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string; is_favorite?: boolean }> };
+    expect(before.history.length).toBeGreaterThan(0);
+    const id = before.history[0]!.id;
+    const fav = await ui.invoke!('studio', 'setFavorite', [id, true]) as { ok: boolean; entry?: { is_favorite?: boolean; favorite_at?: number } };
+    expect(fav.ok).toBe(true);
+    expect(fav.entry?.is_favorite).toBe(true);
+    expect(fav.entry?.favorite_at).toBeGreaterThan(0);
+    const after = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string; is_favorite?: boolean }> };
+    expect(after.history.find((h) => h.id === id)?.is_favorite).toBe(true);
+    const missing = await ui.invoke!('studio', 'setFavorite', ['nope', true]) as { ok: boolean };
+    expect(missing.ok).toBe(false);
+    await world.stop();
+  });
+
   it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
     const { data, fake, world } = await setup();
     fake.checkpointNames = [];

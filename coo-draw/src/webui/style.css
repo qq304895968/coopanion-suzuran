@@ -1550,3 +1550,9 @@
 .coo-section-title { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .coo-section-desc { font-size: 12px; font-weight: 400; opacity: .65; }
 .coo-gen-extra > .coo-section-title { margin-bottom: 8px; }
+
+/* 作品右键菜单：跟随光标的 fixed 弹层，与详情操作区共享同一批动作。 */
+.coo-works-menu { position: fixed; z-index: 60; min-width: 168px; padding: 4px; background: var(--coo-surface); border: 1px solid var(--coo-line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.coo-works-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border: 0; background: transparent; color: inherit; font-size: 13px; border-radius: 6px; cursor: pointer; text-align: left; }
+.coo-works-menu-item:hover { background: var(--coo-accent-soft); }
+.coo-works-menu-item.is-danger { color: var(--coo-danger); }

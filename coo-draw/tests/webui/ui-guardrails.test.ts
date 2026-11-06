@@ -157,4 +157,18 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(cssContent).toMatch(/\.coo-stepper\s*\{[\s\S]*?height:\s*32px/);
   });
 
+  it('作品删除必须经确认弹窗与 deleteWorks 接口，作品域禁用原生 confirm', () => {
+    expect(localClient).toContain('openDeleteDialog');
+    expect(localClient).toContain('openDeleteDialog([entry.id])');
+    expect(localClient).toContain("ctx.invoke('deleteWorks'");
+    expect(localClient).toContain('coo-dialog-overlay');
+    expect(localClient).toContain('coo-dialog__check');
+    expect(localClient).toContain('同时删除本地文件');
+    // 作品域旧的原生确认文案已彻底移除（剩余 confirm 仅属于 ComfyUI 开关与工作流管理）
+    expect(localClient).not.toContain('批量删除？');
+    expect(localClient).not.toContain('此操作不可恢复');
+    expect(cssContent).toMatch(/\.coo-dialog-overlay\s*\{[\s\S]*?position:\s*fixed/);
+    expect(cssContent).toMatch(/\.coo-dialog\s*\{[\s\S]*?background/);
+  });
+
 });

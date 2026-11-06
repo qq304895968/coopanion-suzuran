@@ -138,4 +138,30 @@ describe('OutputStore', () => {
     expect(instance.setFavorite('missing', true)).toBeNull();
   });
 
+  it('删除作品：必删索引，按需删文件，缺失 id 计入 missing', () => {
+    const { store: instance } = store();
+    const saveOne = (seed: number) => instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: `p${seed}`, taskId: `t${seed}`,
+      workflow: 'w', index: 0, batch: 1, seed,
+    });
+    const recordOnly = saveOne(11);
+    const withFile = saveOne(12);
+    const normal = saveOne(13);
+    expect(existsSync(recordOnly.path)).toBe(true);
+
+    const r1 = instance.deleteWorks([recordOnly.id], false);
+    expect(r1).toEqual({ deleted: [recordOnly.id], missing: [] });
+    expect(instance.get(recordOnly.id)).toBeNull();
+    expect(existsSync(recordOnly.path)).toBe(true);
+
+    const r2 = instance.deleteWorks([withFile.id], true);
+    expect(r2).toEqual({ deleted: [withFile.id], missing: [] });
+    expect(instance.get(withFile.id)).toBeNull();
+    expect(existsSync(withFile.path)).toBe(false);
+
+    const r3 = instance.deleteWorks([normal.id, normal.id, 'ghost'], true);
+    expect(r3.deleted).toEqual([normal.id]);
+    expect(r3.missing).toEqual(['ghost']);
+    expect(instance.get(normal.id)).toBeNull();
+  });
 });

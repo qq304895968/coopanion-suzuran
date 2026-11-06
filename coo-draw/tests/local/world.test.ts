@@ -266,6 +266,30 @@ describe('CooGenWorld', () => {
     await world.stop();
   });
 
+  it('作品经面板接口删除：去重、缺失计入 missing、空列表拒绝', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['gone.png']);
+    const ui = world.webUi('zh');
+    const gen = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat', negative: 'bad', checkpoint: 'anything_v5.safetensors',
+      loras: [], steps: 20, cfg: 7, width: 512, height: 512, batch: 1, seed: 9,
+    }]) as { ok: boolean };
+    expect(gen.ok).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const before = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string }> };
+    expect(before.history).toHaveLength(1);
+    const id = before.history[0]!.id;
+    const del = await ui.invoke!('studio', 'deleteWorks', [[id, id, 'ghost'], false]) as { ok: boolean; deleted: string[]; missing: string[] };
+    expect(del.ok).toBe(true);
+    expect(del.deleted).toEqual([id]);
+    expect(del.missing).toEqual(['ghost']);
+    const after = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string }> };
+    expect(after.history).toHaveLength(0);
+    const empty = await ui.invoke!('studio', 'deleteWorks', [[], false]) as { ok: boolean };
+    expect(empty.ok).toBe(false);
+    await world.stop();
+  });
+
   it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
     const { data, fake, world } = await setup();
     fake.checkpointNames = [];

@@ -602,6 +602,19 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
               }
               return { ok: true };
             }
+            if (method.endsWith('deleteWorks')) {
+              const [delIds] = (args ?? []) as [string[]];
+              const hist = boot.history as Array<Record<string, any>>;
+              const deleted: string[] = [];
+              const missing: string[] = [];
+              for (const delId of new Set(delIds ?? [])) {
+                const idx = hist.findIndex((h) => h.id === delId);
+                if (idx < 0) { missing.push(delId); continue; }
+                hist.splice(idx, 1);
+                deleted.push(delId);
+              }
+              return { ok: true, deleted, missing };
+            }
             if (method.endsWith('status')) return { task: null };
             if (method.endsWith('health')) return { health: boot.health };
             if (method.endsWith('refreshModels')) {
@@ -787,6 +800,26 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
         expect(localCtx.root.textContent, `tab=${tabValue}`).not.toContain('面板加载失败');
         expect(localCtx.root.textContent, `tab=${tabValue}`).not.toContain('Panel failed');
       }
+
+      // 6. 删除确认弹窗：操作区删除键打开弹窗，勾选本地文件后确认删除
+      segButtons.find((b) => b.dataset.value === 'works')!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      const beforeCount = (boot.history as Array<Record<string, any>>).length;
+      expect(beforeCount).toBeGreaterThan(0);
+      const opsPanel3 = localCtx.root.querySelector('.operations-panel')!;
+      const delBtn = opsPanel3.querySelectorAll('.btn-action').find((b) => b.textContent.includes('删除'))!;
+      delBtn.click();
+      const overlay = doc.body.querySelector('.coo-dialog-overlay')!;
+      expect(overlay.textContent).toContain('删除');
+      expect(overlay.textContent).toContain('同时删除本地文件');
+      const checkRow = overlay.querySelector('.coo-dialog__check')!;
+      expect(checkRow.getAttribute('aria-checked')).toBe('false');
+      checkRow.click();
+      expect(checkRow.getAttribute('aria-checked')).toBe('true');
+      overlay.querySelectorAll('button').find((b) => b.textContent.includes('删除'))!.click();
+      await new Promise((r) => setTimeout(r, 25));
+      expect(doc.body.querySelector('.coo-dialog-overlay')).toBeNull();
+      expect((boot.history as Array<Record<string, any>>).length).toBe(beforeCount - 1);
 
       controller.abort();
       for (const d of disposables) d.dispose();

@@ -1630,6 +1630,7 @@ export class CooGenWorld implements World {
       case 'revealImage': return this.panelReveal(args[0]);
       case 'sendToPet': return this.panelSendToPet(args[0]);
       case 'setFavorite': return this.panelSetFavorite(args[0], args[1]);
+      case 'deleteWorks': return this.panelDeleteWorks(args[0], args[1]);
       case 'clearHistory': return { ok: true, message: this.outputStore().clear() };
       case 'listLoras': return this.panelListLoras();
       case 'setDefaults': return this.panelSetDefaults(args[0]);
@@ -1923,6 +1924,14 @@ export class CooGenWorld implements World {
     if (!entry) throw new Error('找不到这张图');
     openInFileManager(this.outputDir(), entry.path);
     return { ok: true, path: entry.path };
+  }
+
+  private panelDeleteWorks(ids: unknown, deleteFiles: unknown): { ok: boolean; deleted: string[]; missing: string[]; error?: string } {
+    if (!Array.isArray(ids)) return { ok: false, deleted: [], missing: [], error: '缺少作品 id 列表' };
+    const keys = [...new Set(ids.map((id) => String(id ?? '').trim()).filter(Boolean))].slice(0, 200);
+    if (!keys.length) return { ok: false, deleted: [], missing: [], error: '缺少作品 id 列表' };
+    const result = this.outputStore().deleteWorks(keys, deleteFiles === true || deleteFiles === 'true');
+    return { ok: true, ...result };
   }
 
   private panelSetFavorite(id: unknown, favorite: unknown): { ok: boolean; entry?: HistoryEntry; error?: string } {

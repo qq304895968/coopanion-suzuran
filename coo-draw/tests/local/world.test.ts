@@ -290,6 +290,34 @@ describe('CooGenWorld', () => {
     await world.stop();
   });
 
+  it('面板上传图片：base64 落盘 uploads 并返回服务端路径', async () => {
+    const { data, world } = await setup();
+    const ui = world.webUi('zh');
+    const tiny = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64');
+    const res = await ui.invoke!('studio', 'uploadImage', ['ref.png', tiny]) as { ok: boolean; path?: string; filename?: string; size?: number };
+    expect(res.ok).toBe(true);
+    expect(res.path!.startsWith(join(data, 'uploads'))).toBe(true);
+    expect(res.filename).toMatch(/^upload-.*\.png$/);
+    expect(res.size).toBe(8);
+    expect(existsSync(res.path!)).toBe(true);
+    // dataURL 前缀兼容
+    const dataUrl = await ui.invoke!('studio', 'uploadImage', ['a.jpg', `data:image/jpeg;base64,${tiny}`]) as { ok: boolean; path?: string };
+    expect(dataUrl.ok).toBe(true);
+    expect(existsSync(dataUrl.path!)).toBe(true);
+    // 非法扩展名与非法数据被拒绝
+    const badExt = await ui.invoke!('studio', 'uploadImage', ['evil.exe', tiny]) as { ok: boolean; error?: string };
+    expect(badExt.ok).toBe(false);
+    expect(badExt.error).toContain('png');
+    const badData = await ui.invoke!('studio', 'uploadImage', ['x.png', '!!!not-base64!!!']) as { ok: boolean };
+    expect(badData.ok).toBe(false);
+    // 超限拒绝
+    const huge = Buffer.alloc(21 * 1024 * 1024, 7).toString('base64');
+    const tooBig = await ui.invoke!('studio', 'uploadImage', ['big.png', huge]) as { ok: boolean; error?: string };
+    expect(tooBig.ok).toBe(false);
+    expect(tooBig.error).toContain('20 MB');
+    await world.stop();
+  });
+
   it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
     const { data, fake, world } = await setup();
     fake.checkpointNames = [];

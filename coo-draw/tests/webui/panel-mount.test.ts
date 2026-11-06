@@ -589,7 +589,7 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
               };
             }
             if (method.endsWith('presets')) return { presets: boot.presets, default_workflow: boot.workflow };
-            if (method.endsWith('presetDetail')) return { ok: true, preset: { name: '快速文生图', mapping: [], warnings: [] } };
+            if (method.endsWith('presetDetail')) return { ok: true, preset: { name: '快速文生图', mapping: [{ param: 'inputImage', node_id: '10', field: 'image', ui_label: '输入图', ui_type: 'image', default: '' }], warnings: [] } };
             if (method.endsWith('listLoras')) return { loras: boot.loras, defaults: boot.defaults, aliases: boot.aliases, lora_root: boot.lora_root };
             if (method.endsWith('history')) return { history: boot.history, task: null };
             if (method.endsWith('setFavorite')) {
@@ -664,6 +664,21 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       expect(rows.length).toBe(2);
       expect(rows[0]!.querySelector('.sub-text')?.textContent).toBe('角色');
       expect(rows[1]!.querySelector('.sub-text')).toBeNull();
+      // 每行 LoRA 必须同时渲染 Model 与 CLIP 两个步进器
+      for (const row of rows) {
+        expect(row!.querySelectorAll('.coo-stepper').length).toBe(2);
+      }
+
+      // 参考图上传区按工作流图片 schema 渲染（正向提示词上方，隐藏 file 输入 + 自定义按钮）
+      await new Promise((r) => setTimeout(r, 25));
+      const uploadBox = localCtx.root.querySelector('.coo-upload-box')!;
+      expect(uploadBox.style.display).not.toBe('none');
+      expect(uploadBox.textContent).toContain('参考图上传');
+      expect(uploadBox.textContent).toContain('输入图');
+      const fileInput = uploadBox.querySelector('input')!;
+      expect(fileInput.type).toBe('file');
+      expect((fileInput as unknown as { accept: string }).accept).toContain('image/png');
+      expect(uploadBox.querySelectorAll('button').map((b) => b.textContent).join('|')).toContain('选择文件');
 
       // 验证高级参数面板展开与随机种子按钮点击无报错
       const advToggle = localCtx.root.querySelector('.coo-adv-toggle')!;

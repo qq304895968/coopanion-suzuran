@@ -5,7 +5,7 @@
  * 对话入口通过 coo_gen 工具提交后台任务，完成后推 coogen.done；面板入口直接走同一套任务队列。
  */
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nowIso } from 'cortico/core/util.ts';
@@ -1631,6 +1631,7 @@ export class CooGenWorld implements World {
       case 'sendToPet': return this.panelSendToPet(args[0]);
       case 'setFavorite': return this.panelSetFavorite(args[0], args[1]);
       case 'deleteWorks': return this.panelDeleteWorks(args[0], args[1]);
+      case 'uploadImage': return this.panelUploadImage(args[0], args[1]);
       case 'clearHistory': return { ok: true, message: this.outputStore().clear() };
       case 'listLoras': return this.panelListLoras();
       case 'setDefaults': return this.panelSetDefaults(args[0]);
@@ -1932,6 +1933,26 @@ export class CooGenWorld implements World {
     if (!keys.length) return { ok: false, deleted: [], missing: [], error: '缺少作品 id 列表' };
     const result = this.outputStore().deleteWorks(keys, deleteFiles === true || deleteFiles === 'true');
     return { ok: true, ...result };
+  }
+
+  private panelUploadImage(name: unknown, data: unknown): { ok: boolean; path?: string; filename?: string; size?: number; error?: string } {
+    const rawName = basename(String(name ?? '').trim() || 'image.png');
+    const ext = extname(rawName).toLowerCase();
+    if (!MIME_BY_EXT[ext]) return { ok: false, error: '只支持 png / jpg / webp / gif（only png / jpg / webp / gif）' };
+    const text = String(data ?? '');
+    const comma = text.indexOf(',');
+    const base64 = (comma >= 0 ? text.slice(comma + 1) : text).replace(/\s+/g, '');
+    if (!base64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) return { ok: false, error: '图片数据无效（invalid image data）' };
+    const bytes = Buffer.from(base64, 'base64');
+    if (!bytes.length) return { ok: false, error: '图片数据为空（empty image data）' };
+    if (bytes.length > 20 * 1024 * 1024) return { ok: false, error: '上传图片超过 20 MB（image exceeds 20 MB）' };
+    const dir = join(this.opts.dataDir, 'uploads');
+    mkdirSync(dir, { recursive: true });
+    const stem = safeFilenamePart(basename(rawName, ext));
+    const filename = `upload-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${stem}${ext}`;
+    const target = join(dir, filename);
+    writeFileSync(target, bytes);
+    return { ok: true, path: target, filename, size: bytes.length };
   }
 
   private panelSetFavorite(id: unknown, favorite: unknown): { ok: boolean; entry?: HistoryEntry; error?: string } {

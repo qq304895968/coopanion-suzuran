@@ -182,4 +182,14 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(cssContent).toMatch(/\.coo-works-tile\s+\.coo-works-check\.is-checked\s*\{[\s\S]*?background:\s*var\(--coo-accent\)/);
   });
 
+  it('出图页参考图上传区必须按工作流图片 schema 渲染并经 uploadImage 接口上传', () => {
+    expect(localClient).toContain('coo-upload-box');
+    expect(localClient).toContain('renderUploads');
+    expect(localClient).toContain("item.ui_type === 'image'");
+    expect(localClient).toContain("'uploadImage'");
+    expect(localClient).toContain('MAX_UPLOADS');
+    expect(localClient).toContain('readAsDataURL');
+    expect(cssContent).toMatch(/\.coo-upload-row\s*\{[\s\S]*?display:\s*flex/);
+    expect(cssContent).toMatch(/\.coo-upload-thumb\s*\{[\s\S]*?width:\s*44px/);
+  });
 });

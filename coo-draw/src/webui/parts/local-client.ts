@@ -446,6 +446,11 @@ const studioPanel: WebUiPanel = {
     workflowWrap.append(workflowLabel, workflowRow);
     paramSheet.body.append(workflowWrap);
 
+    // 参考图上传区（按工作流图片输入 schema 渲染，位于正向提示词上方）
+    const uploadBox = ctx.ui.h('div', 'coo-upload-box');
+    uploadBox.style.display = 'none';
+    paramSheet.body.append(uploadBox);
+
     const makeCounter = (ta: HTMLTextAreaElement, limit=500): HTMLElement => {
       const wrap = ctx.ui.h('div','coo-prompt-wrap');
       const counter = ctx.ui.h('div','coo-prompt-counter','0 / 500');
@@ -1007,12 +1012,76 @@ const studioPanel: WebUiPanel = {
     });
 
     // 工作流 extra 渲染
+    const MAX_UPLOADS = 4;
+    const UPLOAD_LIMIT = 20 * 1024 * 1024;
+    const renderUploads = (images: Array<{ param: string; ui_label: string }>): void => {
+      uploadBox.replaceChildren();
+      const slots = images.slice(0, MAX_UPLOADS);
+      if (!slots.length) { uploadBox.style.display = 'none'; return; }
+      uploadBox.style.display = '';
+      uploadBox.append(ctx.ui.h('div', 'coo-group-title', t('参考图上传', 'Upload reference images')));
+      for (const slot of slots) {
+        const key = slot.param as 'inputImage' | 'controlImage';
+        const row = ctx.ui.h('div', 'coo-upload-row');
+        const thumb = ctx.ui.h('div', 'coo-upload-thumb', '+');
+        const label = ctx.ui.h('span', 'coo-upload-label', slot.ui_label || slot.param);
+        const nameEl = ctx.ui.h('span', 'coo-upload-name', '');
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+        fileInput.style.display = 'none';
+        const chooseBtn = ctx.ui.button(t('选择文件', 'Choose file'), { size: 'sm' });
+        const clearBtn = ctx.ui.button(t('清除', 'Clear'), { size: 'sm' });
+        const refresh = (): void => {
+          const cur = state[key];
+          nameEl.textContent = cur ? (cur.split(/[/\\]/).pop() || cur) : t('未选择', 'Empty');
+          clearBtn.disabled = !cur;
+        };
+        refresh();
+        chooseBtn.addEventListener('click', () => fileInput.click());
+        clearBtn.addEventListener('click', () => { state[key] = ''; thumb.replaceChildren('+'); refresh(); });
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files?.[0];
+          fileInput.value = '';
+          if (!file) return;
+          if (file.size > UPLOAD_LIMIT) { say(t('图片超过 20 MB', 'Image exceeds 20 MB'), true); return; }
+          const reader = new FileReader();
+          reader.onerror = () => { if (alive) say(t('读取文件失败', 'Failed to read file'), true); };
+          reader.onload = () => {
+            const result = String(reader.result ?? '');
+            const comma = result.indexOf(',');
+            const base64 = comma >= 0 ? result.slice(comma + 1) : result;
+            if (!base64) { say(t('读取文件失败', 'Failed to read file'), true); return; }
+            const wid = state.workflow;
+            chooseBtn.disabled = true;
+            nameEl.textContent = file.name;
+            void ctx.invoke<{ ok: boolean; path?: string; error?: string }>('uploadImage', [file.name, base64]).then((res) => {
+              chooseBtn.disabled = false;
+              if (!alive) return;
+              if (!res.ok || !res.path) { say(res.error || t('上传失败', 'Upload failed'), true); refresh(); return; }
+              if (state.workflow !== wid) return;
+              state[key] = res.path;
+              thumb.replaceChildren();
+              const img = document.createElement('img');
+              img.src = result; img.alt = file.name;
+              thumb.append(img);
+              refresh();
+              say(t(`已上传 ${file.name}`, `Uploaded ${file.name}`));
+            }).catch((e) => { chooseBtn.disabled = false; if (alive) say(errText(e), true); refresh(); });
+          };
+          reader.readAsDataURL(file);
+        });
+        row.append(thumb, label, nameEl, chooseBtn, clearBtn, fileInput);
+        uploadBox.append(row);
+      }
+    };
     const KNOWN_PARAMS = new Set(['positive','negative','checkpoint','steps','cfg','seed','sampler','scheduler','width','height','batch','inputImage','controlImage','controlNet','denoise','controlStrength']);
     async function loadCustomFields(): Promise<void> {
       const workflowId = state.workflow;
       try {
         const res = await ctx.invoke<PresetDetail>('presetDetail', [workflowId]);
         if (!alive || state.workflow !== workflowId || !res.ok || !res.preset) return;
+        renderUploads(res.preset.mapping.filter((item) => item.ui_type === 'image'));
         const custom = res.preset.mapping.filter((item) => !KNOWN_PARAMS.has(item.param));
         if (!custom.length) return;
         const box = ctx.ui.h('div', 'coo-gen-extra');

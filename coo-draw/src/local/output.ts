@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { addPngText, pngSize } from './png.ts';
@@ -128,6 +128,33 @@ export class OutputStore {
     else delete entry.favorite_at;
     this.persist();
     return entry;
+  }
+
+  /**
+   * 删除作品：必删索引；deleteLocalFiles=true 时连磁盘文件一起删（删失败不阻断索引清理）。
+   * 返回实际删掉与本来就不在的 id。
+   */
+  deleteWorks(ids: string[], deleteLocalFiles: boolean): { deleted: string[]; missing: string[] } {
+    const wanted = new Set(ids);
+    const deleted: string[] = [];
+    const missing: string[] = [];
+    const kept: HistoryEntry[] = [];
+    for (const entry of this.entries) {
+      if (!wanted.has(entry.id)) { kept.push(entry); continue; }
+      wanted.delete(entry.id);
+      if (deleteLocalFiles && entry.path) {
+        try {
+          if (existsSync(entry.path)) unlinkSync(entry.path);
+        } catch {
+          // 文件删失败也不影响索引清理。
+        }
+      }
+      deleted.push(entry.id);
+    }
+    missing.push(...wanted);
+    this.entries = kept;
+    this.persist();
+    return { deleted, missing };
   }
 
   private trim(): void {

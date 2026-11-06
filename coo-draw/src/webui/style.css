@@ -1092,6 +1092,52 @@
   z-index: 1;
 }
 
+/* 删除确认弹窗：遮罩 + 卡片 + 自定义复选框行 */
+.coo-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.coo-dialog {
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  background: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid var(--coo-line, #E5E7EB);
+  box-shadow: 0 12px 32px rgba(0,0,0,.18);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.coo-dialog__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+.coo-dialog__desc {
+  font-size: 13px;
+  color: #6B7280;
+  margin-bottom: 12px;
+}
+.coo-dialog__check {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #111827;
+  margin-bottom: 12px;
+}
+.coo-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
 .coo-batch-stats { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: #8a8f98; padding: 8px 0; }
 .coo-batch-stats .primary { background: var(--coo-accent); color: #fff; border-color: var(--coo-accent); }

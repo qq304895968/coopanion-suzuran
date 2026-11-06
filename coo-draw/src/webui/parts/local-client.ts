@@ -2127,6 +2127,89 @@ const worksPanel: WebUiPanel = {
       });
     };
 
+    /** 删除确认弹窗：自定义复选框决定是否连本地文件一起删（禁用原生 confirm/checkbox）。 */
+    const openDeleteDialog = (ids: string[]): void => {
+      const overlay = document.createElement('div');
+      overlay.className = 'coo-dialog-overlay';
+      const dialog = document.createElement('div');
+      dialog.className = 'coo-dialog';
+      dialog.setAttribute('role', 'alertdialog');
+      dialog.setAttribute('aria-modal', 'true');
+      const title = ctx.ui.h('div', 'coo-dialog__title', ids.length > 1 ? t('删除作品', 'Delete works') : t('删除当前作品', 'Delete this work'));
+      const desc = ctx.ui.h('div', 'coo-dialog__desc', ids.length > 1
+        ? t(`将删除 ${ids.length} 张作品记录。`, `Delete ${ids.length} work records.`)
+        : t('将删除当前作品记录。', 'Delete the current work record.'));
+      let deleteLocalFiles = false;
+      const check = document.createElement('div');
+      check.className = 'coo-dialog__check';
+      check.setAttribute('role', 'checkbox');
+      check.setAttribute('aria-checked', 'false');
+      check.tabIndex = 0;
+      const box = document.createElement('div');
+      box.className = 'coo-checkbox';
+      const checkLabel = ctx.ui.h('span', '', t('同时删除本地文件', 'Also delete local files'));
+      check.append(box, checkLabel);
+      const toggleCheck = (): void => {
+        deleteLocalFiles = !deleteLocalFiles;
+        box.classList.toggle('is-checked', deleteLocalFiles);
+        check.setAttribute('aria-checked', String(deleteLocalFiles));
+      };
+      check.addEventListener('click', toggleCheck);
+      check.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCheck(); }
+      });
+      const actions = ctx.ui.h('div', 'coo-dialog__actions');
+      const cancelBtn = ctx.ui.button(t('取消', 'Cancel'), { size: 'sm' });
+      const okBtn = ctx.ui.button(t('删除', 'Delete'), { size: 'sm', variant: 'danger' });
+      actions.append(cancelBtn, okBtn);
+      dialog.append(title, desc, check, actions);
+      overlay.append(dialog);
+      const doc = ctx.root.ownerDocument;
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') { e.stopPropagation(); dispose(); }
+      };
+      const dispose = (): void => {
+        overlay.remove();
+        doc.removeEventListener('keydown', onKey, true);
+      };
+      cancelBtn.addEventListener('click', dispose);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) dispose(); });
+      okBtn.addEventListener('click', () => {
+        const withFiles = deleteLocalFiles;
+        dispose();
+        void ctx.invoke('deleteWorks', [ids, withFiles]).then((res) => {
+          const out = res as { ok?: boolean; deleted?: string[]; error?: string };
+          if (out.ok === false) throw new Error(out.error || t('删除失败', 'Delete failed'));
+          const gone = new Set(out.deleted ?? ids);
+          allHistory = allHistory.filter((h) => !gone.has(h.id));
+          shared.history = allHistory;
+          for (const id of gone) {
+            selected.delete(id);
+            viewed.delete(id);
+            const cached = thumbCache.get(id);
+            if (cached) { try { URL.revokeObjectURL(cached); } catch {} thumbCache.delete(id); }
+          }
+          saveViewed(viewed);
+          if (batchMode) batchCount.textContent = selected.size ? t(`已选 ${selected.size} 张`, `${selected.size} selected`) : t('已选 0 张', '0 selected');
+          if (activeEntry && gone.has(activeEntry.id)) {
+            activeEntry = allHistory[0] ?? null;
+            if (activeEntry) void showDetail(activeEntry);
+            else { previewWrap.style.display = 'none'; empty.style.display = ''; renderMeta(null); buildOps(null); }
+          }
+          renderGallery();
+          ctx.ui.toast(withFiles
+            ? t(`已删除 ${gone.size} 张作品及本地文件`, `Deleted ${gone.size} works and local files`)
+            : t(`已删除 ${gone.size} 张作品记录`, `Deleted ${gone.size} work records`));
+        }).catch((error) => {
+          if (!alive) return;
+          ctx.ui.toast(`${t('删除失败', 'Delete failed')}：${errText(error)}`, 'bad');
+        });
+      });
+      doc.addEventListener('keydown', onKey, true);
+      (doc.body ?? ctx.root).append(overlay);
+      ctx.own({ dispose });
+    };
+
     const buildOps = (entry: HistoryEntry | null): void => {
       opsPanel.replaceChildren();
       if (!entry) { opsPanel.append(ctx.ui.msgline(t('请选择一张图','Select a picture'))); return; }
@@ -2164,10 +2247,7 @@ const worksPanel: WebUiPanel = {
       fav.addEventListener('click', ()=> onToggleFavorite(entry));
 
       const del = opButton(t('删除','Delete'), 'danger', 'trash');
-      del.addEventListener('click', async ()=>{
-        const ok=await ctx.ui.confirm({ title: t('删除这张？','Delete this?'), body: t('确定删除这张作品吗？此操作不可恢复。','Delete this picture? This cannot be undone.'), danger:true }); if(!ok) return;
-        allHistory = allHistory.filter(h=>h.id!==entry.id); shared.history=allHistory; if (activeEntry?.id===entry.id) { activeEntry=allHistory[0]??null; if (activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } } renderGallery(); ctx.ui.toast(t('已从画廊移除，文件仍保留在输出目录','Removed from gallery; file kept'));
-      });
+      del.addEventListener('click', ()=> openDeleteDialog([entry.id]));
 
       opsPanel.append(redraw, tweak, toPet, compare, openFolder, fav, del);
     };
@@ -2411,15 +2491,9 @@ const worksPanel: WebUiPanel = {
     });
     batchAll.addEventListener('click', ()=>{ const list = filtered(); for (const h of list) selected.add(h.id); batchCount.textContent = t(`已选 ${selected.size} 张`, `${selected.size} selected`); renderGallery(); });
     batchInverse.addEventListener('click', ()=>{ const list = filtered(); for (const h of list) { if (selected.has(h.id)) selected.delete(h.id); else selected.add(h.id); } batchCount.textContent = t(`已选 ${selected.size} 张`, `${selected.size} selected`); renderGallery(); });
-    batchDel.addEventListener('click', async ()=>{
-      if (!selected.size) return; const ok = await ctx.ui.confirm({ title: t('批量删除？', 'Delete selected?'), body: t(`确定删除 ${selected.size} 张？此操作不可恢复。`, `Delete ${selected.size} pictures? This cannot be undone.`), danger: true }); if (!ok) return;
-      allHistory = allHistory.filter(h=> !selected.has(h.id)); shared.history = allHistory;
-      // 清理选中
-      for (const id of [...selected]) viewed.delete(id);
-      saveViewed(viewed);
-      selected.clear(); batchCount.textContent=t('已选 0 张','0 selected'); renderGallery();
-      if (activeEntry && !allHistory.some(h=>h.id===activeEntry!.id)) { activeEntry=allHistory[0]??null; if(activeEntry) void showDetail(activeEntry); else { previewWrap.style.display='none'; empty.style.display=''; renderMeta(null); buildOps(null); } }
-      ctx.ui.toast(t('已删除','Deleted'));
+    batchDel.addEventListener('click', ()=>{
+      if (!selected.size) return;
+      openDeleteDialog([...selected]);
     });
     batchExport.addEventListener('click', ()=>{ ctx.ui.toast(t('已请求打开文件夹，请手动复制','Open folder to copy')); void ctx.invoke('openFolder'); });
 

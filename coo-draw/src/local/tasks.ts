@@ -14,7 +14,7 @@ interface TaskInternal {
   status: TaskStatus;
   progress: TaskProgress;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
   workflow: Record<string, unknown>;
   workflowName: string;
   seed: number;
@@ -45,7 +45,7 @@ export interface TaskManagerOptions {
 
 export interface SubmitInput {
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
   workflow: Record<string, unknown>;
   workflowName: string;
   seed: number;

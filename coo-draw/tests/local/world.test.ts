@@ -217,6 +217,31 @@ describe('CooGenWorld', () => {
     await world.stop();
   });
 
+  it('面板生成透传 LoRA 双强度：strength_model 与 strength_clip 分别写入节点', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['clip.png']);
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat',
+      negative: 'bad',
+      checkpoint: 'anything_v5.safetensors',
+      loras: [{ path: '角色/zelda_botw_style.safetensors', weight: 0.8, clip_weight: 0.5 }],
+      steps: 20,
+      cfg: 7,
+      width: 512,
+      height: 512,
+      batch: 1,
+      seed: 9,
+    }]) as { ok: boolean; task?: GenerateTaskView; error?: string };
+    expect(res.ok).toBe(true);
+    expect(res.task?.loras[0]).toMatchObject({ weight: 0.8, clip_weight: 0.5 });
+    const nodes = Object.values((fake.workflow ?? {}) as Record<string, { class_type: string; inputs: Record<string, unknown> }>);
+    const lora = nodes.find((node) => node.class_type === 'LoraLoader')!;
+    expect(lora.inputs.strength_model).toBe(0.8);
+    expect(lora.inputs.strength_clip).toBe(0.5);
+    await world.stop();
+  });
+
   it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
     const { data, fake, world } = await setup();
     fake.checkpointNames = [];

@@ -18,7 +18,12 @@ function summary(preset: WorkflowPreset): WorkflowSummary {
   const splitUnet = hasSplitUnet(preset.workflow);
   const warnings = preset.warnings?.filter((w) => !(splitUnet && w.includes('CheckpointLoader')));
   const workflowLoras = listWorkflowLoRAs(preset.workflow as unknown as Workflow)
-    .map((lora) => ({ path: lora.path, name: lora.name, weight: lora.weight }));
+    .map((lora) => ({
+      path: lora.path,
+      name: lora.name,
+      weight: lora.weight,
+      ...(lora.clip_weight !== undefined ? { clip_weight: lora.clip_weight } : {}),
+    }));
   return {
     id: preset.id,
     name: preset.name,

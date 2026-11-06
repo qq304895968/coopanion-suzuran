@@ -104,10 +104,15 @@ export function normalizeSettings(raw: unknown): SettingsFile {
       const path = cleanText(entry.path).replace(/\\/g, '/');
       if (!path) continue;
       const name = cleanText(entry.name) || path.split('/').pop()!.replace(/\.(safetensors|ckpt|pt|pth)$/i, '');
+      const modelWeight = cleanWeight(entry.weight);
+      const clipRaw = Number(entry.clip_weight);
       defaults.push({
         name,
         path,
-        weight: cleanWeight(entry.weight),
+        weight: modelWeight,
+        ...(entry.clip_weight !== undefined && Number.isFinite(clipRaw)
+          ? { clip_weight: Math.round(Math.min(2, Math.max(-2, clipRaw)) * 100) / 100 }
+          : {}),
         trigger_words: cleanStringArray(entry.trigger_words, 24),
       });
     }
@@ -193,7 +198,9 @@ function normalizeLastParams(raw: unknown): SavedStudioParams | undefined {
         if (!path) return [];
         const w = Number(rec.weight);
         const weight = Number.isFinite(w) ? Math.round(Math.min(2, Math.max(-2, w)) * 100) / 100 : 0.75;
-        return [{ path, weight }];
+        const c = Number(rec.clip_weight);
+        const clip = Number.isFinite(c) ? Math.round(Math.min(2, Math.max(-2, c)) * 100) / 100 : weight;
+        return [{ path, weight, clip_weight: clip }];
       });
   }
   if (typeof src.inputImage === 'string') out.inputImage = src.inputImage.trim().slice(0, 500);

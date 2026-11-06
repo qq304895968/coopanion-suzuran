@@ -735,7 +735,7 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
         expect(generatedPayloads[0]!.positive).toBe('suzuran');
         expect(generatedPayloads[0]!.negative).toBe('lowres');
         expect(generatedPayloads[0]!.steps).toBe(28);
-        expect(generatedPayloads[0]!.loras).toEqual([{ path: '角色/suzuran.safetensors', weight: 0.8 }]);
+        expect(generatedPayloads[0]!.loras).toEqual([{ path: '角色/suzuran.safetensors', weight: 0.8, clip_weight: 0.8 }]);
         expect(generatedPayloads[0]!.seed).not.toBe(42);
       }
 

@@ -128,4 +128,14 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
       removeDir(dir);
     }
   });
+  it('出图页 LoRA 行内必须同时渲染 Model 与 CLIP 两个 32px 步进器', () => {
+    // 表头双列 + 行内双步进器 + 提交载荷携带 clip_weight
+    expect(localClient).toContain('makeLoraStepper');
+    expect(localClient).toContain("makeLoraStepper(record, 'weight', checked)");
+    expect(localClient).toContain("makeLoraStepper(record, 'clip_weight', checked)");
+    expect(localClient).toContain('clip_weight: entry.clip_weight');
+    // 步进器高度仍由铁律 2 统一守卫为 32px
+    expect(cssContent).toMatch(/\.coo-stepper\s*\{[\s\S]*?height:\s*32px/);
+  });
+
 });

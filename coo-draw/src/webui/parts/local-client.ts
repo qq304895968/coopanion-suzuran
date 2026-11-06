@@ -29,7 +29,7 @@ interface PresetDetail {
     builtin: boolean;
     kind?: string;
     mapping: ParamMapping[];
-    workflow_loras?: Array<{ path: string; name?: string; weight: number }>;
+    workflow_loras?: Array<{ path: string; name?: string; weight: number; clip_weight?: number }>;
     warnings: string[];
   };
   error?: string;
@@ -230,7 +230,7 @@ const studioPanel: WebUiPanel = {
       controlNet: '',
       denoise: undefined as number | undefined,
       controlStrength: undefined as number | undefined,
-      loras: new Map<string, number>(),
+      loras: new Map<string, { weight: number; clip_weight: number }>(),
       custom: {} as Record<string, string | number>,
       sizePreset: '768x1152',
     };
@@ -239,7 +239,9 @@ const studioPanel: WebUiPanel = {
       const match = SIZE_PRESETS.find(p => p.w === state.width && p.h === state.height);
       state.sizePreset = match ? match.value : 'custom';
     }
-    for (const lora of boot.defaults) state.loras.set(lora.path, lora.weight);
+    for (const lora of boot.defaults) {
+      state.loras.set(lora.path, { weight: lora.weight, clip_weight: lora.clip_weight ?? lora.weight });
+    }
 
     const pendingAction = shared.pendingStudioAction;
     shared.pendingStudioAction = null;
@@ -253,7 +255,7 @@ const studioPanel: WebUiPanel = {
         const found = boot.loras.find(
           (rec) => rec.path.replace(/\\/g, '/').toLowerCase() === norm || rec.name.toLowerCase() === item.name.toLowerCase(),
         );
-        return { path: found ? found.path : item.path, weight: item.weight };
+        return { path: found ? found.path : item.path, weight: item.weight, clip_weight: item.clip_weight ?? item.weight };
       });
       let nextSeed = entry.seed;
       if (randomizeSeed) {
@@ -317,7 +319,11 @@ const studioPanel: WebUiPanel = {
         state.loras = new Map(
           initialSaved.loras
             .filter((item) => item && typeof item.path === 'string' && boot.loras.some((l) => l.path === item.path))
-            .map((item) => [item.path, Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0.75]),
+            .map((item) => {
+              const modelWeight = Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0.75;
+              const clipRaw = Number(item.clip_weight);
+              return [item.path, { weight: modelWeight, clip_weight: Number.isFinite(clipRaw) ? clipRaw : modelWeight }] as const;
+            }),
         );
       }
       const match = SIZE_PRESETS.find((p) => p.w === state.width && p.h === state.height && p.value !== 'custom');
@@ -568,18 +574,100 @@ const studioPanel: WebUiPanel = {
     loraHeader.append(
       ctx.ui.h('div', 'col-check', ''),
       ctx.ui.h('div', 'col-name', t('LoRA', 'LoRA')),
-      ctx.ui.h('div', 'col-weight', t('权重', 'Weight')),
+      ctx.ui.h('div', 'col-weight', t('Model 强度', 'Model')),
+      ctx.ui.h('div', 'col-weight', t('CLIP 强度', 'CLIP')),
     );
     const loraBody = ctx.ui.h('div', 'coo-lora-body');
     loraTableCard.append(loraHeader, loraBody);
     paramSheet.body.append(loraTableCard);
 
     const LORA_STORE_KEY = 'coo-draw-last-loras';
+    const LORA_DEFAULT_WEIGHT = 0.75;
     const persistLora = (): void => { try { localStorage.setItem(LORA_STORE_KEY, JSON.stringify([...state.loras.entries()])); } catch {} };
-    const restoreLora = (): void => { try { const raw = localStorage.getItem(LORA_STORE_KEY); if (!raw) return; const arr = JSON.parse(raw) as Array<[string, number]>; if (!Array.isArray(arr)) return; state.loras = new Map(arr.filter(([k, v]) => typeof k === 'string' && typeof v === 'number' && loras.some((l) => l.path === k))); } catch {} };
+    const restoreLora = (): void => {
+      try {
+        const raw = localStorage.getItem(LORA_STORE_KEY);
+        if (!raw) return;
+        const arr = JSON.parse(raw) as Array<[string, unknown]>;
+        if (!Array.isArray(arr)) return;
+        const next = new Map<string, { weight: number; clip_weight: number }>();
+        for (const [path, value] of arr) {
+          if (typeof path !== 'string' || !loras.some((l) => l.path === path)) continue;
+          // 兼容旧版存盘：value 是单个数字时视为只有 model 强度，clip 跟随。
+          const obj = (typeof value === 'object' && value !== null ? value : {}) as { weight?: unknown; clip_weight?: unknown };
+          const modelRaw = typeof value === 'number' ? value : Number(obj.weight);
+          const clipRaw = typeof value === 'number' ? value : Number(obj.clip_weight);
+          const weight = Number.isFinite(modelRaw) ? modelRaw : LORA_DEFAULT_WEIGHT;
+          next.set(path, { weight, clip_weight: Number.isFinite(clipRaw) ? clipRaw : weight });
+        }
+        state.loras = next;
+      } catch {}
+    };
 
     const renderLoraCount = (): void => {
       loraCount.textContent = t(`已选 ${state.loras.size} 个`, `${state.loras.size} selected`);
+    };
+    /** LoRA 行内步进器：Model 与 CLIP 各一个，均为 32px（复用 .coo-stepper）。 */
+    const makeLoraStepper = (
+      record: LoRARecord,
+      kind: 'weight' | 'clip_weight',
+      checked: boolean,
+    ): HTMLElement => {
+      const entry = state.loras.get(record.path);
+      const fallback = record.weight ?? LORA_DEFAULT_WEIGHT;
+      const shown = kind === 'weight'
+        ? (entry?.weight ?? fallback)
+        : (entry?.clip_weight ?? entry?.weight ?? fallback);
+      const stepper = ctx.ui.h('div', 'coo-stepper' + (!checked ? ' is-disabled' : ''));
+      const dec = document.createElement('button');
+      dec.type = 'button';
+      dec.className = 'step-btn';
+      dec.textContent = '-';
+      dec.disabled = !checked;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.className = 'step-input';
+      input.value = Number(shown).toFixed(2);
+      input.disabled = !checked;
+      input.title = t('双击恢复默认值 0.75', 'Double-click to reset to 0.75');
+      const commit = (value: number): void => {
+        const target = state.loras.get(record.path);
+        if (!target) return;
+        target[kind] = value;
+        persistLora();
+      };
+      input.addEventListener('dblclick', () => {
+        if (input.disabled) return;
+        input.value = LORA_DEFAULT_WEIGHT.toFixed(2);
+        commit(LORA_DEFAULT_WEIGHT);
+      });
+      input.addEventListener('change', () => {
+        const rawValue = Number(input.value);
+        if (Number.isFinite(rawValue) && Math.abs(rawValue) > 2) {
+          ctx.ui.toast(t('权重超出范围 -2 ~ 2', 'Weight out of range -2 ~ 2'), 'bad');
+        }
+        const v = Math.min(2, Math.max(-2, num(input.value, LORA_DEFAULT_WEIGHT)));
+        input.value = v.toFixed(2);
+        commit(v);
+      });
+      const inc = document.createElement('button');
+      inc.type = 'button';
+      inc.className = 'step-btn';
+      inc.textContent = '+';
+      inc.disabled = !checked;
+      dec.addEventListener('click', () => {
+        const v = Math.max(-2, Math.round((num(input.value, LORA_DEFAULT_WEIGHT) - 0.05) * 100) / 100);
+        input.value = v.toFixed(2);
+        commit(v);
+      });
+      inc.addEventListener('click', () => {
+        const v = Math.min(2, Math.round((num(input.value, LORA_DEFAULT_WEIGHT) + 0.05) * 100) / 100);
+        input.value = v.toFixed(2);
+        commit(v);
+      });
+      stepper.append(dec, input, inc);
+      return stepper;
     };
     const renderLoraTable = (): void => {
       const query = loraSearch.value.trim().toLowerCase();
@@ -604,8 +692,10 @@ const studioPanel: WebUiPanel = {
         cb.title = record.name;
         const toggleCb = (): void => {
           const next = !checked;
-          if (next) state.loras.set(record.path, record.weight ?? 0.75);
-          else state.loras.delete(record.path);
+          if (next) {
+            const fallback = record.weight ?? LORA_DEFAULT_WEIGHT;
+            state.loras.set(record.path, { weight: fallback, clip_weight: fallback });
+          } else state.loras.delete(record.path);
           persistLora();
           renderLoraTable();
         };
@@ -631,73 +721,20 @@ const studioPanel: WebUiPanel = {
           nameCell.append(subText);
         }
 
-        const weightCell = ctx.ui.h('div', 'col-weight');
-        const stepper = ctx.ui.h('div', 'coo-stepper' + (!checked ? ' is-disabled' : ''));
-        const dec = document.createElement('button');
-        dec.type = 'button';
-        dec.className = 'step-btn';
-        dec.textContent = '-';
-        dec.disabled = !checked;
-        const weightInput = document.createElement('input');
-        weightInput.type = 'text';
-        weightInput.inputMode = 'decimal';
-        weightInput.className = 'step-input';
-        weightInput.value = Number(state.loras.get(record.path) ?? record.weight ?? 0.75).toFixed(2);
-        weightInput.disabled = !checked;
-        weightInput.title = t('双击恢复默认值 0.75', 'Double-click to reset to 0.75');
-        weightInput.addEventListener('dblclick', () => {
-          if (weightInput.disabled) return;
-          weightInput.value = '0.75';
-          if (state.loras.has(record.path)) {
-            state.loras.set(record.path, 0.75);
-            persistLora();
-          }
-        });
-        weightInput.addEventListener('change', () => {
-          const raw = Number(weightInput.value);
-          if (Number.isFinite(raw) && Math.abs(raw) > 2) {
-            ctx.ui.toast(t('权重超出范围 -2 ~ 2', 'Weight out of range -2 ~ 2'), 'bad');
-          }
-          const v = Math.min(2, Math.max(-2, num(weightInput.value, 0.75)));
-          weightInput.value = v.toFixed(2);
-          if (state.loras.has(record.path)) {
-            state.loras.set(record.path, v);
-            persistLora();
-          }
-        });
-        const inc = document.createElement('button');
-        inc.type = 'button';
-        inc.className = 'step-btn';
-        inc.textContent = '+';
-        inc.disabled = !checked;
-        dec.addEventListener('click', () => {
-          const v = Math.max(-2, Math.round((num(weightInput.value, 0.75) - 0.05) * 100) / 100);
-          weightInput.value = v.toFixed(2);
-          if (state.loras.has(record.path)) {
-            state.loras.set(record.path, v);
-            persistLora();
-          }
-        });
-        inc.addEventListener('click', () => {
-          const v = Math.min(2, Math.round((num(weightInput.value, 0.75) + 0.05) * 100) / 100);
-          weightInput.value = v.toFixed(2);
-          if (state.loras.has(record.path)) {
-            state.loras.set(record.path, v);
-            persistLora();
-          }
-        });
-        stepper.append(dec, weightInput, inc);
-        weightCell.append(stepper);
+        const modelCell = ctx.ui.h('div', 'col-weight');
+        modelCell.append(makeLoraStepper(record, 'weight', checked));
+        const clipCell = ctx.ui.h('div', 'col-weight');
+        clipCell.append(makeLoraStepper(record, 'clip_weight', checked));
 
-        rowEl.append(cbCell, nameCell, weightCell);
+        rowEl.append(cbCell, nameCell, modelCell, clipCell);
         loraBody.append(rowEl);
       }
       renderLoraCount();
     };
-    btnAll.addEventListener('click', () => { for (const l of loras) state.loras.set(l.path, l.weight ?? 0.75); persistLora(); renderLoraTable(); });
+    btnAll.addEventListener('click', () => { for (const l of loras) { const w = l.weight ?? LORA_DEFAULT_WEIGHT; state.loras.set(l.path, { weight: w, clip_weight: w }); } persistLora(); renderLoraTable(); });
     btnInverse.addEventListener('click', () => {
-      const next = new Map<string, number>();
-      for (const l of loras) if (!state.loras.has(l.path)) next.set(l.path, l.weight ?? 0.75);
+      const next = new Map<string, { weight: number; clip_weight: number }>();
+      for (const l of loras) if (!state.loras.has(l.path)) { const w = l.weight ?? LORA_DEFAULT_WEIGHT; next.set(l.path, { weight: w, clip_weight: w }); }
       state.loras = next; persistLora(); renderLoraTable();
     });
     btnClear.addEventListener('click', () => { state.loras.clear(); persistLora(); renderLoraTable(); });
@@ -714,18 +751,20 @@ const studioPanel: WebUiPanel = {
      * 这样「选工作流 = 选它自带的 LoRA」，生成时直接复用工作流里的节点。
      */
     const applyWorkflowLoras = (
-      list: Array<{ path: string; name?: string; weight: number }> | undefined,
+      list: Array<{ path: string; name?: string; weight: number; clip_weight?: number }> | undefined,
       replace = false,
     ): number => {
       if (!list?.length) return 0;
-      const next = new Map<string, number>();
-      if (!replace) for (const [path, weight] of state.loras) next.set(path, weight);
+      const next = new Map<string, { weight: number; clip_weight: number }>();
+      if (!replace) for (const [path, entry] of state.loras) next.set(path, { ...entry });
       let added = 0;
       for (const item of list) {
         const record = findLoraRecord(item);
         if (!record) continue;
         if (!next.has(record.path)) added += 1;
-        next.set(record.path, Number.isFinite(Number(item.weight)) ? Number(item.weight) : (record.weight ?? 0.75));
+        const modelWeight = Number.isFinite(Number(item.weight)) ? Number(item.weight) : (record.weight ?? LORA_DEFAULT_WEIGHT);
+        const clipRaw = Number(item.clip_weight);
+        next.set(record.path, { weight: modelWeight, clip_weight: Number.isFinite(clipRaw) ? clipRaw : modelWeight });
       }
       if (!next.size) return 0;
       state.loras = next;
@@ -955,7 +994,7 @@ const studioPanel: WebUiPanel = {
       positive: state.positive,
       negative: state.negative,
       checkpoint: workflowNeedsCheckpoint() ? state.checkpoint : '',
-      loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
+      loras: [...state.loras.entries()].map(([path, entry]) => ({ path, weight: entry.weight, clip_weight: entry.clip_weight })),
       sampler: state.sampler, scheduler: state.scheduler, steps: state.steps, cfg: state.cfg,
       width: state.width, height: state.height, batch: state.batch, seed: state.seed,
       workflow: state.workflow,
@@ -1436,7 +1475,7 @@ const studioPanel: WebUiPanel = {
         positive: state.positive,
         negative: state.negative,
         checkpoint: state.checkpoint,
-        loras: [...state.loras.entries()].map(([path, weight]) => ({ path, weight })),
+        loras: [...state.loras.entries()].map(([path, entry]) => ({ path, weight: entry.weight, clip_weight: entry.clip_weight })),
         sampler: state.sampler,
         scheduler: state.scheduler,
         steps: state.steps,

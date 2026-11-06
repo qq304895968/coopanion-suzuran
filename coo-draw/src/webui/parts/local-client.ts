@@ -2281,6 +2281,22 @@ const worksPanel: WebUiPanel = {
       ctx.own({ dispose });
     };
 
+    // 复制图片：取原图二进制经 ClipboardItem 写入剪贴板；环境不支持时 toast 说明而非抛错。
+    const copyEntryImage = async (target: HistoryEntry): Promise<void> => {
+      try {
+        const blob = await ctx.invokeBinary('image', [target.id]);
+        const clipboard = (globalThis.navigator as Navigator | undefined)?.clipboard;
+        const Item = (globalThis as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+        if (!clipboard?.write || !Item) throw new Error(t('当前环境不支持复制图片', 'Copying images is not supported here'));
+        await clipboard.write([new Item({ [blob.type || 'image/png']: blob })]);
+        if (!alive) return;
+        ctx.ui.toast(t('已复制图片', 'Image copied'));
+      } catch (error) {
+        if (!alive) return;
+        ctx.ui.toast(`${t('复制失败', 'Copy failed')}：${errText(error)}`, 'bad');
+      }
+    };
+
     // 在文件管理器中定位作品：优先精确揭示，失败时退回打开画夹目录（详情按钮与右键菜单共用）。
     const revealEntry = (target: HistoryEntry): void => {
       void ctx.invoke('revealImage', [target.id]).then(() => ctx.ui.toast(t('已请求在文件管理器中显示', 'Revealing in file manager'))).catch(() => void ctx.invoke('openFolder').then(() => ctx.ui.toast(t('已请求打开文件夹', 'Opening folder'))).catch((e) => ctx.ui.toast(errText(e), 'bad')));
@@ -2459,6 +2475,7 @@ const worksPanel: WebUiPanel = {
         btn.addEventListener('click', () => { close(); run(); });
         menu.append(btn);
       };
+      item(t('复制图片', 'Copy image'), 'copy', false, () => { void copyEntryImage(entry); });
       item(entry.is_favorite === true ? t('取消收藏', 'Unfavorite') : t('收藏', 'Favorite'), 'star', false, () => onToggleFavorite(entry));
       item(t('对比', 'Compare'), 'compare', false, () => enterCompare(entry));
       item(t('打开文件夹', 'Open folder'), 'folder', false, () => revealEntry(entry));

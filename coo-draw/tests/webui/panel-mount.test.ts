@@ -859,8 +859,34 @@ describe('画室面板真实挂载与交互验证（防 TDZ 与运行时崩溃�
       expect(worksMenu.style.left).toBe('120px');
       expect(worksMenu.style.top).toBe('90px');
       const menuItems = worksMenu.querySelectorAll('.coo-works-menu-item');
-      expect(menuItems.map((i) => i.textContent)).toEqual(['收藏', '对比', '打开文件夹', '删除']);
-      menuItems[0]!.click();
+      expect(menuItems.map((i) => i.textContent)).toEqual(['复制图片', '收藏', '对比', '打开文件夹', '删除']);
+      // 复制图片：注入假剪贴板，断言 image/png 二进制被写入
+      const written: unknown[][] = [];
+      const prevNavigatorDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+      const prevClipboardItem = (globalThis as any).ClipboardItem;
+      Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { write: async (items: unknown[]) => { written.push(items); } } }, configurable: true, writable: true });
+      (globalThis as any).ClipboardItem = class FakeClipboardItem {
+        items: Record<string, unknown>;
+        constructor(items: Record<string, unknown>) { this.items = items; }
+      };
+      try {
+        menuItems[0]!.click();
+        await new Promise((r) => setTimeout(r, 15));
+        expect(written).toHaveLength(1);
+        const copied = (written[0]![0] as unknown as { items: Record<string, unknown> }).items;
+        expect(Object.keys(copied)).toEqual(['image/png']);
+        expect(copied['image/png']).toBeInstanceOf(Blob);
+        expect(doc.body.querySelector('.coo-works-menu')).toBeNull();
+      } finally {
+        if (prevNavigatorDesc) Object.defineProperty(globalThis, 'navigator', prevNavigatorDesc);
+        else delete (globalThis as any).navigator;
+        if (prevClipboardItem === undefined) delete (globalThis as any).ClipboardItem;
+        else (globalThis as any).ClipboardItem = prevClipboardItem;
+      }
+      // 收藏：重新开启菜单后点击
+      fireContextMenu(localCtx.root.querySelectorAll('.coo-works-tile')[0]!);
+      await new Promise((r) => setTimeout(r, 15));
+      doc.body.querySelectorAll('.coo-works-menu-item').find((i) => i.textContent === '收藏')!.click();
       await new Promise((r) => setTimeout(r, 15));
       expect(doc.body.querySelector('.coo-works-menu')).toBeNull();
       expect((boot.history as Array<Record<string, any>>)[0]!.is_favorite).toBe(true);

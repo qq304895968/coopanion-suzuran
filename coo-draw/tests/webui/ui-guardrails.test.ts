@@ -224,6 +224,9 @@ describe('画室 UI 架构铁律与防退化守卫', () => {
     expect(localClient).toContain('() => onToggleFavorite(entry)');
     expect(localClient).toContain('() => openDeleteDialog([entry.id])');
     expect(localClient).toContain('() => revealEntry(entry)');
+    expect(localClient).toContain('copyEntryImage');
+    expect(localClient).toContain('复制图片');
+    expect(localClient).toContain('ClipboardItem');
     expect(cssContent).toMatch(/\.coo-works-menu\s*\{[\s\S]*?position:\s*fixed/);
     expect(cssContent).toContain('.coo-works-menu-item');
   });

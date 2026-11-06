@@ -3,13 +3,15 @@ import { basename, extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { addPngText, pngSize } from './png.ts';
 import { ensureDir, readJson, safeFilenamePart, writeJsonAtomic } from './fs-util.ts';
-import type { GenerateParams, HistoryEntry, LoRASource } from './types.ts';
+import type { GenerateParams, HistoryEntry, LoRASource, WorkflowModels } from './types.ts';
 
 export interface SaveImageInput {
   bytes: Uint8Array;
   mime: string;
   params: GenerateParams;
   loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
+  /** 生成时从工作流解析到的模型三件；缺省时按 params 回退。 */
+  models?: WorkflowModels;
   promptId: string;
   taskId: string;
   workflow: string;
@@ -149,7 +151,9 @@ export class OutputStore {
         prompt_id: input.promptId,
         positive: input.params.positive,
         negative: input.params.negative ?? '',
-        checkpoint: input.params.checkpoint ?? '',
+        checkpoint: input.models?.checkpoint || input.params.checkpoint || '',
+        text_encoder: input.models?.textEncoder || '',
+        vae: input.models?.vae || '',
         loras: input.loras.map((lora) => ({
           name: lora.name,
           path: lora.path,
@@ -195,7 +199,9 @@ export class OutputStore {
       path: absolute,
       positive: input.params.positive,
       negative: input.params.negative ?? '',
-      checkpoint: input.params.checkpoint ?? '',
+      checkpoint: input.models?.checkpoint || input.params.checkpoint || '',
+      ...(input.models?.textEncoder ? { text_encoder: input.models.textEncoder } : {}),
+      ...(input.models?.vae ? { vae: input.models.vae } : {}),
       loras: input.loras.map(({ name, path, weight, clip_weight, source }) => ({
         name,
         path,

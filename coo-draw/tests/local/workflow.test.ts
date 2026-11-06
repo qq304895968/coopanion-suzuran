@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyCustomParams, applyParams, buildForPreset, builtinPresets, convertUiWorkflow, detectParamMapping,
-  injectLoRAs, listWorkflowLoRAs, validateApiWorkflow, type Workflow,
+  extractWorkflowModels, injectLoRAs, listWorkflowLoRAs, validateApiWorkflow, type Workflow,
 } from '../../src/local/workflow.ts';
 
 const quick = () => builtinPresets().find((preset) => preset.id === 'quick-txt2img')!;
@@ -266,3 +266,36 @@ describe('LoRA 双强度（strength_model / strength_clip）', () => {
   });
 });
 
+describe('工作流模型三件解析', () => {
+  it('Checkpoint 工作流解析主模型，无独立编码器/VAE 节点时为空', () => {
+    const preset = quick();
+    const applied = applyParams(preset.workflow as unknown as Workflow, preset.param_mapping, {
+      positive: 'cat', checkpoint: 'anything_v5.safetensors',
+    });
+    const models = extractWorkflowModels(applied, 'anything_v5.safetensors');
+    expect(models.checkpoint).toBe('anything_v5.safetensors');
+    expect(models.textEncoder).toBe('');
+    expect(models.vae).toBe('');
+  });
+
+  it('分离式工作流解析 UNET / CLIP / VAE 三件', () => {
+    const workflow: Workflow = {
+      '10': { class_type: 'UNETLoader', inputs: { unet_name: 'krea2_turbo_nvfp4.safetensors', weight_dtype: 'default' } },
+      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 'qwen3vl_4b_fp8_scaled.safetensors', type: 'krea2' } },
+      '12': { class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_vae.safetensors' } },
+      '3': { class_type: 'KSampler', inputs: { model: ['10', 0], steps: 8 } },
+      '9': { class_type: 'SaveImage', inputs: { images: ['3', 0] } },
+    };
+    expect(extractWorkflowModels(workflow)).toEqual({
+      checkpoint: 'krea2_turbo_nvfp4.safetensors',
+      textEncoder: 'qwen3vl_4b_fp8_scaled.safetensors',
+      vae: 'qwen_image_vae.safetensors',
+    });
+  });
+
+  it('节点里没写模型名时回退到面板 checkpoint', () => {
+    const preset = quick();
+    const models = extractWorkflowModels(preset.workflow as unknown as Workflow, 'fallback.safetensors');
+    expect(models.checkpoint).toBe('fallback.safetensors');
+  });
+});

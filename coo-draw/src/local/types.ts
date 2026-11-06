@@ -159,6 +159,15 @@ export interface GenerateTaskView {
   elapsed_ms?: number;
 }
 
+export interface WorkflowModels {
+  /** 主模型：CheckpointLoader.ckpt_name，缺省时取 UNETLoader.unet_name。 */
+  checkpoint: string;
+  /** 文本编码器：CLIPLoader.clip_name；没有独立节点时为空。 */
+  textEncoder: string;
+  /** VAE：VAELoader.vae_name；没有独立节点时为空。 */
+  vae: string;
+}
+
 export interface HistoryEntry {
   id: string;
   filename: string;
@@ -167,6 +176,10 @@ export interface HistoryEntry {
   positive: string;
   negative: string;
   checkpoint: string;
+  /** 文本编码器文件名（CLIPLoader）；工作流里没有独立节点时缺省。 */
+  text_encoder?: string;
+  /** VAE 文件名（VAELoader）；工作流里没有独立节点时缺省。 */
+  vae?: string;
   loras: Array<{ name: string; path: string; weight: number; clip_weight?: number; source?: LoRASource }>;
   sampler: string;
   scheduler: string;

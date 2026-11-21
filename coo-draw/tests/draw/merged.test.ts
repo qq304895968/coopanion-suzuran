@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 合并层的行为测试：路由、人设本地出图、参考图 describe 流程、配置迁移与工作流约束。
  * 用假的 ComfyUI 客户端，不碰真网络。
  */
@@ -184,6 +184,27 @@ describe('config', () => {
     const api = groups.find((group) => group.id === 'world:draw')!;
     expect(Object.keys(api.schema.properties)).toContain('worlds.draw.routeDiary');
   });
+
+  it('drawConfig 一次取齐 API 设置、画夹、本地配置与工作流列表', async () => {
+    const { world } = makeDraw({ routePet: 'local', style: 'pencil', dailyLimit: 20 });
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('local', 'studio.drawConfig', []) as {
+      api: { style: string; routePet: string; routeDiary: string; dailyLimit: number; maxImagesPerCall: number };
+      folder: { path: string; fallback: boolean };
+      presets: { presets: Array<{ id: string; name: string }>; default_workflow: string };
+      local: { url: string; outputDir: string; modelsDir: string; defaultWorkflow: string; launchScript: string };
+    };
+    expect(res.api.routePet).toBe('local');
+    expect(res.api.routeDiary).toBe('api');
+    expect(res.api.style).toBe('pencil');
+    expect(res.api.dailyLimit).toBe(20);
+    expect(res.api.maxImagesPerCall).toBe(1);
+    expect(res.folder.fallback).toBe(true);
+    expect(res.local.url).toBe('http://127.0.0.1:8188');
+    expect(res.local.defaultWorkflow).toBe('quick-txt2img');
+    expect(res.presets.presets.length).toBeGreaterThan(0);
+    expect(res.presets.presets.map((p) => p.id)).toContain(res.local.defaultWorkflow);
+  });
 });
 
 describe('routing', () => {
@@ -272,6 +293,73 @@ describe('local sub-panels', () => {
     const loras = await ui.invoke!('local', 'loras.listLoras', []) as { loras?: unknown[] };
     expect(Array.isArray(loras.loras)).toBe(true);
     expect(ui.panels?.filter((panel) => !(panel as { slot?: string }).slot).map((panel) => panel.id)).toEqual(['api', 'local']);
+    expect(ui.badges).toBeUndefined();
+    await made.world.stop();
+  });
+
+  it('streams real-time pet_draw progress and records pet drawings into studio history', async () => {
+    const dataDir = root();
+    let watchHandler: ((event: import('../../src/local/comfy.ts').ComfyEvent) => void) | undefined;
+    let ready = false;
+    const comfy = fakeComfy();
+    comfy.watch = (handlers) => {
+      watchHandler = handlers.event;
+      return { connected: true, dispose: () => { watchHandler = undefined; } };
+    };
+    comfy.submit = async (workflow) => {
+      comfy.submitted.push(workflow);
+      setTimeout(() => {
+        watchHandler?.({ type: 'progress', prompt_id: 'p1', data: { value: 4, max: 8, node: '3' } });
+        setTimeout(() => { ready = true; }, 40);
+      }, 20);
+      return { prompt_id: 'p1' };
+    };
+    comfy.history = async () => (ready
+      ? {
+          outputs: { '9': { images: [{ filename: 'draw-persona_0001.png', type: 'output' }] } },
+          status: { status_str: 'success', completed: true },
+        }
+      : null);
+
+    const cfg: DrawConfigSection = {
+      ...DRAW_DEFAULTS,
+      enabled: true,
+      routePet: 'local',
+      cooldownSeconds: 0,
+      popupEnabled: false,
+    };
+    const world = new DrawWorld({
+      cfg,
+      timezone: 'Asia/Shanghai',
+      dataDir,
+      botDir: dataDir,
+      botName: '铃兰',
+      secret: () => 'sk-test',
+      popup: { showData: async () => true },
+      clientFactory: () => comfy,
+      now: () => new Date('2026-11-03T12:00:00+08:00'),
+    });
+    await world.start(fakeHost([]));
+
+    const frames: Array<{ type?: string; task?: { status?: string; source?: string; progress?: { current?: number; total?: number } } | null }> = [];
+    const ui = world.webUi('zh');
+    ui.stream!('local', {
+      open: true,
+      send: (text) => { frames.push(JSON.parse(text)); },
+      close: () => undefined,
+      onMessage: () => undefined,
+      onClose: () => undefined,
+    });
+
+    const out = await call(world, 'pet_draw', { subject: '一只戴草帽的小柴犬' });
+    expect(out.text).toContain('画好了');
+    expect(frames.some((f) => f.task?.source === 'pet' && f.task?.progress?.current === 4 && f.task?.progress?.total === 8)).toBe(true);
+    expect(frames.some((f) => f.task?.source === 'pet' && f.task?.status === 'done')).toBe(true);
+
+    const hist = await ui.invoke!('local', 'studio.history', [10]) as { history: Array<{ source?: string; note?: string; positive: string }> };
+    expect(hist.history.length).toBeGreaterThanOrEqual(1);
+    expect(hist.history[0]!.source).toBe('pet');
+    await world.stop();
   });
 });
 

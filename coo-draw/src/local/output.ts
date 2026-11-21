@@ -1,15 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { addPngText, pngSize } from './png.ts';
 import { ensureDir, readJson, safeFilenamePart, writeJsonAtomic } from './fs-util.ts';
-import type { GenerateParams, HistoryEntry, LoRASource } from './types.ts';
+import type { GenerateParams, HistoryEntry, LoRASource, WorkflowModels } from './types.ts';
 
 export interface SaveImageInput {
   bytes: Uint8Array;
   mime: string;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
+  /** 生成时从工作流解析到的模型三件；缺省时按 params 回退。 */
+  models?: WorkflowModels;
   promptId: string;
   taskId: string;
   workflow: string;
@@ -35,6 +37,8 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 function timestamp(date: Date, timezone: string): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const fallback = (): string => `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,
@@ -47,10 +51,17 @@ function timestamp(date: Date, timezone: string): string {
       hourCycle: 'h23',
     }).formatToParts(date);
     const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
-    return `${get('year')}${get('month')}${get('day')}-${get('hour')}${get('minute')}${get('second')}`;
+    const year = get('year');
+    const candidate = `${year}${get('month')}${get('day')}-${get('hour')}${get('minute')}${get('second')}`;
+    // 防御：若 Intl 因时区数据错误或注入的 now 返回异常年份（例如 2026 当预期 2025），用本地 fallback 校验
+    const y = Number(year);
+    if (Number.isFinite(y) && (y < 2020 || y > 2030)) {
+      // 年份异常时回退到本地时间，避免文件名出现 2026 这种可疑值
+      return fallback();
+    }
+    return candidate;
   } catch {
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+    return fallback();
   }
 }
 
@@ -108,6 +119,44 @@ export class OutputStore {
     return this.entries.find((entry) => entry.id === id) ?? null;
   }
 
+  /** 设置收藏：写入 history.json，返回更新后的条目；找不到返回 null。 */
+  setFavorite(id: string, favorite: boolean): HistoryEntry | null {
+    const entry = this.get(id);
+    if (!entry) return null;
+    entry.is_favorite = favorite;
+    if (favorite) entry.favorite_at = this.now().getTime();
+    else delete entry.favorite_at;
+    this.persist();
+    return entry;
+  }
+
+  /**
+   * 删除作品：必删索引；deleteLocalFiles=true 时连磁盘文件一起删（删失败不阻断索引清理）。
+   * 返回实际删掉与本来就不在的 id。
+   */
+  deleteWorks(ids: string[], deleteLocalFiles: boolean): { deleted: string[]; missing: string[] } {
+    const wanted = new Set(ids);
+    const deleted: string[] = [];
+    const missing: string[] = [];
+    const kept: HistoryEntry[] = [];
+    for (const entry of this.entries) {
+      if (!wanted.has(entry.id)) { kept.push(entry); continue; }
+      wanted.delete(entry.id);
+      if (deleteLocalFiles && entry.path) {
+        try {
+          if (existsSync(entry.path)) unlinkSync(entry.path);
+        } catch {
+          // 文件删失败也不影响索引清理。
+        }
+      }
+      deleted.push(entry.id);
+    }
+    missing.push(...wanted);
+    this.entries = kept;
+    this.persist();
+    return { deleted, missing };
+  }
+
   private trim(): void {
     if (this.entries.length > this.limit) this.entries = this.entries.slice(0, this.limit);
     this.persist();
@@ -140,8 +189,16 @@ export class OutputStore {
         prompt_id: input.promptId,
         positive: input.params.positive,
         negative: input.params.negative ?? '',
-        checkpoint: input.params.checkpoint ?? '',
-        loras: input.loras.map((lora) => ({ name: lora.name, path: lora.path, weight: lora.weight, source: lora.source })),
+        checkpoint: input.models?.checkpoint || input.params.checkpoint || '',
+        text_encoder: input.models?.textEncoder || '',
+        vae: input.models?.vae || '',
+        loras: input.loras.map((lora) => ({
+          name: lora.name,
+          path: lora.path,
+          weight: lora.weight,
+          clip_weight: lora.clip_weight ?? lora.weight,
+          source: lora.source,
+        })),
         sampler: input.params.sampler ?? 'euler_ancestral',
         scheduler: input.params.scheduler ?? 'normal',
         steps: input.params.steps ?? 20,
@@ -151,6 +208,7 @@ export class OutputStore {
         batch: input.params.batch ?? 1,
         seed: input.seed,
         workflow: input.workflow,
+        ...(input.params.source ? { source: input.params.source } : {}),
         created_at: this.now().toISOString(),
       }),
       parameters: a1111(input.params, input.loras, input.seed),
@@ -179,8 +237,16 @@ export class OutputStore {
       path: absolute,
       positive: input.params.positive,
       negative: input.params.negative ?? '',
-      checkpoint: input.params.checkpoint ?? '',
-      loras: input.loras.map(({ name, path, weight, source }) => ({ name, path, weight, source })),
+      checkpoint: input.models?.checkpoint || input.params.checkpoint || '',
+      ...(input.models?.textEncoder ? { text_encoder: input.models.textEncoder } : {}),
+      ...(input.models?.vae ? { vae: input.models.vae } : {}),
+      loras: input.loras.map(({ name, path, weight, clip_weight, source }) => ({
+        name,
+        path,
+        weight,
+        ...(clip_weight !== undefined ? { clip_weight } : {}),
+        source,
+      })),
       sampler: input.params.sampler ?? 'euler_ancestral',
       scheduler: input.params.scheduler ?? 'normal',
       steps: input.params.steps ?? 20,
@@ -191,8 +257,17 @@ export class OutputStore {
       batch: input.batch,
       created_at: this.now().getTime(),
       workflow: input.workflow,
+      ...(input.params.workflow ? { workflow_id: input.params.workflow } : {}),
       prompt_id: input.promptId,
       task_id: input.taskId,
+      ...(input.params.note ? { note: input.params.note } : {}),
+      ...(input.params.source ? { source: input.params.source } : {}),
+      ...(input.params.inputImage ? { inputImage: input.params.inputImage } : {}),
+      ...(input.params.controlImage ? { controlImage: input.params.controlImage } : {}),
+      ...(input.params.controlNet ? { controlNet: input.params.controlNet } : {}),
+      ...(input.params.denoise !== undefined ? { denoise: input.params.denoise } : {}),
+      ...(input.params.controlStrength !== undefined ? { controlStrength: input.params.controlStrength } : {}),
+      ...(input.params.custom ? { custom: { ...input.params.custom } } : {}),
     };
     this.entries.unshift(entry);
     this.trim();

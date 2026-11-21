@@ -15,6 +15,8 @@
     "test:tooling": "node --test scripts/tests/*.test.mjs",
     "check:repo": "node scripts/check-repository.mjs",
     "check:artifacts": "node scripts/check-repository.mjs --artifacts",
+    "rebuild": "node scripts/rebuild-workspace.mjs",
+    "rebuild:apply": "node scripts/rebuild-workspace.mjs --apply",
     "validate": "pnpm check:repo && pnpm test:tooling && pnpm typecheck && pnpm test && pnpm test:smoke && pnpm build && pnpm check:artifacts && pnpm check:metadata && pnpm check:packages",
     "check:host": "node --import tsx scripts/check-host.mjs",
     "check:metadata": "node --import tsx scripts/check-metadata.mjs",

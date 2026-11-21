@@ -80,6 +80,42 @@ pnpm --filter cortico-world-emote-pics build
 - 旧的两个包已从工作区删除，不再镜像、不再发布；`scripts/drawing-mirrors.json` 保留为空清单，`node scripts/sync-drawing.mjs --check` 因此恒为通过。
 - 只安装 `coo-draw` 即可。人设对话里的 `pet_draw`、本地出图工具和面板都在这个包里。
 
+## 改完代码怎么装进 Coopanion
+
+改完任意一个包的源码后，从仓库根目录跑一条命令就够了：
+
+```sh
+node scripts/rebuild-workspace.mjs            # 先预览：只报告改了哪些包、会跑哪些步骤，不写任何东西
+node scripts/rebuild-workspace.mjs --apply    # 真跑：自检 → 构建 → 链进宿主
+```
+
+Windows 上也可以直接双击 `scripts/rebuild.cmd`（等同 `--apply`）。
+
+两个解释结果的要点：
+
+- 「没有检测到需要重建的包」后面会逐个包列出判断依据（`dist/webui.js 已经是最新的` / `没有 build 脚本` / `没有浏览器端产物`），照着看就知道脚本是没活干还是漏读了什么。
+- 判断「改没改」只看源码和样式文件（`.ts/.tsx/.js/.mjs/.css/.json/...`），`describe.json`、`package.json` 这类构建产物和记账文件不算，改它们不会触发重复构建。
+
+脚本会自己找出「源码比 `dist/` 新」的包，对它们依次执行 `typecheck` → `test` → `build`（有 `describe` 的再生成自描述），然后把包目录链进 Coopanion 的 `extensions`。它不执行 `corepack pnpm add`，所以不会再受宿主 store 版本不一致（`ERR_PNPM_UNEXPECTED_STORE`）的影响。
+
+| 参数 | 作用 |
+| --- | --- |
+| `--apply` | 真正写入；不加就是干跑 |
+| `--all` | 不看改动，所有包都跑一遍 |
+| `--no-test` | 只 typecheck + 构建，跳过单元测试 |
+| `--skip-check` | 连 typecheck 都跳过，只构建 |
+| `--force-link` | 就算包没改动，也重新建一次链接 |
+| `--no-link` | 只构建，不碰宿主 |
+| `--extensions <目录>` | 指定宿主 `extensions`；默认自动探测，也可用 `COOPANION_EXTENSIONS` |
+| `coo-draw coo-mood` | 只处理点名的包（目录名或包名都行） |
+
+- 只改了 `src/webui/**`、`style.css` 这类浏览器端代码：构建完刷新宿主页面即可。
+- 改了 `world.ts`、`api/`、`local/` 等服务端代码：必须重启 Coopanion。
+- 宿主 `package.json` 在写入前会留一份 `package.json.bak-rebuild-*` 备份；链接指向别处、或依赖来自 registry 时脚本会拒绝动手，不会装一半。
+- 换了部署目录时用 `--extensions` 或环境变量 `COOPANION_EXTENSIONS` 指过去。
+
+宿主自带的「安装」按钮走的是 `corepack pnpm add`，需要在宿主的 `extensions/package.json` 里固定 `"packageManager": "pnpm@11.28.6"`，否则 corepack 会切到别的大版本并报 store 冲突；这条路径本脚本不依赖。
+
 ## 构建与安装边界
 
 `dist/` 不再纳入 Git。安装源码包或打包前，先安装依赖并构建。QQ 的 CSS 已恢复为源码；表情包构建按 manifest 输出原有的带日期 JS/CSS 文件名，不依赖残留的旧 `dist`。

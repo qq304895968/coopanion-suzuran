@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CooGenWorld } from '../../src/local/world.ts';
@@ -214,6 +214,289 @@ describe('CooGenWorld', () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     const status = await ui.invoke!('studio', 'status', []) as { task: GenerateTaskView };
     expect(status.task.status).toBe('done');
+    await world.stop();
+  });
+
+  it('面板生成透传 LoRA 双强度：strength_model 与 strength_clip 分别写入节点', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['clip.png']);
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat',
+      negative: 'bad',
+      checkpoint: 'anything_v5.safetensors',
+      loras: [{ path: '角色/zelda_botw_style.safetensors', weight: 0.8, clip_weight: 0.5 }],
+      steps: 20,
+      cfg: 7,
+      width: 512,
+      height: 512,
+      batch: 1,
+      seed: 9,
+    }]) as { ok: boolean; task?: GenerateTaskView; error?: string };
+    expect(res.ok).toBe(true);
+    expect(res.task?.loras[0]).toMatchObject({ weight: 0.8, clip_weight: 0.5 });
+    const nodes = Object.values((fake.workflow ?? {}) as Record<string, { class_type: string; inputs: Record<string, unknown> }>);
+    const lora = nodes.find((node) => node.class_type === 'LoraLoader')!;
+    expect(lora.inputs.strength_model).toBe(0.8);
+    expect(lora.inputs.strength_clip).toBe(0.5);
+    await world.stop();
+  });
+
+  it('作品收藏经面板接口持久化', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['fav.png']);
+    const ui = world.webUi('zh');
+    const gen = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat', negative: 'bad', checkpoint: 'anything_v5.safetensors',
+      loras: [], steps: 20, cfg: 7, width: 512, height: 512, batch: 1, seed: 9,
+    }]) as { ok: boolean };
+    expect(gen.ok).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const before = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string; is_favorite?: boolean }> };
+    expect(before.history.length).toBeGreaterThan(0);
+    const id = before.history[0]!.id;
+    const fav = await ui.invoke!('studio', 'setFavorite', [id, true]) as { ok: boolean; entry?: { is_favorite?: boolean; favorite_at?: number } };
+    expect(fav.ok).toBe(true);
+    expect(fav.entry?.is_favorite).toBe(true);
+    expect(fav.entry?.favorite_at).toBeGreaterThan(0);
+    const after = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string; is_favorite?: boolean }> };
+    expect(after.history.find((h) => h.id === id)?.is_favorite).toBe(true);
+    const missing = await ui.invoke!('studio', 'setFavorite', ['nope', true]) as { ok: boolean };
+    expect(missing.ok).toBe(false);
+    await world.stop();
+  });
+
+  it('作品经面板接口删除：去重、缺失计入 missing、空列表拒绝', async () => {
+    const { fake, world } = await setup();
+    fake.makeDone(['gone.png']);
+    const ui = world.webUi('zh');
+    const gen = await ui.invoke!('studio', 'generate', [{
+      positive: 'a cat', negative: 'bad', checkpoint: 'anything_v5.safetensors',
+      loras: [], steps: 20, cfg: 7, width: 512, height: 512, batch: 1, seed: 9,
+    }]) as { ok: boolean };
+    expect(gen.ok).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const before = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string }> };
+    expect(before.history).toHaveLength(1);
+    const id = before.history[0]!.id;
+    const del = await ui.invoke!('studio', 'deleteWorks', [[id, id, 'ghost'], false]) as { ok: boolean; deleted: string[]; missing: string[] };
+    expect(del.ok).toBe(true);
+    expect(del.deleted).toEqual([id]);
+    expect(del.missing).toEqual(['ghost']);
+    const after = await ui.invoke!('studio', 'history', [10]) as { history: Array<{ id: string }> };
+    expect(after.history).toHaveLength(0);
+    const empty = await ui.invoke!('studio', 'deleteWorks', [[], false]) as { ok: boolean };
+    expect(empty.ok).toBe(false);
+    await world.stop();
+  });
+
+  it('面板上传图片：base64 落盘 uploads 并返回服务端路径', async () => {
+    const { data, world } = await setup();
+    const ui = world.webUi('zh');
+    const tiny = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64');
+    const res = await ui.invoke!('studio', 'uploadImage', ['ref.png', tiny]) as { ok: boolean; path?: string; filename?: string; size?: number };
+    expect(res.ok).toBe(true);
+    expect(res.path!.startsWith(join(data, 'uploads'))).toBe(true);
+    expect(res.filename).toMatch(/^upload-.*\.png$/);
+    expect(res.size).toBe(8);
+    expect(existsSync(res.path!)).toBe(true);
+    // dataURL 前缀兼容
+    const dataUrl = await ui.invoke!('studio', 'uploadImage', ['a.jpg', `data:image/jpeg;base64,${tiny}`]) as { ok: boolean; path?: string };
+    expect(dataUrl.ok).toBe(true);
+    expect(existsSync(dataUrl.path!)).toBe(true);
+    // 非法扩展名与非法数据被拒绝
+    const badExt = await ui.invoke!('studio', 'uploadImage', ['evil.exe', tiny]) as { ok: boolean; error?: string };
+    expect(badExt.ok).toBe(false);
+    expect(badExt.error).toContain('png');
+    const badData = await ui.invoke!('studio', 'uploadImage', ['x.png', '!!!not-base64!!!']) as { ok: boolean };
+    expect(badData.ok).toBe(false);
+    // 超限拒绝
+    const huge = Buffer.alloc(21 * 1024 * 1024, 7).toString('base64');
+    const tooBig = await ui.invoke!('studio', 'uploadImage', ['big.png', huge]) as { ok: boolean; error?: string };
+    expect(tooBig.ok).toBe(false);
+    expect(tooBig.error).toContain('20 MB');
+    await world.stop();
+  });
+
+  it('面板只读本地连接配置快照（写入走宿主 setConfig）', async () => {
+    const { data, world } = await setup();
+    const ui = world.webUi('zh');
+    const res = await ui.invoke!('studio', 'localConfig', []) as { url: string; outputDir: string; modelsDir: string; defaultWorkflow: string; launchScript: string };
+    expect(res.url).toBe('http://127.0.0.1:8188');
+    expect(res.outputDir).toBe(join(data, 'out'));
+    expect(res.modelsDir).toBe('');
+    expect(res.defaultWorkflow).toBe('quick-txt2img');
+    expect(res.launchScript).toBe('');
+    await world.stop();
+  });
+
+  it('无需 Checkpoint 的导入工作流（如 Krea2 分离式加载器）挂载 LoRA 生图时不弹 CheckpointLoader 提醒', async () => {
+    const { data, fake, world } = await setup();
+    fake.checkpointNames = [];
+    fake.makeDone(['krea.png']);
+    const kreaPath = join(data, 'krea2.json');
+    writeJson(kreaPath, {
+      '10': { class_type: 'UNETLoader', inputs: { unet_name: 'krea2.safetensors', weight_dtype: 'default' } },
+      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5.safetensors', type: 'krea2' } },
+      '12': { class_type: 'VAELoader', inputs: { vae_name: 'ae.safetensors' } },
+      '5': { class_type: 'EmptyLatentImage', inputs: { width: 768, height: 1152, batch_size: 1 } },
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['11', 0] } },
+      '7': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['11', 0] } },
+      '3': { class_type: 'KSampler', inputs: { seed: 1, steps: 8, cfg: 1, sampler_name: 'euler', scheduler: 'normal', denoise: 1, model: ['10', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0] } },
+      '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['12', 0] } },
+      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'krea', images: ['8', 0] } },
+    });
+
+    const ui = world.webUi('zh');
+    const imported = await ui.invoke!('workflows', 'importWorkflow', [kreaPath, 'Krea2二次元图片']) as {
+      ok: boolean;
+      preset?: { id: string; needs_checkpoint?: boolean };
+      warnings?: string[];
+    };
+    expect(imported.ok).toBe(true);
+    expect(imported.preset?.needs_checkpoint).toBe(false);
+    expect((imported.warnings ?? []).some((w) => w.includes('CheckpointLoader'))).toBe(false);
+
+    const res = await ui.invoke!('studio', 'generate', [{
+      workflow: imported.preset!.id,
+      positive: '大肥鱼，女仆装，可爱，kawaii',
+      negative: 'low quality, blurry',
+      checkpoint: '',
+      loras: [{ path: '角色/zelda_botw_style.safetensors', weight: 0.8 }],
+      steps: 8,
+      cfg: 1,
+      width: 768,
+      height: 1152,
+      batch: 1,
+      seed: 42,
+    }]) as { ok: boolean; warnings?: string[]; error?: string };
+
+    expect(res.ok).toBe(true);
+    expect(res.warnings ?? []).toEqual([]);
+    const submittedNodes = Object.values((fake.workflow ?? {}) as Record<string, { class_type: string }>);
+    expect(submittedNodes.some((n) => n.class_type === 'LoraLoader')).toBe(true);
+    await world.stop();
+  });
+
+  it('点击生成即使离线失败或校验拦截也会持久化保存参数，重启后 bootstrap 原样恢复', async () => {
+    const dir = tempDir();
+    dirs.push(dir);
+    const offline = new FakeComfy();
+    offline.health = async () => ({ ok: false, url: 'http://127.0.0.1:8188', error: 'offline', checked_at: Date.now() });
+
+    const world1 = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'sdxl.safetensors' }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: 'Coo',
+      secret: () => '',
+      clientFactory: () => offline,
+    });
+    const ui1 = world1.webUi('zh');
+    const failedGen = await ui1.invoke!('studio', 'generate', [{
+      workflow: 'quick-txt2img',
+      positive: '星空下的铃兰',
+      negative: 'blurry',
+      checkpoint: 'sdxl.safetensors',
+      loras: [{ path: '角色/suzuran.safetensors', weight: 0.75 }],
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      steps: 28,
+      cfg: 6.5,
+      width: 832,
+      height: 1216,
+      batch: 2,
+      seed: 123456,
+    }]) as { ok: boolean };
+    expect(failedGen.ok).toBe(false);
+    await world1.stop();
+
+    // 模拟重启：新建 World 实例后 bootstrap 应完整恢复上次点击生成时的参数
+    const world2 = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'sdxl.safetensors' }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: 'Coo',
+      secret: () => '',
+      clientFactory: () => offline,
+    });
+    const boot2 = await world2.webUi('zh').invoke!('studio', 'bootstrap', []) as {
+      last_params?: {
+        positive?: string;
+        negative?: string;
+        checkpoint?: string;
+        sampler?: string;
+        scheduler?: string;
+        steps?: number;
+        cfg?: number;
+        width?: number;
+        height?: number;
+        batch?: number;
+        seed?: number;
+        loras?: Array<{ path: string; weight: number }>;
+      };
+    };
+    expect(boot2.last_params).toMatchObject({
+      positive: '星空下的铃兰',
+      negative: 'blurry',
+      checkpoint: 'sdxl.safetensors',
+      sampler: 'dpmpp_2m',
+      scheduler: 'karras',
+      steps: 28,
+      cfg: 6.5,
+      width: 832,
+      height: 1216,
+      batch: 2,
+      seed: 123456,
+      loras: [{ path: '角色/suzuran.safetensors', weight: 0.75 }],
+    });
+    await world2.stop();
+  });
+
+  it('作品页发送到桌宠时同步触发头顶气泡弹图与 coogen.shared 观看动作及感想事件', async () => {
+    const dir = tempDir();
+    dirs.push(dir);
+    const fake = new FakeComfy();
+    fake.historyEntry = {
+      outputs: { '7': { images: [{ filename: 'out_0001.png', type: 'output' }] } },
+      status: { status_str: 'success', completed: true },
+    };
+    const bubbleRequests: string[] = [];
+    const { host, events } = testHost();
+    const world = new CooGenWorld({
+      cfg: testCfg({ defaultCheckpoint: 'anything_v5.safetensors', popupEnabled: false }),
+      timezone: 'Asia/Shanghai',
+      dataDir: dir,
+      botDir: dir,
+      botName: '铃兰',
+      secret: () => '',
+      clientFactory: () => fake,
+      fetchImpl: (async (input: string | URL | Request) => {
+        bubbleRequests.push(String(input));
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }) as typeof fetch,
+    });
+    await world.start(host);
+
+    const genTool = world.tools().find((t) => t.name === 'coo_gen')!;
+    await genTool.handler({ subject: '海边日落', wait: true }, { role: 'test' } as never);
+
+    const ui = world.webUi('zh');
+    const hist = await ui.invoke!('studio', 'history', [5]) as { history: Array<{ id: string }> };
+    expect(hist.history.length).toBeGreaterThanOrEqual(1);
+
+    const sent = await ui.invoke!('studio', 'sendToPet', [hist.history[0]!.id]) as { ok: boolean; message: string };
+    expect(sent.ok).toBe(true);
+    expect(sent.message).toContain('感想');
+    expect(bubbleRequests.some((u) => u.includes('/api/image-bubble'))).toBe(true);
+
+    const sharedEvent = events.find((e) => e.type === 'coogen.shared');
+    expect(sharedEvent).toBeTruthy();
+    expect(sharedEvent!.text).toContain('pet_act');
+    expect(sharedEvent!.text).toContain('pet_say');
+    expect((sharedEvent as unknown as { blobs?: unknown[] }).blobs?.length).toBe(1);
     await world.stop();
   });
 });

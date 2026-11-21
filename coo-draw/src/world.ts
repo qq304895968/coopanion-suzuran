@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 「画室」World：一个入口，两套画法。
  *
  * - API 引擎（`./api`，从 pet-draw 搬来）负责人设笔触的小画：画夹、评价、弹图、额度；
@@ -83,6 +83,7 @@ export class DrawWorld implements World {
       ...(opts.now ? { now: opts.now } : {}),
       routeFor: (purpose) => this.routeFor(purpose),
       renderLocal: (request) => this.renderLocal(request),
+      onDrawLifecycle: (event) => this.local.handlePetDrawLifecycle(event),
     });
     this.local = new CooGenWorld({
       cfg: localCfgView(opts.cfg),
@@ -220,7 +221,6 @@ export class DrawWorld implements World {
     const zh = language.startsWith('zh');
     const apiUi = this.api.webUi(language);
     const localUi = this.local.webUi(language);
-    const cfg = this.opts.cfg;
     return {
       label: zh ? '画室' : 'Drawing studio',
       config: DRAW_GROUPS,
@@ -243,22 +243,34 @@ export class DrawWorld implements World {
       ],
       invoke: async (panel, method, args) => {
         if (panel === 'api') return apiUi.invoke!('folder', method, args);
-        // 本地页签内用「studio.xxx / loras.xxx / workflows.xxx」前缀把子面板的方法转发给原实现。
         if (panel === 'local') {
+          // 配置子页：一次取齐 API 侧设置、画夹信息、本地配置与工作流列表。
+          if (method === 'studio.drawConfig') {
+            const [settings, folder, presets, local] = await Promise.all([
+              apiUi.invoke!('folder', 'settings', []),
+              apiUi.invoke!('folder', 'info', []),
+              localUi.invoke!('studio', 'presets', []),
+              localUi.invoke!('studio', 'localConfig', []),
+            ]);
+            return { api: settings, folder, presets, local };
+          }
+          // 本地页签内用「studio.xxx / loras.xxx / workflows.xxx」前缀把子面板的方法转发给原实现。
           const dot = method.indexOf('.');
           if (dot > 0) return localUi.invoke!(method.slice(0, dot), method.slice(dot + 1), args);
           return localUi.invoke!('studio', method, args);
         }
         return localUi.invoke!(panel, method, args);
       },
+      stream: (panel, socket) => {
+        if (panel === 'api') {
+          apiUi.stream?.(panel, socket);
+          return;
+        }
+        localUi.stream?.(panel, socket);
+      },
       lamps: [
         ...(apiUi.lamps ?? []),
         ...(localUi.lamps ?? []),
-      ],
-      badges: [
-        ...(apiUi.badges ?? []),
-        { label: zh ? '主动画' : 'Pet', value: routeLabel(cfg.routePet), tone: 'plain' },
-        { label: zh ? '日记' : 'Diary', value: routeLabel(cfg.routeDiary), tone: 'plain' },
       ],
       promptDocs: [
         {

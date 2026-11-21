@@ -221,6 +221,33 @@ export const PET_DRAW_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   },
 ];
 
+export type PetDrawLifecycleEvent =
+  | {
+      phase: 'start';
+      taskId: string;
+      route: 'api' | 'local';
+      subject: string;
+      styleLabel: string;
+      negativePrompt: string;
+      count: number;
+    }
+  | {
+      phase: 'done';
+      taskId: string;
+      route: 'api' | 'local';
+      subject: string;
+      prompt: string;
+      styleLabel: string;
+      negativePrompt: string;
+      images: Array<{ bytes: Uint8Array; mime: string; width: number; height: number; fileName: string }>;
+    }
+  | {
+      phase: 'failed' | 'cancelled';
+      taskId: string;
+      route: 'api' | 'local';
+      error?: string;
+    };
+
 export interface PetDrawWorldOptions {
   /** `worlds.pet-draw` 的活引用。 */
   cfg: PetDrawConfigSection;
@@ -240,6 +267,8 @@ export interface PetDrawWorldOptions {
   routeFor?: (purpose: 'pet' | 'diary') => 'api' | 'local';
   /** 路由到本地时，由外层本地引擎渲染；这里仍负责计数、存画夹、弹图和事件。 */
   renderLocal?: (request: LocalPersonaRequest) => Promise<LocalPersonaResult>;
+  /** 桌宠出图生命周期通知，用于同步出图页进度与历史。 */
+  onDrawLifecycle?: (event: PetDrawLifecycleEvent) => void;
 }
 
 const str = (args: Record<string, unknown>, key: string): string | undefined => {
@@ -691,7 +720,17 @@ export class PetDrawWorld implements World {
     }
     this.busy = true;
     const started = Date.now();
+    const drawTaskId = `pet-${started.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     let reference: ReferenceImage | null = null;
+    this.opts.onDrawLifecycle?.({
+      phase: 'start',
+      taskId: drawTaskId,
+      route,
+      subject,
+      styleLabel: profile.label,
+      negativePrompt,
+      count,
+    });
 
     try {
       const modeInput = str(args, 'referenceMode') ?? 'auto';
@@ -728,8 +767,10 @@ export class PetDrawWorld implements World {
       }
 
       let images: Array<{ bytes: Uint8Array; mime: string; width: number; height: number; fileName: string }>;
+      let usedPrompt = subject;
       if (route === 'local') {
         const promptArg = str(args, 'prompt');
+        if (promptArg) usedPrompt = promptArg;
         const result = await this.opts.renderLocal!({
           subject,
           ...(promptArg ? { prompt: promptArg } : {}),
@@ -741,6 +782,12 @@ export class PetDrawWorld implements World {
           signal: controller.signal,
         });
         if (result.kind === 'needPrompt') {
+          this.opts.onDrawLifecycle?.({
+            phase: 'cancelled',
+            taskId: drawTaskId,
+            route,
+            error: '等待桌宠根据参考图补充提示词',
+          });
           const blobs = reference
             ? [{
                 bytes: reference.bytes,
@@ -760,6 +807,7 @@ export class PetDrawWorld implements World {
         if (result.notes.length) notes.push(...result.notes);
       } else {
         const prompt = buildPrompt(subject, cfg, persona.traits, Boolean(reference));
+        usedPrompt = prompt;
         const batch = await drawWithQwen({
           apiKey,
           prompt,
@@ -798,6 +846,16 @@ export class PetDrawWorld implements World {
         }, this.now, price);
       }
       this.lastGeneratedIds = saved.map((item) => item.id);
+      this.opts.onDrawLifecycle?.({
+        phase: 'done',
+        taskId: drawTaskId,
+        route,
+        subject,
+        prompt: usedPrompt,
+        styleLabel: profile.label,
+        negativePrompt,
+        images,
+      });
       const writeError = this.store.takeWriteError();
       if (writeError) ctx.log.warn('pet-draw: could not write state file', writeError);
 
@@ -855,6 +913,12 @@ export class PetDrawWorld implements World {
       };
     } catch (error) {
       if (error instanceof QwenDrawError) {
+        this.opts.onDrawLifecycle?.({
+          phase: error.code === 'aborted' ? 'cancelled' : 'failed',
+          taskId: drawTaskId,
+          route,
+          error: error.message,
+        });
         if (error.code === 'aborted' || error.code === 'timeout') {
           return {
             text: `[stopped] ${error.code === 'timeout' ? '画太久了' : '停下了'}，这次不算。`,
@@ -869,6 +933,12 @@ export class PetDrawWorld implements World {
         const requestId = error.opts.requestId ? `（request_id ${error.opts.requestId}）` : '';
         return { text: `没画成：${error.message}${requestId}。这张没算进今天的次数。`, failed: true };
       }
+      this.opts.onDrawLifecycle?.({
+        phase: controller.signal.aborted ? 'cancelled' : 'failed',
+        taskId: drawTaskId,
+        route,
+        error: safeMessage(error),
+      });
       ctx.log.error('pet-draw: unexpected error', error);
       return { text: `没画成：${safeMessage(error)}。这张没算进今天的次数。`, failed: true };
     } finally {

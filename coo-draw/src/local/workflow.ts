@@ -1,5 +1,5 @@
 /** ComfyUI API 格式工作流：内置模板、参数映射、LoRA 注入，以及 UI 格式导入。 */
-import type { GenerateParams, ParamMapping, WorkflowPreset } from './types.ts';
+import type { GenerateParams, ParamMapping, WorkflowModels, WorkflowPreset } from './types.ts';
 
 export type WorkflowNode = {
   class_type: string;
@@ -261,7 +261,21 @@ function maxNodeId(workflow: Workflow): number {
 
 function checkpointNode(workflow: Workflow): string | null {
   for (const [id, node] of Object.entries(workflow)) {
-    if (/^(CheckpointLoaderSimple|CheckpointLoader)$/.test(node.class_type)) return id;
+    if (node.class_type.startsWith('CheckpointLoader')) return id;
+  }
+  return null;
+}
+
+function unetLoaderNode(workflow: Workflow): string | null {
+  for (const [id, node] of Object.entries(workflow)) {
+    if (/^(UNETLoader|UnetLoaderGGUF)$/i.test(node.class_type)) return id;
+  }
+  return null;
+}
+
+function clipLoaderNode(workflow: Workflow): string | null {
+  for (const [id, node] of Object.entries(workflow)) {
+    if (/^(CLIPLoader|DualCLIPLoader|TripleCLIPLoader|CLIPLoaderGGUF)$/i.test(node.class_type)) return id;
   }
   return null;
 }
@@ -272,60 +286,208 @@ function isLink(value: unknown): value is [string | number, number] {
     && typeof value[1] === 'number';
 }
 
+export interface WorkflowLoRA {
+  node_id: string;
+  /** 工作流里写的 lora_name（可能带目录和扩展名） */
+  path: string;
+  /** 去掉目录和扩展名后的名字，用于和面板里的 LoRA 比对 */
+  name: string;
+  weight: number;
+  clip_weight?: number;
+}
+
+function isLoraLoader(node: WorkflowNode | undefined): boolean {
+  return !!node && /^LoraLoader(ModelOnly)?$/.test(node.class_type);
+}
+
+/** 归一化 LoRA 名：去目录、去扩展名、转小写，用来判断是不是同一份 LoRA。 */
+export function loraBasename(value: string): string {
+  const file = value.replace(/\\/g, '/').split('/').pop() ?? value;
+  return file.replace(/\.(safetensors|ckpt|pt|bin)$/i, '').toLowerCase();
+}
+
+export function loraKey(lora: { path?: string; name?: string }): string {
+  return loraBasename(lora.path || lora.name || '');
+}
+
+/** 列出工作流里已经存在的 LoRA，导入/切换 preset 时用来回填面板。 */
+export function listWorkflowLoRAs(workflow: Workflow): WorkflowLoRA[] {
+  const result: WorkflowLoRA[] = [];
+  for (const [id, node] of Object.entries(workflow)) {
+    if (!isLoraLoader(node)) continue;
+    const raw = node.inputs.lora_name;
+    if (typeof raw !== 'string' || !raw) continue;
+    const weight = Number(node.inputs.strength_model ?? 1);
+    const clip = node.inputs.strength_clip === undefined ? undefined : Number(node.inputs.strength_clip);
+    result.push({
+      node_id: id,
+      path: raw,
+      name: loraBasename(raw),
+      weight: Number.isFinite(weight) ? weight : 1,
+      ...(clip !== undefined && Number.isFinite(clip) ? { clip_weight: clip } : {}),
+    });
+  }
+  return result;
+}
+
 /**
- * 在 checkpoint 的 MODEL/CLIP 输出后插入 LoRA 链，并把所有下游引用改到链尾。
- * 已存在的 LoraLoader 会被自然叠在我们后面。
+ * 从已构建的工作流里解析模型三件，供作品元信息展示。
+ * fallbackCheckpoint 用于节点里没写死模型名的模板（applyParams 已把面板值写入节点，通常与它一致）。
+ */
+export function extractWorkflowModels(workflow: Workflow, fallbackCheckpoint = ''): WorkflowModels {
+  let checkpoint = '';
+  let textEncoder = '';
+  let vae = '';
+  for (const node of Object.values(workflow)) {
+    if (node.class_type.startsWith('CheckpointLoader')) {
+      if (!checkpoint) checkpoint = text(node.inputs.ckpt_name ?? node.inputs.config_name);
+    } else if (/^(UNETLoader|UnetLoaderGGUF)$/i.test(node.class_type)) {
+      if (!checkpoint) checkpoint = text(node.inputs.unet_name);
+    } else if (/^(CLIPLoader|DualCLIPLoader|TripleCLIPLoader|CLIPLoaderGGUF)$/i.test(node.class_type)) {
+      if (!textEncoder) textEncoder = text(node.inputs.clip_name);
+    } else if (/^VAELoader/i.test(node.class_type)) {
+      if (!vae) vae = text(node.inputs.vae_name);
+    }
+    if (checkpoint && textEncoder && vae) break;
+  }
+  return { checkpoint: checkpoint || fallbackCheckpoint, textEncoder, vae };
+}
+
+/**
+ * 在 CheckpointLoader 或分离式 UNETLoader（+ CLIPLoader）输出后插入 LoRA 链，
+ * 并把所有下游引用改到链尾。工作流里已有同名 LoRA 时只更新权重，不再叠加一份。
  */
 export function injectLoRAs(
   workflow: Workflow,
-  loras: Array<{ path: string; weight: number }>,
+  loras: Array<{ path: string; weight: number; clip_weight?: number }>,
 ): BuildWorkflowResult {
   const out = clone(workflow);
   const warnings: string[] = [];
   if (!loras.length) return { workflow: out, warnings };
+
+  // 工作流本身已带的 LoRA：更新 model 强度；只有调用方显式给了 clip_weight
+  // 才更新 CLIP 强度，否则保持工作流原值。剩余没出现过的 LoRA 才插入新节点，
+  // 避免同一组 LoRA 被应用两遍。
+  const existing = new Map<string, string>();
+  for (const [id, node] of Object.entries(out)) {
+    if (!isLoraLoader(node)) continue;
+    const raw = node.inputs.lora_name;
+    if (typeof raw === 'string' && raw) existing.set(loraBasename(raw), id);
+  }
+  const pending: Array<{ path: string; weight: number; clip_weight?: number }> = [];
+  const seen = new Set<string>();
+  for (const lora of loras) {
+    const key = loraKey(lora);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const existingId = existing.get(key);
+    if (existingId) {
+      out[existingId]!.inputs.strength_model = lora.weight;
+      if (lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight)) {
+        out[existingId]!.inputs.strength_clip = lora.clip_weight;
+      }
+      continue;
+    }
+    pending.push(lora);
+  }
+  if (!pending.length) return { workflow: out, warnings };
   const ckpt = checkpointNode(out);
-  if (!ckpt) {
-    warnings.push('工作流里没有 CheckpointLoader，LoRA 没有可插入的位置');
+  if (ckpt) {
+    let next = maxNodeId(out) + 1;
+    let model: [string, number] = [ckpt, 0];
+    let clip: [string, number] = [ckpt, 1];
+    const inserted: string[] = [];
+    for (const lora of pending) {
+      const id = String(next++);
+      const clipWeight = lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight) ? lora.clip_weight : lora.weight;
+      out[id] = {
+        class_type: 'LoraLoader',
+        inputs: {
+          lora_name: lora.path,
+          strength_model: lora.weight,
+          strength_clip: clipWeight,
+          model,
+          clip,
+        },
+        _meta: { title: `LoRA: ${lora.path.split('/').pop() ?? lora.path}` },
+      };
+      inserted.push(id);
+      model = [id, 0];
+      clip = [id, 1];
+    }
+    const skip = new Set(inserted);
+    for (const [id, node] of Object.entries(out)) {
+      if (skip.has(id)) continue;
+      for (const [field, value] of Object.entries(node.inputs)) {
+        if (!isLink(value)) continue;
+        if (String(value[0]) !== ckpt) continue;
+        if (value[1] === 0) node.inputs[field] = [...model];
+        else if (value[1] === 1) node.inputs[field] = [...clip];
+      }
+    }
     return { workflow: out, warnings };
   }
-  let next = maxNodeId(out) + 1;
-  let model: [string, number] = [ckpt, 0];
-  let clip: [string, number] = [ckpt, 1];
-  const inserted: string[] = [];
-  for (const lora of loras) {
-    const id = String(next++);
-    out[id] = {
-      class_type: 'LoraLoader',
-      inputs: {
-        lora_name: lora.path,
-        strength_model: lora.weight,
-        strength_clip: lora.weight,
-        model,
-        clip,
-      },
-      _meta: { title: `LoRA: ${lora.path.split('/').pop() ?? lora.path}` },
-    };
-    inserted.push(id);
-    model = [id, 0];
-    clip = [id, 1];
-  }
-  const skip = new Set(inserted);
-  for (const [id, node] of Object.entries(out)) {
-    if (skip.has(id)) continue;
-    for (const [field, value] of Object.entries(node.inputs)) {
-      if (!isLink(value)) continue;
-      if (String(value[0]) !== ckpt) continue;
-      if (value[1] === 0) node.inputs[field] = [...model];
-      else if (value[1] === 1) node.inputs[field] = [...clip];
+
+  // 分离式加载器（如 Krea2 / Flux / SD3：UNETLoader + CLIPLoader，或单独 UNETLoader）
+  const unetId = unetLoaderNode(out);
+  if (unetId) {
+    const clipId = clipLoaderNode(out);
+    let next = maxNodeId(out) + 1;
+    let modelLink: [string, number] = [unetId, 0];
+    let clipLink: [string, number] | null = clipId ? [clipId, 0] : null;
+    const inserted: string[] = [];
+    for (const lora of pending) {
+      const id = String(next++);
+      const clipWeight = lora.clip_weight !== undefined && Number.isFinite(lora.clip_weight) ? lora.clip_weight : lora.weight;
+      if (clipLink) {
+        out[id] = {
+          class_type: 'LoraLoader',
+          inputs: {
+            lora_name: lora.path,
+            strength_model: lora.weight,
+            strength_clip: clipWeight,
+            model: [...modelLink],
+            clip: [...clipLink],
+          },
+          _meta: { title: `LoRA: ${lora.path.split('/').pop() ?? lora.path}` },
+        };
+        modelLink = [id, 0];
+        clipLink = [id, 1];
+      } else {
+        out[id] = {
+          class_type: 'LoraLoaderModelOnly',
+          inputs: {
+            lora_name: lora.path,
+            strength_model: lora.weight,
+            model: [...modelLink],
+          },
+          _meta: { title: `LoRA: ${lora.path.split('/').pop() ?? lora.path}` },
+        };
+        modelLink = [id, 0];
+      }
+      inserted.push(id);
     }
+    const skip = new Set(inserted);
+    for (const [id, node] of Object.entries(out)) {
+      if (skip.has(id) || id === unetId || id === clipId) continue;
+      for (const [field, value] of Object.entries(node.inputs)) {
+        if (!isLink(value)) continue;
+        const src = String(value[0]);
+        if (src === unetId && value[1] === 0) node.inputs[field] = [...modelLink];
+        else if (clipId && clipLink && src === clipId && value[1] === 0) node.inputs[field] = [...clipLink];
+      }
+    }
+    return { workflow: out, warnings };
   }
+
+  warnings.push('工作流里没有 CheckpointLoader，LoRA 没有可插入的位置');
   return { workflow: out, warnings };
 }
 
 export function buildForPreset(
   preset: WorkflowPreset,
   params: GenerateParams,
-  loras: Array<{ path: string; weight: number }>,
+  loras: Array<{ path: string; weight: number; clip_weight?: number }>,
 ): BuildWorkflowResult {
   const applied = applyParams(preset.workflow as unknown as Workflow, preset.param_mapping, params);
   const injected = injectLoRAs(applied, loras);
@@ -384,7 +546,7 @@ export function detectParamMapping(workflow: Workflow): { mapping: ParamMapping[
     const [id, node] = checkpoint;
     const field = 'ckpt_name' in node.inputs ? 'ckpt_name' : 'config_name';
     add({ param: 'checkpoint', node_id: id, field, ui_label: '模型', ui_type: 'dropdown', default: text(node.inputs[field], '') });
-  } else {
+  } else if (!unetLoaderNode(workflow)) {
     warnings.push('没有识别到 CheckpointLoader；LoRA 无法插入');
   }
 
@@ -459,8 +621,13 @@ export type ObjectInfo = Record<string, ObjectInfoNode>;
 
 const FALLBACK_SCHEMA: Record<string, string[]> = {
   CheckpointLoaderSimple: ['ckpt_name'],
+  UNETLoader: ['unet_name', 'weight_dtype'],
+  CLIPLoader: ['clip_name', 'type'],
+  DualCLIPLoader: ['clip_name1', 'clip_name2', 'type'],
+  VAELoader: ['vae_name'],
   CLIPTextEncode: ['text'],
   EmptyLatentImage: ['width', 'height', 'batch_size'],
+  EmptySD3LatentImage: ['width', 'height', 'batch_size'],
   KSampler: ['seed', 'steps', 'cfg', 'sampler_name', 'scheduler', 'denoise'],
   KSamplerAdvanced: ['add_noise', 'noise_seed', 'steps', 'cfg', 'sampler_name', 'scheduler', 'start_at_step', 'end_at_step', 'return_with_leftover_noise'],
   VAEDecode: [],
@@ -468,6 +635,7 @@ const FALLBACK_SCHEMA: Record<string, string[]> = {
   SaveImage: ['filename_prefix'],
   LoadImage: ['image'],
   LoraLoader: ['lora_name', 'strength_model', 'strength_clip'],
+  LoraLoaderModelOnly: ['lora_name', 'strength_model'],
   ControlNetLoader: ['control_net_name'],
   ControlNetApplyAdvanced: ['strength', 'start_percent', 'end_percent'],
   CLIPSetLastLayer: ['stop_at_clip_layer'],

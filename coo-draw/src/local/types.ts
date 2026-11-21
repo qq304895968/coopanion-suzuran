@@ -11,6 +11,8 @@ export interface DefaultLoRA {
   /** 相对 ComfyUI `models/loras` 的路径，统一用 `/`。 */
   path: string;
   weight: number;
+  /** CLIP 强度（strength_clip）；缺省跟随 weight。 */
+  clip_weight?: number;
   trigger_words: string[];
 }
 
@@ -37,6 +39,8 @@ export interface MatchedLoRA {
   path: string;
   name: string;
   weight: number;
+  /** CLIP 强度（strength_clip）；缺省跟随 weight。 */
+  clip_weight?: number;
   source: LoRASource;
   /** 命中原因，给回执和面板看。 */
   reason: string;
@@ -91,12 +95,14 @@ export interface WorkflowPreset {
   warnings?: string[];
 }
 
+export type TaskSource = 'user' | 'pet';
+
 export interface GenerateParams {
   positive: string;
   negative?: string;
   checkpoint?: string;
-  /** 选中的 LoRA；source 由服务端补齐，面板传 manual。 */
-  loras?: Array<{ path: string; weight: number; source?: LoRASource }>;
+  /** 选中的 LoRA；source 由服务端补齐，面板传 manual。weight 即 strength_model，clip_weight 即 strength_clip（缺省跟随 weight）。 */
+  loras?: Array<{ path: string; weight: number; clip_weight?: number; source?: LoRASource }>;
   sampler?: string;
   scheduler?: string;
   steps?: number;
@@ -116,6 +122,8 @@ export interface GenerateParams {
   note?: string;
   /** 导入工作流的自定义参数（param -> 值）。 */
   custom?: Record<string, string | number>;
+  /** 任务来源：用户在面板发起 或 桌宠发起。 */
+  source?: TaskSource;
 }
 
 export type TaskStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
@@ -140,14 +148,24 @@ export interface GenerateTaskView {
   id: string;
   prompt_id: string;
   status: TaskStatus;
+  source?: TaskSource;
   progress: TaskProgress;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
   images: TaskImage[];
   error?: string;
   created_at: number;
   finished_at?: number;
   elapsed_ms?: number;
+}
+
+export interface WorkflowModels {
+  /** 主模型：CheckpointLoader.ckpt_name，缺省时取 UNETLoader.unet_name。 */
+  checkpoint: string;
+  /** 文本编码器：CLIPLoader.clip_name；没有独立节点时为空。 */
+  textEncoder: string;
+  /** VAE：VAELoader.vae_name；没有独立节点时为空。 */
+  vae: string;
 }
 
 export interface HistoryEntry {
@@ -158,7 +176,11 @@ export interface HistoryEntry {
   positive: string;
   negative: string;
   checkpoint: string;
-  loras: Array<{ name: string; path: string; weight: number; source?: LoRASource }>;
+  /** 文本编码器文件名（CLIPLoader）；工作流里没有独立节点时缺省。 */
+  text_encoder?: string;
+  /** VAE 文件名（VAELoader）；工作流里没有独立节点时缺省。 */
+  vae?: string;
+  loras: Array<{ name: string; path: string; weight: number; clip_weight?: number; source?: LoRASource }>;
   sampler: string;
   scheduler: string;
   steps: number;
@@ -168,9 +190,21 @@ export interface HistoryEntry {
   seed: number;
   batch: number;
   created_at: number;
+  /** 是否收藏；缺省（旧数据）视为未收藏。 */
+  is_favorite?: boolean;
+  favorite_at?: number;
   workflow: string;
+  workflow_id?: string;
   prompt_id: string;
   task_id: string;
+  note?: string;
+  source?: TaskSource;
+  inputImage?: string;
+  controlImage?: string;
+  controlNet?: string;
+  denoise?: number;
+  controlStrength?: number;
+  custom?: Record<string, string | number>;
 }
 
 export interface WorkflowSummary {
@@ -178,10 +212,14 @@ export interface WorkflowSummary {
   name: string;
   builtin: boolean;
   kind?: WorkflowPreset['kind'];
+  /** 当前工作流是否包含需要选择的 Checkpoint 参数映射。 */
+  needs_checkpoint?: boolean;
   created_at: number;
   source?: string;
   warnings?: string[];
   mapping_count: number;
+  /** 工作流自身携带的 LoRA（导入后回填到面板，生成时不再重复叠加）。 */
+  workflow_loras?: Array<{ path: string; name: string; weight: number; clip_weight?: number }>;
 }
 
 export interface ComfyHealth {
@@ -211,6 +249,28 @@ export interface ModelFileView {
   size: number;
   /** 绝对路径，面板「复制路径」用。 */
   file: string;
+}
+
+export interface SavedStudioParams {
+  workflow?: string;
+  positive?: string;
+  negative?: string;
+  checkpoint?: string;
+  loras?: Array<{ path: string; weight: number; clip_weight?: number }>;
+  sampler?: string;
+  scheduler?: string;
+  steps?: number;
+  cfg?: number;
+  width?: number;
+  height?: number;
+  batch?: number;
+  seed?: number;
+  inputImage?: string;
+  controlImage?: string;
+  controlNet?: string;
+  denoise?: number;
+  controlStrength?: number;
+  custom?: Record<string, string | number>;
 }
 
 export interface CooGenBootstrap {
@@ -249,6 +309,7 @@ export interface CooGenBootstrap {
   lora_root: string;
   defaults: DefaultLoRA[];
   aliases: Record<string, string[]>;
+  last_params?: SavedStudioParams;
   history: HistoryEntry[];
   presets: WorkflowSummary[];
   workflow: string;
@@ -266,6 +327,7 @@ export interface GenerateResponse {
 export interface StatusResponse {
   task: GenerateTaskView | null;
   health: ComfyHealth;
+  launch?: LaunchState;
   warnings: string[];
 }
 

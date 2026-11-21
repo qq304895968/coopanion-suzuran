@@ -1,4 +1,4 @@
-﻿import { EventEmitter } from 'node:events';
+import { EventEmitter } from 'node:events';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -100,5 +100,37 @@ describe('LaunchManager', () => {
     expect(result.ok).toBe(true);
     expect(calls[0]!.args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
     expect(calls[0]!.args[3]).toBe(stop);
+  }, 10_000);
+
+  it('startBackground 立即返回不阻塞，后台探活成功后自动切换就绪态', async () => {
+    const dir = tempDir();
+    dirs.push(dir);
+    const script = join(dir, 'start.bat');
+    writeFileSync(script, '@echo off\r\n');
+    let healthy = false;
+    const states: Array<{ running: boolean; ok?: boolean }> = [];
+    const manager = new LaunchManager({
+      getConfig: () => ({ script, args: '', cwd: dir, waitSeconds: 10, stopScript: '' }),
+      health: async () => ({
+        ok: healthy,
+        url: 'http://127.0.0.1:8188',
+        ...(healthy ? { system: 'ComfyUI' } : { error: 'offline' }),
+        checked_at: Date.now(),
+      }),
+      onStateChange: (s) => states.push({ running: s.running, ok: s.ok }),
+      spawnImpl: (() => new FakeChild()) as never,
+    });
+    const t0 = Date.now();
+    const res = await manager.startBackground();
+    expect(Date.now() - t0).toBeLessThan(200);
+    expect(res.ok).toBe(true);
+    expect(res.starting).toBe(true);
+    expect(manager.running()).toBe(true);
+
+    healthy = true;
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    expect(manager.running()).toBe(false);
+    expect(states.some((s) => s.running === false && s.ok === true)).toBe(true);
+    manager.dispose();
   }, 10_000);
 });

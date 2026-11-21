@@ -5,7 +5,7 @@ import type {
 } from './comfy.ts';
 import type { OutputStore } from './output.ts';
 import type {
-  GenerateParams, GenerateTaskView, HistoryEntry, LoRASource, TaskProgress, TaskStatus,
+  GenerateParams, GenerateTaskView, HistoryEntry, LoRASource, TaskProgress, TaskStatus, WorkflowModels,
 } from './types.ts';
 
 interface TaskInternal {
@@ -14,7 +14,8 @@ interface TaskInternal {
   status: TaskStatus;
   progress: TaskProgress;
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
+  models?: WorkflowModels;
   workflow: Record<string, unknown>;
   workflowName: string;
   seed: number;
@@ -45,7 +46,9 @@ export interface TaskManagerOptions {
 
 export interface SubmitInput {
   params: GenerateParams;
-  loras: Array<{ path: string; name: string; weight: number; source: LoRASource }>;
+  loras: Array<{ path: string; name: string; weight: number; clip_weight?: number; source: LoRASource }>;
+  /** 生成时从工作流解析到的模型三件；缺省时按 params 回退。 */
+  models?: WorkflowModels;
   workflow: Record<string, unknown>;
   workflowName: string;
   seed: number;
@@ -70,6 +73,7 @@ export class TaskManager {
       id: task.id,
       prompt_id: task.prompt_id,
       status: task.status,
+      ...(task.params.source ? { source: task.params.source } : {}),
       progress: { ...task.progress },
       params: { ...task.params },
       loras: task.loras.map((item) => ({ ...item })),
@@ -112,6 +116,7 @@ export class TaskManager {
       progress: { current: 0, total: params.steps ?? 20, message: '已提交，等 ComfyUI 接单' },
       params,
       loras: input.loras,
+      ...(input.models ? { models: input.models } : {}),
       workflow: input.workflow,
       workflowName: input.workflowName,
       seed,
@@ -306,6 +311,7 @@ export class TaskManager {
           mime: image.mime,
           params: task.params,
           loras: task.loras,
+          ...(task.models ? { models: task.models } : {}),
           promptId: task.prompt_id,
           taskId: task.id,
           workflow: task.workflowName,

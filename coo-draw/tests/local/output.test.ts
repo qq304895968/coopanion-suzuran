@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OutputStore } from '../../src/local/output.ts';
@@ -86,5 +86,82 @@ describe('OutputStore', () => {
     expect(a.filename).not.toBe(b.filename);
     expect(a.filename).toContain('_1.png');
     expect(b.filename).toContain('_2.png');
+  });
+
+  it('保存时写入解析到的模型三件，缺省回退到 params', () => {
+    const { store: instance } = store();
+    const entry = instance.save({
+      bytes: pngBytes(),
+      mime: 'image/png',
+      params: { ...params, checkpoint: '' },
+      loras: [],
+      models: { checkpoint: 'krea2_turbo_nvfp4.safetensors', textEncoder: 'qwen3vl_4b_fp8_scaled.safetensors', vae: 'qwen_image_vae.safetensors' },
+      promptId: 'p1',
+      taskId: 't1',
+      workflow: 'Krea2',
+      index: 0,
+      batch: 1,
+      seed: 42,
+    });
+    expect(entry.checkpoint).toBe('krea2_turbo_nvfp4.safetensors');
+    expect(entry.text_encoder).toBe('qwen3vl_4b_fp8_scaled.safetensors');
+    expect(entry.vae).toBe('qwen_image_vae.safetensors');
+    const text = readPngText(readFileSync(entry.path));
+    const meta = JSON.parse(text.find((item) => item.keyword === 'coo-gen')!.text);
+    expect(meta.checkpoint).toBe('krea2_turbo_nvfp4.safetensors');
+    expect(meta.text_encoder).toBe('qwen3vl_4b_fp8_scaled.safetensors');
+    expect(meta.vae).toBe('qwen_image_vae.safetensors');
+
+    const fallback = instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: 'p2', taskId: 't2',
+      workflow: 'w', index: 0, batch: 1, seed: 7,
+    });
+    expect(fallback.checkpoint).toBe('anything_v5.safetensors');
+    expect(fallback.text_encoder).toBeUndefined();
+    expect(fallback.vae).toBeUndefined();
+  });
+
+  it('收藏状态持久化到 history.json，跨实例可读', () => {
+    const { data, store: instance } = store();
+    const entry = instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: 'p', taskId: 't',
+      workflow: 'w', index: 0, batch: 1, seed: 7,
+    });
+    expect(entry.is_favorite).toBeUndefined();
+    const updated = instance.setFavorite(entry.id, true);
+    expect(updated?.is_favorite).toBe(true);
+    expect(updated?.favorite_at).toBeGreaterThan(0);
+    const reopened = new OutputStore({ dataDir: data, outputDir: join(data, 'output'), timezone: 'Asia/Shanghai', historyLimit: 50 });
+    expect(reopened.get(entry.id)?.is_favorite).toBe(true);
+    expect(instance.setFavorite(entry.id, false)?.is_favorite).toBe(false);
+    expect(instance.get(entry.id)?.favorite_at).toBeUndefined();
+    expect(instance.setFavorite('missing', true)).toBeNull();
+  });
+
+  it('删除作品：必删索引，按需删文件，缺失 id 计入 missing', () => {
+    const { store: instance } = store();
+    const saveOne = (seed: number) => instance.save({
+      bytes: pngBytes(), mime: 'image/png', params, loras: [], promptId: `p${seed}`, taskId: `t${seed}`,
+      workflow: 'w', index: 0, batch: 1, seed,
+    });
+    const recordOnly = saveOne(11);
+    const withFile = saveOne(12);
+    const normal = saveOne(13);
+    expect(existsSync(recordOnly.path)).toBe(true);
+
+    const r1 = instance.deleteWorks([recordOnly.id], false);
+    expect(r1).toEqual({ deleted: [recordOnly.id], missing: [] });
+    expect(instance.get(recordOnly.id)).toBeNull();
+    expect(existsSync(recordOnly.path)).toBe(true);
+
+    const r2 = instance.deleteWorks([withFile.id], true);
+    expect(r2).toEqual({ deleted: [withFile.id], missing: [] });
+    expect(instance.get(withFile.id)).toBeNull();
+    expect(existsSync(withFile.path)).toBe(false);
+
+    const r3 = instance.deleteWorks([normal.id, normal.id, 'ghost'], true);
+    expect(r3.deleted).toEqual([normal.id]);
+    expect(r3.missing).toEqual(['ghost']);
+    expect(instance.get(normal.id)).toBeNull();
   });
 });
